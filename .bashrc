@@ -30,11 +30,12 @@ export HISTCONTROL='erasedups:ignorespace'
 export HISTIGNORE='pwd:history*:pscp*'
 
 # for setting history length see HISTSIZE and HISTFILESIZE in bash(1)
-export HISTSIZE=40000
+export HISTSIZE=10000
 export HISTFILESIZE=40000
 shopt -s histappend
 export HISTTIMEFORMAT='[%F %T]  '
 export PROMPT_COMMAND="history -a; history -c; history -r; $PROMPT_COMMAND"
+alias his='history 50'
 
 ############################### USER DEFINE #####################################
 export alldot='* .[^.]*'
