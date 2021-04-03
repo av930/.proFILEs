@@ -31,13 +31,9 @@
 [alias]
     alias   = config --get-regexp ^alias\\.
     df      = difftool -t bc
-    br      = branch
     tagcur  = describe --tags --abbrev=0 --match 
-    rb      = rebase
-    co      = checkout
-    lol     = log --oneline --decorate --graph -n 15
-    lg      = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr)%Creset %C(blue)<%an>%Creset' --abbrev-commit --date=relative
+    loga    = log --oneline --decorate --graph -n 15 --all
+    logo    = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr)%Creset %C(blue)<%an>%Creset' --abbrev-commit --date=relative
     space   = diff --cached --no-color > stage.diff && git apply --index -R stage.diff && git apply --index --whitespace=fix stage.diff && rm -f stage.diff
     ci      = commit --verbose
-    st      = status
 
