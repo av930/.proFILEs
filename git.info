@@ -1,23 +1,23 @@
 ##this is configuration
-#
-git init
-## create repository 
-git clone -o bit https://av930@bitbucket.org/developenv/profiles.git
-git clone -o bit git@bitbucket.org:developenv/profiles.git
+go main page: https://github.com/av930/.proFILEs
+
+## create repository info .proFILEs 
+git clone https://github.com/av930/.proFILEs.git
+git clone git@github.com:av930/.proFILEs.git
 
 ## get remote repo info
-git remote -v 
-git remote show bit
+git remote -v
+git remote show origin
 
 ## change remote name
-git remote rm bit
-git remote add bit ssh://git@bitbucket.org:developenv/profiles.git
-git remote add bit https://av930@bitbucket.org/developenv/profiles.git
-git remote add bit git@bitbucket.org:developenv/profiles.git
+git remote rm origin 
+git remote add origin git@github.com:av930/.proFILEs.git
+#bitbucket
+git remote add origin ssh://git@bitbucket.org:developenv/profiles.git
 
 ## git push & pull
-git push -u bit master
-git pull bit master
+git push -u origin master
+git pull origin master
 
 
 ## sub-project ##
