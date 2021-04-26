@@ -1,7 +1,7 @@
 # User customed file
 ######################
 .gitconfig.user
-tempdir/
+tempdir/*
 
 
 # Compiled source #

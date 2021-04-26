@@ -12,48 +12,62 @@ if [ -f "${proFILEdir}/.bashrc" ]; then source "${proFILEdir}/.bashrc"; fi
 COMMENT
 
 
-############################## Prompt DEFINE #####################################
 
 ############################### RC setting  #####################################
 #Beware that most terminals override Ctrl+S to suspend execution until Ctrl+Q is entered.-
-#This is called XON/XOFF flow control. For activating forward-search-history, either disable flow control by issuing:
+#This is called XON/XOFF flow control. For activating forward-search-history, 
+#either disable flow control by issuing:
+
+###############################
+#### basic terminal setting
 stty -ixon
-#terminal setting
 
 #default file option on create time
 umask 022
 
-#### history merge for multi terminal
+#global TAG for alias for banning conflict for builtin commands
+export TAG='l'
+alias bashg="cd ${HOME}/${proFILEdir}"
+alias bashs="source ${HOME}/${proFILEdir}/.bashrc"
+alias bashe="vi ${HOME}/${proFILEdir}/.bashrc"
+
+
+###############################
+#### history merge after terminal exit
 #export HISTCONTROL=ignoredups:ignorespace same to export HISTCONTROL=ignoreboth
 export HISTCONTROL='erasedups:ignorespace'
 #history filter out
-export HISTIGNORE='pwd:history*:pscp*'
-
+export HISTIGNORE='pwd:history*:'
 # for setting history length see HISTSIZE and HISTFILESIZE in bash(1)
 export HISTSIZE=10000
 export HISTFILESIZE=40000
-shopt -s histappend
 export HISTTIMEFORMAT='[%F %T]  '
-export PROMPT_COMMAND="history -a; history -c; history -r; $PROMPT_COMMAND"
-alias his='history 50'
 
-############################### USER DEFINE #####################################
-export alldot='* .[^.]*'
-alias ls='ls -thrF --color=auto --show-control-chars'
-alias grep='grep --color=auto'
-alias env='env|sort'
-alias dir='ls -al -F --color=auto| grep /'
+function update_history(){
+    history -a
+    history -c
+    history -r
+    shopt -u histappend
+}
+#update history only login
+update_history
+#export PROMPT_COMMAND="history -a; history -c; history -r; $PROMPT_COMMAND"
+#shopt -s histappend
 
-############################### Tool ALIAS #####################################
+alias his='history 100'
+alias hisgrep='history | egrep -i --color=auto'
 
-alias ps="ps -u $USER -o pid,args --forest"
-alias du='echo subdir size is; du -sh'
+
+###############################
+#### screen alias
+
 # screen configuration
 # alias byobu='byobu -U $*'
-alias sccl='screen -ls'
-alias sccr='screen -U -R'
-alias sccs="screen -U -R -c ${proFILEdir}/.screenrc_spilt"
-function sccx()
+alias ${TAG}sc='screen -ls'
+alias ${TAG}scr='screen -U -R'
+alias ${TAG}scl="screen -U -R -c ${proFILEdir}/.screenrc_spilt"
+alias ${TAG}scx='kill_screen'
+function kill_screen()
 {
     if [ "$1" != "" ]; then 
        #kill only one
@@ -68,17 +82,42 @@ function sccx()
     fi
 }
 
-############################### ENV DEFINE ######################################
+###############################
+#### move & find
+export alldot='* .[^.]*'
+
+alias ${TAG}du='echo subdir size is; du -sh'
+alias ${TAG}ps="ps -u $USER -o pid,args --forest"
+alias ${TAG}s='ls -thrF --color=auto --show-control-chars'
+alias grep='grep --color=auto'
+alias env='env|sort'
+alias ${TAG}epo='echo repo sync -qcj4; repo sync -qcj4'
+alias dir='ls -al -F --color=auto| grep /'
+alias showpath='echo $PATH|sed "s/:/:\n/g"'
+alias findgrep='findandgrep'
+alias findrm='findandremove'
+
+function findandgrep() { find . -name $1 -print | xargs grep -e "$2";}
+function findandremove()
+{
+    if [ "$1" == "" ]; then echo [WARNING] plz input filename!!
+    else find . -name "$1" -exec rm -rf \{\} \;
+    fi
+}
+
 alias moveup='mv * .[^.]* ..'
-alias gpro="cd ${proFILEdir}"
-function gtop()
+alias grepo="goup .repo"
+alias gup="goup"
+alias gg="godown_withmenu"
+alias ga="goaround_withmenu"
+function goup()
 {
     local TOPFILE=${proFILEdir}
     local HERE=$PWD
     local T=
     while [ \( ! \( -d $TOPFILE \) \) -a \( $PWD != "/" \) ]; do
         T=$PWD
-        if [ -d "$T/.repo" ]; then
+        if [ -d "$T/$@" ]; then
             \cd $T
             return
         fi
@@ -89,75 +128,33 @@ function gtop()
 }
 
 
-function setup-gdb()
-{
-    adb devices
-    echo "only 1 device: enter, more than 1: -e or -d"
-    read choice
-    adb $choice forward tcp:5039 tcp:5039
-    adb $choice shell ps
-    echo -n "Which process? with & for background:"
-    read process_id
-    adb $choice shell gdbserver :5039 --attach $process_id &
+function godown_withmenu(){
+local INPUT
+INPUT=$(find ~/ -mindepth 1 -maxdepth 4 -type d -name "$@" 2> /dev/null)
+show_menu_do "$INPUT"
+cd ${RET} 
 }
 
-function start-gdb()
-{
-    if [ "$1" == "" ]; then 
-        echo [WARNING] "you must run envsetup.sh \& lunch before gdb"
-        echo [WARNING] current PRODUCT_OUT is $(get_build_var PRODUCT_OUT)
-        echo [WARNING] plz input \$PRODUCT_OUT/symbols/system/xxx 
-        echo \$1 should be symbol file, \$2 optionally could be remote ip
-        return 
-    fi
-
-    # should be ndk gdb for windows
-    if [ "${OSTYPE}" == "cygwin" ]; then
-        local GDB=/cygdrive/d/SDK/Android/android-ndk-r8b/toolchains/arm-linux-androideabi-4.6/prebuilt/windows/bin/arm-linux-androideabi-gdb.exe
-    else
-        local GDB=prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.6/bin/arm-linux-androideabi-gdb
-        export PATH=$PATH:~/out/host/linux-x86/bin/adb
-    fi
-
-    # should be product dir
-    local OUT_SYMBOLS=$(expr match "$1" '\(.*symbols\)')
-    local OUT_SO_SYMBOLS=$OUT_SYMBOLS/system/lib
-
-
-
-    echo >|"gdbclient.cmds" "set solib-absolute-prefix $OUT_SYMBOLS"
-    echo >>"gdbclient.cmds" "set solib-search-path $OUT_SO_SYMBOLS:$OUT_SO_SYMBOLS/hw:$OUT_SO_SYMBOLS/ssl/engines"
-    echo >>"gdbclient.cmds" "target remote $2:5039"
-    echo >>"gdbclient.cmds" ""
-
-    cat "gdbclient.cmds"
-    echo "cgdb -d $GDB -x gdbclient.cmds $1"
-    cgdb -d $GDB -x "gdbclient.cmds" $1
-
-}
-alias show-path='echo $PATH|sed "s/:/:\n/g"'
-
-
-############################### Utility #####################################
-alias  vi="VIMINIT=':so ~/.vim/.vimrc' MYVIMRC='~/.vim/.vimrc' vim $*"
-alias  vimp="VIMINIT=':so ~/.viu/.vimrc_backup' MYVIMRC='~/.viu/.vimrc_backup' vim $* -V9myLog"
-alias  vimu="VIMINIT=':so ~/.viu/.vimrc' MYVIMRC='~/.viu/.vimrc' vim $*" 
-alias  vimo="VIMINIT=':so ~/.vio/.vimrc' MYVIMRC='~/.vio/.vimrc' vim $* -V9myLog"
-
-#go file on symbol definition
-alias vimt='vi -t'
-
-
-function findgrep() { find . -name $1 -print | xargs grep -e "$2";}
-function findrm()
-{
-    if [ "$1" == "" ]; then echo [WARNING] plz input filename!!
-    else find . -name "$1" -exec rm -rf \{\} \;
-    fi
+function goaround_withmenu(){
+local INPUT
+#find sub dirtory
+INPUT=$(find ./ -maxdepth 2 -type d -name "$@" 2> /dev/null)
+#find parents dirtory
+INPUT="${INPUT} $(find ../ -maxdepth 2 -type d -name ${PWD##*/} -prune -o -name "$@" 2> /dev/null)"
+#find grand parents dirtory
+show_menu_do "$INPUT"
+echo ${RET}
+cd ${RET}
+if [ "${RET##*/}" = "${PWD##*/}" ]; then goup "$@";fi
 }
 
-alias scp_echo='echo scp-get;echo "scp joongkeun.kim@100.1.1.1:/home/joongkeun.kim/filename . ";echo scp filename joongkeun.kim@$SOLAR:/home/joongkeun.kim'
 
+alias ${TAG}cp='echo "scp ${USER}@$(hostname -i):${HOME}/filename . ";\
+echo scp filename ${USER}@$(hostname -i):${HOME}/'
+
+
+###############################
+#### internal fuction 
 
 function show_menu_do(){
 ## ---------------------------------------------------------------------------
@@ -198,17 +195,8 @@ fi
  return 0
 }
 
-function show-out(){
-local INPUT
-INPUT=$(find ~/ -maxdepth 3 -type d -name "out*" -exec \
-    find {}/target/product -mindepth 1 -maxdepth 1 -type d \; 2> /dev/null)
-show_menu_do "$INPUT"
-cd ${RET} 
-}
 
-
-# copy & paste http://sourceforge.net/projects/commandlinecopypaste/
-## ---------------------------------------------------------------------------
+#### copy & paste http://sourceforge.net/projects/commandlinecopypaste/
 # ex-copy: pwd | cc, ex-paste: cd $(cv)
 #command line copy+paste dir
 export CLCP_DIR="${proFILEdir}"
@@ -222,6 +210,24 @@ alias coyp_cv="cat ${CLCF}"
 alias lll="launch_cur_dir"
 
 
+
+#### vi startup option
+alias  vi="VIMINIT=':so ~/.vim/.vimrc' MYVIMRC='~/.vim/.vimrc' vim $*"
+alias  vimp="VIMINIT=':so ~/.viu/.vimrc_backup' MYVIMRC='~/.viu/.vimrc_backup' vim $* -V9myLog"
+alias  vimu="VIMINIT=':so ~/.viu/.vimrc' MYVIMRC='~/.viu/.vimrc' vim $*" 
+alias  vimo="VIMINIT=':so ~/.vio/.vimrc' MYVIMRC='~/.vio/.vimrc' vim $* -V9myLog"
+
+#go file on symbol definition
+alias vimt='vi -t'
+
+
+
+
+
+
+
+##################################################################################
+##################################################################################
 printf '[%s] runned: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
 
 # load target specific
