@@ -114,7 +114,7 @@ fi
 ######################################################################
 # post check
 ######################################################################
-if [ ! $(which sceen &>/dev/null) ]; then 
+if [ ! $(which sceen) ]; then 
   printf "you need to run:${RED} sudo apt-get install screen ${NCOL}"
   printf "${YELLOW} this configuration needs screen except CYGWIN ${NCOL}"
 fi
