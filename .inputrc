@@ -51,6 +51,8 @@ set horizontal-scroll-mode off
 
 # default is EMACS mode, this is better for even VI-users in CLI
 # edit vi control mode for any vi-compatible program
+set editing-mode emacs
+
 #set editing-mode vi
 # edit vi control mode for only bash
 #set -o vi
@@ -59,25 +61,49 @@ set horizontal-scroll-mode off
 # Vi mode : ESC+b : delete word
  
 ############################## This is Key Binding ##############################
-#key-bindingÀ» ÇØÁÖ´Â ºÎºÐÀ¸·Î ÇöÀç »ç¿ëÇÏ´Â key°ªÀ» ¾Ë¾Æ³»·Á¸é ´ÙÀ½°ú °°ÀÌ ÇÏ¸éµÈ´Ù.
-#Ctrl+V, key -> homekey¸¦ ¾Ë¾Æ³»·Á¸é Ctrl+V HOMEÀ¸·Î [1~ °ªÀÌ ³ª¿À°Ô µÈ´Ù.
+#key-binding¿ ¿¿¿ ¿¿¿¿ ¿¿ ¿¿¿¿ key¿¿ ¿¿¿¿¿ ¿¿¿ ¿¿ ¿¿¿¿.
+#Ctrl+V, key ¿¿¿¿ homekey¿ ¿¿¿¿¿ Ctrl+V HOME¿¿¿¿ ¿¿¿ ¿¿
 
-#allow the use of the Home/End keys
-"\e[1~": beginning-of-line
-"\e[4~": end-of-line
+$if mode=emacs
+   # Move head of line and end
+   "\e[1~": beginning-of-line
+   "\e[4~": end-of-line
 
-# allow the use of the Delete/Insert keys
-"\e[3~": delete-char
-"\e[2~": quoted-insert
+   # Ctrl+arrows
+   "\e[1;5C": forward-word
+   "\e[1;5D": backward-word
 
+   # Alt+arrows
+   #"\e[3C": forward-word
+   #"\e[3D": backward-word
 
-# page-up/downÀ¸·Î scroll-up/downÀº terminal settingÀ¸·Î Ã³¸®ÇÑ´Ù.
-# shell settingÀÌ ¾Æ´Ô. ±×·¸Áö ¾ÊÀ¸¸é screen¿¡¼­ pageup/downÀ» ctrl°ú ÇÔ²² ´­·¯¾ß ÇÑ´Ù. 
-# mappings for "page up" and "page down" to step to the beginning/end of the history
-"\e[5~": beginning-of-history
-"\e[6~": end-of-history
+   # allow the use of the Delete/Insert keys
+   "\e[3~": delete-char
+   "\e[2~": quoted-insert
 
-# alternate mappings for "page up" and "page down" to search the history
-#"\e[5~": history-search-backward
-#"\e[6~": history-search-forward
+   # page-up/down¿ ¿¿ scroll-up/down¿ terminal setting¿¿ ¿¿¿¿.
+   # shell setting¿ ¿¿. ¿¿¿ ¿¿¿ screen¿¿ pageup/down¿ ctrl¿ ¿¿ ¿¿¿ ¿¿. 
+   # mappings for "page up" and "page down" to step to the beginning/end of the history
+   "\e[5~": beginning-of-history
+   "\e[6~": end-of-history
 
+   # alternate mappings for "page up" and "page down" to search the history
+   #"\e[5~": history-search-backward
+   #"\e[6~": history-search-forward
+$endif
+
+$if mode=vi
+    set keymap vi-command
+    "gg": beginning-of-history
+    "G": end-of-history
+    "k": history-search-backward
+    "j": history-search-forward
+    "?": reverse-search-history
+    "/": forward-search-history
+
+    set keymap vi-insert
+    "\C-l": clear-screen
+    "\C-w": backward-kill-word
+    "\C-a": beginning-of-line
+    "\C-e": end-of-line
+$endif
