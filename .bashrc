@@ -63,10 +63,10 @@ alias hisgrep='history | egrep -i --color=auto'
 
 # screen configuration
 # alias byobu='byobu -U $*'
-alias ${TAG}sc='screen -ls'
-alias ${TAG}scr='screen -U -R'
-alias ${TAG}scl="screen -U -R -c ${proFILEdir}/.screenrc_spilt"
-alias ${TAG}scx='kill_screen'
+alias sc='screen -ls'
+alias scr='screen -U -R'
+alias scl="screen -U -R -c ${proFILEdir}/.screenrc_spilt"
+alias scx='kill_screen'
 function kill_screen()
 {
     if [ "$1" != "" ]; then 
