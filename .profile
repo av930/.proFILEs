@@ -28,7 +28,7 @@ else proFILEdirOS=${proFILEdir}/linux
 fi
 
 
-USR_FILE=~/profile.config
+USR_FILE=~/.profile.config
 if [ -f "${USR_FILE}" ]
 then source "${USR_FILE}" 
 else source ${proFILEdir}/default.config

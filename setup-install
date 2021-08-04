@@ -44,7 +44,7 @@ function copy_tools() {
     set -x
     pushd ${proFILEdir}
 
-    cp ${1} default.config $HOME/profile.config
+    cp ${1} default.config $HOME/.profile.config
 
     cp ${1}R .byobu/ $HOME/
     ln -fs  ${proFILEdir}/.inputrc        $HOME/.inputrc
