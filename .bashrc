@@ -88,6 +88,8 @@ export alldot='* .[^.]*'
 
 alias ${TAG}du='echo subdir size is; du -sh'
 alias ${TAG}ps="ps -u $USER -o pid,args --forest"
+alias ${TAG}pstree="pstree -hap -u $USER"
+alias ${TAG}pstall="pstree -ha"
 alias ${TAG}s='ls -thrF --color=auto --show-control-chars'
 alias grep='grep --color=auto'
 alias env='env|sort'
