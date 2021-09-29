@@ -109,15 +109,10 @@ function restore_tools() {
 # main function
 ######################################################################
 printf "CONFIRM : WILL UPDATE & COPY from $SRC $DST"
-printf "\n[c)opy/ u)pdate b)ackup r)restore n)oting]: "
+printf "\n[c)opy r)restore n)oting]: "
 read confirm
 if [ "$confirm" = "c" ]; then
     copy_tools -ivf
-elif [ "$confirm" = "u" ]; then
-    copy_tools -uvf
-elif [ "$confirm" = "b" ]; then
-    #backup¿ª ∏∏µÍ 
-    copy_tools -ibuvf 
 elif [ "$confirm" = "r" ]; then
     restore_tools
 else 

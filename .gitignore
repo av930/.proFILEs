@@ -17,6 +17,7 @@ tempdir/*
 ###################
 *.swp
 *.swo
+^BC*.tmp
 *~
 
 # Packages #
