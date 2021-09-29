@@ -96,7 +96,7 @@ function remove_tools() {
 # main function
 ######################################################################
 printf "CONFIRM : WILL UPDATE & COPY from $SRC $DST"
-printf "\n[c)opy/ u)pdate b)ackup r)remove n)oting]: "
+printf "\n[c)opy u)pdate b)ackup r)remove n)oting]: "
 read confirm
 if [ "$confirm" = "c" ]; then
     copy_tools -ivf
