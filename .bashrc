@@ -151,8 +151,8 @@ if [ "${RET##*/}" = "${PWD##*/}" ]; then goup "$@";fi
 }
 
 
-alias ${TAG}cp='echo "scp ${USER}@$(hostname -i):${HOME}/filename . ";\
-echo scp filename ${USER}@$(hostname -i):${HOME}/'
+alias ${TAG}cp='echo "scp ${USER}@$(hostname -I):${HOME}/filename . ";\
+echo scp filename ${USER}@$(hostname -I):${HOME}/'
 
 
 ###############################
