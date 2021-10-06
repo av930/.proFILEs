@@ -5,6 +5,6 @@
 
 
 [includeIf "gitdir:~/.proFILEs/"]
-    path = ~/.proFILEs/.gitconfig.user.extra
+    path = ~/.proFILEs/user.gitconfig.extra
 
 

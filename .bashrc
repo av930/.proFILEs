@@ -237,12 +237,12 @@ printf '[%s] runned: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
 ##################################################################################
 USR_FILE=${proFILEdirOS}/.bashrc
 if [ -f "${USR_FILE}" ]; then source "${USR_FILE}" ;fi
+USR_FILE=${proFILEdir}/user.bashrc
+if [ -f "${USR_FILE}" ]; then source "${USR_FILE}" ;fi
 
 # load android & repo
 ##################################################################################
 USR_FILE=${proFILEdir}/android/android
-if [ -f "${USR_FILE}" ]; then source "${USR_FILE}" ;fi
-USR_FILE=${proFILEdir}/android/repo
 if [ -f "${USR_FILE}" ]; then source "${USR_FILE}" ;fi
 
 # show banner when login in screen
