@@ -199,7 +199,7 @@ fi
 }
 
 function get_ip(){
-readarray -td" " a <<<"$(hostname -I) $SSH_CONNECTION"
+readarray -t a <<<"$(hostname -I) $SSH_CONNECTION"
   for ip in ${a[@]}; do
     max=$(grep -o $ip <<< ${a[*]} | wc -l)
     if [ $max -eq 2 ] ;then echo $ip & break; fi
