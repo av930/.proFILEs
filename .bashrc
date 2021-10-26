@@ -81,7 +81,7 @@ function kill_screen()
        done
     fi
 }
-
+alias scxx="screen -ls | tail -n +2 | head -n -2 | awk '{print $1}' | xargs -I {} screen -S {} -X quit"
 ###############################
 #### move & find
 export alldot='* .[^.]*'
