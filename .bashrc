@@ -15,7 +15,7 @@ COMMENT
 
 ############################### RC setting  #####################################
 #Beware that most terminals override Ctrl+S to suspend execution until Ctrl+Q is entered.-
-#This is called XON/XOFF flow control. For activating forward-search-history, 
+#This is called XON/XOFF flow control. For activating forward-search-history,
 #either disable flow control by issuing:
 
 ###############################
@@ -69,7 +69,7 @@ alias scl="screen -U -R -c ${proFILEdir}/.screenrc_spilt"
 alias scx='kill_screen'
 function kill_screen()
 {
-    if [ "$1" != "" ]; then 
+    if [ "$1" != "" ]; then
        #kill only one
        screen -S $1 -X quit
     else
@@ -86,15 +86,14 @@ alias scxx="screen -ls | tail -n +2 | head -n -2 | awk '{print $1}' | xargs -I {
 #### move & find
 export alldot='* .[^.]*'
 
-alias ${TAG}du='echo subdir size is; du -sh'
-alias ${TAG}ps="ps -u $USER -o pid,args --forest"
-alias ${TAG}pstree="pstree -hap -u $USER"
-alias ${TAG}pstall="pstree -ha"
-alias ${TAG}s='ls -thrF --color=auto --show-control-chars'
+alias du${TAG}='echo subdir size is; du -sh'
+alias ps${TAG}="ps -u $USER -o pid,args --forest"
+alias pstree="pstree -hap -u $USER"
+alias pstree${TAG}="pstree -ha"
+alias ls='ls -thrF --color=auto --show-control-chars'
+alias dir='ls -al -F --color=auto| grep /'
 alias grep='grep --color=auto'
 alias env='env|sort'
-alias ${TAG}epo='echo repo sync -qcj4; repo sync -qcj4'
-alias dir='ls -al -F --color=auto| grep /'
 alias showpath='echo $PATH|sed "s/:/:\n/g"'
 alias findgrep='findandgrep'
 alias findrm='findandremove'
@@ -108,6 +107,7 @@ function findandremove()
 }
 
 alias moveup='mv * .[^.]* ..'
+alias repo${TAG}='echo repo sync -qcj4; repo sync -qcj4'
 alias grepo="goup .repo"
 alias gup="goup"
 alias gg="godown_withmenu"
@@ -126,7 +126,7 @@ function goup()
         \cd ..
     done
     \cd $HERE
-    cd $HOME 
+    cd $HOME
 }
 
 
@@ -134,7 +134,7 @@ function godown_withmenu(){
 local INPUT
 INPUT=$(find ~/ -mindepth 1 -maxdepth 4 -type d -name "$@" 2> /dev/null)
 show_menu_do "$INPUT"
-cd ${RET} 
+cd ${RET}
 }
 
 function goaround_withmenu(){
@@ -151,13 +151,12 @@ if [ "${RET##*/}" = "${PWD##*/}" ]; then goup "$@";fi
 }
 
 
-alias ${TAG}ip='hostname -I'
-alias ${TAG}cp='echo "scp ${USER}@$(hostname -I):${HOME}/filename . ";\
-echo scp filename ${USER}@$(hostname -I):${HOME}/'
+alias scp${TAG}='echo "scp ${USER}@$(get_ip):${HOME}/filename . ";\
+echo scp filename ${USER}@$(get_ip):${HOME}/'
 
 
 ###############################
-#### internal fuction 
+#### internal fuction
 
 function show_menu_do(){
 ## ---------------------------------------------------------------------------
@@ -198,13 +197,14 @@ fi
  return 0
 }
 
+#ip=192.168.0.1
 function get_ip(){
 readarray -t a <<<"$(hostname -I) $SSH_CONNECTION"
   for ip in ${a[@]}; do
     max=$(grep -o $ip <<< ${a[*]} | wc -l)
-    if [ $max -eq 2 ] ;then echo $ip & break; fi
+    if [ $max -eq 2 ] ;then echo $ip && break; fi
   done
-return $ip
+#return $ip
 }
 
 
@@ -226,7 +226,7 @@ alias lll="launch_cur_dir"
 #### vi startup option
 alias  vi="VIMINIT=':so ~/.vim/.vimrc' MYVIMRC='~/.vim/.vimrc' vim $*"
 alias  vimp="VIMINIT=':so ~/.viu/.vimrc_backup' MYVIMRC='~/.viu/.vimrc_backup' vim $* -V9myLog"
-alias  vimu="VIMINIT=':so ~/.viu/.vimrc' MYVIMRC='~/.viu/.vimrc' vim $*" 
+alias  vimu="VIMINIT=':so ~/.viu/.vimrc' MYVIMRC='~/.viu/.vimrc' vim $*"
 alias  vimo="VIMINIT=':so ~/.vio/.vimrc' MYVIMRC='~/.vio/.vimrc' vim $* -V9myLog"
 
 #go file on symbol definition
@@ -258,6 +258,6 @@ if [ -f "${USR_FILE}" ]; then source "${USR_FILE}" ;fi
 ##################################################################################
 USR_FILE=${proFILEdir}/.banner
 
-if [ -f "${USR_FILE}" ] && [ -n "$STY" ] && [ "$opt_banner" = "yes" ] 
-	then source "${USR_FILE}" 
+if [ -f "${USR_FILE}" ] && [ -n "$STY" ] && [ "$opt_banner" = "yes" ]
+	then source "${USR_FILE}"
 fi

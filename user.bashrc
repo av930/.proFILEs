@@ -1,2 +1,2 @@
-alias lsu="su - vc.integrator"
+alias su${TAG}="su - vc.integrator"
 

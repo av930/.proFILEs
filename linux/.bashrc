@@ -49,7 +49,7 @@ function launch_cur_dir()
 
 function xming()
 {
-    Command=$(w|awk '/joongkeu/ {print $3}'|sed 's/:.*//' |sort -u); 
+    Command=$(w|awk '/joongkeu/ {print $3}'|sed 's/:.*//' |sort -u);
     export DISPLAY=${Command}:0.0
 }
 
@@ -60,7 +60,7 @@ function set_sdk(){
     export ANDROID_PRODUCT_OUT=${SRC_FULL}/out/target/product/generic
 
 }
-    
+
 function java15()
 {
 JAVA_HOME=$JAVA_15HOME
