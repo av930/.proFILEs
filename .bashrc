@@ -12,7 +12,6 @@ if [ -f "${proFILEdir}/.bashrc" ]; then source "${proFILEdir}/.bashrc"; fi
 COMMENT
 
 
-
 ############################### RC setting  #####################################
 #Beware that most terminals override Ctrl+S to suspend execution until Ctrl+Q is entered.-
 #This is called XON/XOFF flow control. For activating forward-search-history,
@@ -25,9 +24,14 @@ stty -ixon
 #default file option on create time
 umask 022
 
+###############################
+#### profile alias
 #global TAG for alias for banning conflict for builtin commands
 export TAG='l'
+export alldot='* .[^.]*'
+
 alias bashg="cd ${HOME}/${proFILEdir}"
+alias bashu="git -C ${HOME}/${proFILEdir} pull"
 alias bashs="source ${HOME}/${proFILEdir}/.bashrc"
 alias bashe="vi ${HOME}/${proFILEdir}/.bashrc"
 
@@ -82,10 +86,20 @@ function kill_screen()
     fi
 }
 alias scxx="screen -ls | tail -n +2 | head -n -2 | awk '{print $1}' | xargs -I {} screen -S {} -X quit"
-###############################
-#### move & find
-export alldot='* .[^.]*'
 
+###############################
+#### utility
+
+alias scp${TAG}='echo "scp ${USER}@$(get_ip):${HOME}/filename .\n scp filename ${USER}@$(get_ip):${HOME}/'
+alias ssh${TAG}='echo ssh -p 22 ${USER}@$(get_ip)'
+alias repo${TAG}='echo repo sync -qcj4; repo sync -qcj4'
+
+###############################
+#### move
+alias findrm='findandremove'
+alias moveup='mv * .[^.]* ..'
+
+#### find
 alias du${TAG}='echo subdir size is; du -sh'
 alias ps${TAG}="ps -u $USER -o pid,args --forest"
 alias pstree="pstree -hap -u $USER"
@@ -96,7 +110,35 @@ alias grep='grep --color=auto'
 alias env='env|sort'
 alias showpath='echo $PATH|sed "s/:/:\n/g"'
 alias findgrep='findandgrep'
-alias findrm='findandremove'
+
+alias grepo="goup .repo"
+alias gup="goup"
+alias gg="godown_withmenu"
+alias ga="goaround_withmenu"
+
+###############################
+#### copy & paste http://sourceforge.net/projects/commandlinecopypaste/
+# ex-copy: pwd | cc, ex-paste: cd $(cv)
+#command line copy+paste dir
+export CLCP_DIR="${proFILEdir}"
+#command line clipboard file
+export CLCF="${proFILEdir}/.path.log"
+alias copy_cc="sh ${CLCP_DIR}/cc.sh"
+alias coyp_cv="cat ${CLCF}"
+#alias lll="launch_cur_dir | cc; cv"
+alias lll="launch_cur_dir"
+
+
+###############################
+#### vi startup option
+alias  vi="VIMINIT=':so ~/.vim/.vimrc' MYVIMRC='~/.vim/.vimrc' vim $*"
+alias  vimp="VIMINIT=':so ~/.viu/.vimrc_backup' MYVIMRC='~/.viu/.vimrc_backup' vim $* -V9myLog"
+alias  vimu="VIMINIT=':so ~/.viu/.vimrc' MYVIMRC='~/.viu/.vimrc' vim $*"
+alias  vimo="VIMINIT=':so ~/.vio/.vimrc' MYVIMRC='~/.vio/.vimrc' vim $* -V9myLog"
+
+#go file on symbol definition
+alias vimt='vi -t'
+
 
 function findandgrep() { find . -name $1 -print | xargs grep -e "$2";}
 function findandremove()
@@ -106,12 +148,6 @@ function findandremove()
     fi
 }
 
-alias moveup='mv * .[^.]* ..'
-alias repo${TAG}='echo repo sync -qcj4; repo sync -qcj4'
-alias grepo="goup .repo"
-alias gup="goup"
-alias gg="godown_withmenu"
-alias ga="goaround_withmenu"
 function goup()
 {
     local TOPFILE=${proFILEdir}
@@ -151,8 +187,6 @@ if [ "${RET##*/}" = "${PWD##*/}" ]; then goup "$@";fi
 }
 
 
-alias scp${TAG}='echo "scp ${USER}@$(get_ip):${HOME}/filename . ";\
-echo scp filename ${USER}@$(get_ip):${HOME}/'
 
 
 ###############################
@@ -206,34 +240,6 @@ readarray -t a <<<"$(hostname -I) $SSH_CONNECTION"
   done
 #return $ip
 }
-
-
-#### copy & paste http://sourceforge.net/projects/commandlinecopypaste/
-# ex-copy: pwd | cc, ex-paste: cd $(cv)
-#command line copy+paste dir
-export CLCP_DIR="${proFILEdir}"
-
-#command line clipboard file
-export CLCF="${proFILEdir}/.path.log"
-
-alias copy_cc="sh ${CLCP_DIR}/cc.sh"
-alias coyp_cv="cat ${CLCF}"
-#alias lll="launch_cur_dir | cc; cv"
-alias lll="launch_cur_dir"
-
-
-
-#### vi startup option
-alias  vi="VIMINIT=':so ~/.vim/.vimrc' MYVIMRC='~/.vim/.vimrc' vim $*"
-alias  vimp="VIMINIT=':so ~/.viu/.vimrc_backup' MYVIMRC='~/.viu/.vimrc_backup' vim $* -V9myLog"
-alias  vimu="VIMINIT=':so ~/.viu/.vimrc' MYVIMRC='~/.viu/.vimrc' vim $*"
-alias  vimo="VIMINIT=':so ~/.vio/.vimrc' MYVIMRC='~/.vio/.vimrc' vim $* -V9myLog"
-
-#go file on symbol definition
-alias vimt='vi -t'
-
-
-
 
 
 
