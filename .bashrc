@@ -89,7 +89,7 @@ alias scxx="screen -ls | tail -n +2 | head -n -2 | awk '{print $1}' | xargs -I {
 
 ###############################
 #### utility
-
+alias dokcer='docker'
 alias scp${TAG}='echo "scp ${USER}@$(get_ip):${HOME}/filename .\n scp filename ${USER}@$(get_ip):${HOME}/'
 alias ssh${TAG}='echo ssh -p 22 ${USER}@$(get_ip)'
 alias repo${TAG}='echo repo sync -qcj4; repo sync -qcj4'
