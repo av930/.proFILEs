@@ -1,7 +1,7 @@
 printf '[%s] called: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
 ############################## COMMON .bashrc #####################################
 :<< COMMENT
-# 1. below code should be inserted in .bashrc 
+# 1. below code should be inserted in .bashrc
 # 2. or replaced by .bash_aliases to include this file
 # usually end of file is ok, or user dependent postion is ok, or after these line
 #    . ~/.bash_aliases , . /etc/bash_completion
@@ -33,7 +33,7 @@ export alldot='* .[^.]*'
 
 alias bashg="cd ${HOME}/${proFILEdir}"
 alias bashu="git -C ${HOME}/${proFILEdir} pull"
-alias bashs="source ${HOME}/${proFILEdir}/.bashrc"
+alias bashs="source ${HOME}/${proFILEdir}/.profile"
 alias bashe="vi ${HOME}/${proFILEdir}/.bashrc"
 
 
