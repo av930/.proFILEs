@@ -1,3 +1,4 @@
+printf '[%s] called: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
 ############################## USER DEFINE ################################
 
 DEVTOOLS=/cygdrive/d/.gradle/OneDrive/_MyProgram
@@ -23,6 +24,3 @@ GNUPLOT=$DEVTOOLS/_Shell/_Gnutool/gnuplot/bin
 export SRC_SDK SETTING CGDB ANT_HOME SRC_WORK DEVTOOLS CLASSPATH SOLAR JAVA_HOME
 
 #PATH=$ASTYLE:$PATH:$GNUPLOT
-
-
-printf '[%s] runned: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"

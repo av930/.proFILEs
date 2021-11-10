@@ -1,3 +1,4 @@
+printf '[%s] called: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
 echo -e "${magenta}"
 cat<< COMMENT
 ******************************************************************

@@ -1,3 +1,4 @@
+printf '[%s] called: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
 #------------------------------ linux -----------------------------------------
 ############################## Prompt DEFINE #####################################
 # set a fancy prompt (non-color, unless we know we "want" color)
@@ -76,5 +77,4 @@ CLASSPATH=$JAVA_HOME/lib/tools.jar:$JAVA_HOME/lib/activation.jar
 PATH=.:$JAVA_HOME/bin:$PATH
 }
 
-############################### Utility #####################################
-printf '[%s] runned: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
+
