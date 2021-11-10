@@ -30,7 +30,4 @@
     keepBackup = false
 
 [color]
-	ui = auto
-[user]
-	name = av9300
-	email = av9300@gmail.com
+    ui = auto

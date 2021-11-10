@@ -1,9 +1,10 @@
+printf '[%s] called: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
 ############################## COMMON .bashrc #####################################
 :<< COMMENT
-# below code should be inserted in .bashrc
+# 1. below code should be inserted in .bashrc 
+# 2. or replaced by .bash_aliases to include this file
 # usually end of file is ok, or user dependent postion is ok, or after these line
-#    . ~/.bash_aliases
-#    . /etc/bash_completion
+#    . ~/.bash_aliases , . /etc/bash_completion
 printf '[%s] runned: [%s] sourced\n' "$0" "$BASH_SOURCE"
 if [ -f "${proFILEdir}/.bashrc" ]; then source "${proFILEdir}/.bashrc"; fi
 
@@ -246,7 +247,6 @@ readarray -t a <<<"$(hostname -I) $SSH_CONNECTION"
 
 ##################################################################################
 ##################################################################################
-printf '[%s] runned: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
 
 # load target specific
 ##################################################################################
@@ -257,13 +257,12 @@ if [ -f "${USR_FILE}" ]; then source "${USR_FILE}" ;fi
 
 # load android & repo
 ##################################################################################
-USR_FILE=${proFILEdir}/android/android
+USR_FILE=${proFILEdir}/android/.androidrc
 if [ -f "${USR_FILE}" ]; then source "${USR_FILE}" ;fi
 
 # show banner when login in screen
 ##################################################################################
 USR_FILE=${proFILEdir}/.banner
-
 if [ -f "${USR_FILE}" ] && [ -n "$STY" ] && [ "$opt_banner" = "yes" ]
-	then source "${USR_FILE}"
+    then source "${USR_FILE}"
 fi

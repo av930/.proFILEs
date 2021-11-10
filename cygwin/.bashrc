@@ -1,3 +1,4 @@
+printf '[%s] called: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
 #------------------------------ cygwin -----------------------------------------
 # The absolute path must be eliminated within this file
 # 이 파일에는 절대 path가 없어야 합니다.
@@ -79,8 +80,3 @@ function set-android-sdk(){
     export USE_CYGWIN=1 #refer HOST_windows-x86.mk for cygwin building 
 
 }
-
-
-############################### Utility #####################################
-
-printf '[%s] runned: [%s] sourced\n' "$0" "$BASH_SOURCE"

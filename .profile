@@ -1,28 +1,29 @@
+printf '[%s] called: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
 ############################## COMMON .profile#####################################
 # common configuration
 ##################################################################
 # LANG & Color
 ##################################################################
-#∞˙∞≈ ªÁøÎ«œ¥¯ version
+#Í≥ºÍ±∞ ÏÇ¨Ïö©ÌïòÎçò version
 #LANG=C.euckr
 #LANG=en_US.UTF-8
 #LANG=ko_KR.euckr
 
-#«ˆ¿Á ∞À¡ıµ» version
+#ÌòÑÏû¨ Í≤ÄÏ¶ùÎêú version
 LANG=ko_KR.UTF-8
 
 ##### color code
 red='\e[0;31m';     RED='\e[1;31m';     green='\e[0;32m';       GREEN='\e[1;32m';
 yellow='\e[0;33m';  YELLOW='\e[1;33m';  blue='\e[0;34m';        BLUE='\e[1;34m';
-cyan='\e[0;36m';    CYAN='\e[1;36m';    magenta='\e[0;35m';     brown='\e[0;33m';     
+cyan='\e[0;36m';    CYAN='\e[1;36m';    magenta='\e[0;35m';     brown='\e[0;33m';
 NCOL='\e[0m';
 
 
-# find proFILEs path 
+# find proFILEs path
 ##################################################################
 proFILEdir='.proFILEs'
 proFILEdirOS='unknown'
-if [ $(expr match "$OSTYPE" 'cygwin') -ne 0 ] 
+if [ $(expr match "$OSTYPE" 'cygwin') -ne 0 ]
 then proFILEdirOS=${proFILEdir}/cygwin
 else proFILEdirOS=${proFILEdir}/linux
 fi
@@ -30,13 +31,14 @@ fi
 
 USR_FILE=~/.profile.config
 if [ -f "${USR_FILE}" ]
-then source "${USR_FILE}" 
-else source ${proFILEdir}/default.config
+then source "${USR_FILE}"
+else source ${proFILEdir}/.profile.default
 fi
 
-export proFILEdir proFILEdirOS LANG red RED green GREEN yellow YELLOW blue BLUE cyan CYAN magenta brown NCOL 
+export proFILEdir proFILEdirOS LANG 
+export red RED green GREEN yellow YELLOW blue BLUE cyan CYAN magenta brown NCOL
 
-printf '[%s] runned: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
+
 # specific profile
 # check linux or cygwin and load profile
 ##################################################################
@@ -46,6 +48,7 @@ if [ -f "${proFILEdirOS}/.profile" ]; then source "${proFILEdirOS}/.profile" ;fi
 # .bashrc
 ##################################################################
 # source the users bashrc if it exists
+printf '[%s] runned: [%s:%s] sourced\n' "$0" "${HOME}/.bashrc" "$LINENO"
 if [ -f "${HOME}/.bashrc" ]; then source "${HOME}/.bashrc"; fi
 
 
