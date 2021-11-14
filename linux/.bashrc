@@ -39,13 +39,11 @@ fi
 ############################### Tool ALIAS #####################################
 function launch_cur_dir()
 {
-    ip_addr=$(hostname -I |cut  -f1 -d' ')
     home_name=$(dirname $HOME)
-    #print scp path dir
-    #echo "$(whoami)@$ip_addr:$proFILEdir/.path.log"
     #print current path as windows type
-    path=$(pwd|sed "s:$home_name:\/\/$ip_addr:"|sed 's:\/:\\:g')
-    echo "$path" | tee ${HOME}/.proFILEs/.path.log
+    pathwithIP=$(pwd|sed "s:$home_name:\/\/$(get_ip):"|sed 's:\/:\\:g')
+    pathwithDrive=$(pwd|sed "s:${HOME}:Y\::"|sed 's:\/:\\:g')
+    echo "$pathwithDrive" | tee ${HOME}/.proFILEs/.path.log
 }
 
 function xming()

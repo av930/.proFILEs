@@ -21,7 +21,7 @@ NCOL='\e[0m';
 
 # find proFILEs path
 ##################################################################
-proFILEdir='.proFILEs'
+proFILEdir="${BASH_SOURCE%/*}/.proFILEs"
 proFILEdirOS='unknown'
 if [ $(expr match "$OSTYPE" 'cygwin') -ne 0 ]
 then proFILEdirOS=${proFILEdir}/cygwin
@@ -35,7 +35,7 @@ then source "${USR_FILE}"
 else source ${proFILEdir}/.profile.default
 fi
 
-export proFILEdir proFILEdirOS LANG 
+export proFILEdir proFILEdirOS LANG
 export red RED green GREEN yellow YELLOW blue BLUE cyan CYAN magenta brown NCOL
 
 
@@ -66,5 +66,6 @@ if [[ ${SHLVL} -eq 1 && -x $(which screen) ]]; then
     #((SHLVL+=1)); export SHLVL
     #exec screen -R -e "^Ee" ${SHELL} -l
     #start screen if not using cygwin
+    if [ "${BASH_SOURCE%/*}" != "$HOME" ]; then echo login as other user && return ; fi
     if [ "$OSTYPE" != "cygwin" ] && [ "$opt_screen" = "yes" ]; then screen -U -R; fi
 fi

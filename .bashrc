@@ -126,7 +126,7 @@ export CLCP_DIR="${proFILEdir}"
 export CLCF="${proFILEdir}/.path.log"
 alias copy_cc="sh ${CLCP_DIR}/cc.sh"
 alias coyp_cv="cat ${CLCF}"
-#alias lll="launch_cur_dir | cc; cv"
+#alias lll="launch_cur_dir | copy_cc; copy_cv"
 alias lll="launch_cur_dir"
 
 
