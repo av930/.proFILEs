@@ -33,7 +33,7 @@ export alldot='* .[^.]*'
 
 alias bashg="cd ${HOME}/${proFILEdir}"
 alias bashu="git -C ${HOME}/${proFILEdir} pull"
-alias bashs="source ${HOME}/${proFILEdir}/.profile"
+alias bashs="source ${HOME}/.profile"
 alias bashe="vi ${HOME}/${proFILEdir}/.bashrc"
 
 
