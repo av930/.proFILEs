@@ -48,8 +48,8 @@ if [ -f "${proFILEdirOS}/.profile" ]; then source "${proFILEdirOS}/.profile" ;fi
 # .bashrc
 ##################################################################
 # source the users bashrc if it exists
-printf '[%s] runned: [%s:%s] sourced\n' "$0" "${HOME}/.bashrc" "$LINENO"
-if [ -f "${HOME}/.bashrc" ]; then source "${HOME}/.bashrc"; fi
+printf '[%s] runned: [%s:%s] sourced\n' "$0" "${proFILEdir}/.bashrc" "$LINENO"
+if [ -f "${proFILEdir}/.bashrc" ]; then source "${proFILEdir}/.bashrc"; fi
 
 
 # common configuration
