@@ -31,10 +31,10 @@ umask 022
 export TAG='l'
 export alldot='* .[^.]*'
 
-alias bashg="cd ${HOME}/${proFILEdir}"
-alias bashu="git -C ${HOME}/${proFILEdir} pull"
-alias bashs="source ${HOME}/.profile"
-alias bashe="vi ${HOME}/${proFILEdir}/.bashrc"
+alias bashg="cd ${proFILEdir}"
+alias bashu="git -C ${proFILEdir} pull"
+alias bashs="source ${proFILEdir%/*}/.profile"
+alias bashe="vi ${proFILEdir}/.bashrc"
 
 
 ###############################
