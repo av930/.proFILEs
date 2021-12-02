@@ -90,9 +90,10 @@ alias scxx="screen -ls | tail -n +2 | head -n -2 | awk '{print $1}' | xargs -I {
 
 ###############################
 #### utility
+
 alias dokcer='docker'
-alias scp${TAG}='echo "scp ${USER}@$(get_ip):${HOME}/filename .\n scp filename ${USER}@$(get_ip):${HOME}/"'
-alias ssh${TAG}='echo ssh -p 22 ${USER}@$(get_ip)'
+alias scp${TAG}='echo "scp ${USER}@$CURR_IP:${HOME}/filename .\n scp filename ${USER}@$CURR_IP:${HOME}/"'
+alias ssh${TAG}='echo ssh -p 22 ${USER}@$CURR_IP'
 alias repo${TAG}='echo repo sync -qcj4; repo sync -qcj4'
 
 ###############################
@@ -231,17 +232,6 @@ fi
  RET=$pathname
  return 0
 }
-
-#ip=192.168.0.1
-function get_ip(){
-readarray -t a <<<"$(hostname -I) $SSH_CONNECTION"
-  for ip in ${a[@]}; do
-    max=$(grep -o $ip <<< ${a[*]} | wc -l)
-    if [ $max -eq 2 ] ;then echo $ip && break; fi
-  done
-#return $ip
-}
-
 
 
 
