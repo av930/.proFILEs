@@ -35,7 +35,20 @@ then source "${USR_FILE}"
 else source ${proFILEdir}/.profile.default
 fi
 
-export proFILEdir proFILEdirOS LANG
+# get_ip=192.168.0.1
+##################################################################
+CURR_IP=172.0.0.1
+function get_ip(){
+readarray -t a <<<"$(hostname -I) $SSH_CONNECTION"
+  for ip in ${a[@]}; do
+    max=$(grep -o $ip <<< ${a[*]} | wc -l)
+    if [ $max -eq 2 ] ;then CURR_IP=$ip && echo $ip && break; fi
+  done
+#return $ip
+}
+
+CURR_IP=$(get_ip)
+export proFILEdir proFILEdirOS LANG CURR_IP
 export red RED green GREEN yellow YELLOW blue BLUE cyan CYAN magenta brown NCOL
 
 
@@ -66,6 +79,6 @@ if [[ ${SHLVL} -eq 1 && -x $(which screen) ]]; then
     #((SHLVL+=1)); export SHLVL
     #exec screen -R -e "^Ee" ${SHELL} -l
     #start screen if not using cygwin
-    if [ "${BASH_SOURCE%/*}" != "$HOME" ]; then echo login as other user && return ; fi
+    if [ "${BASH_SOURCE%/*}" != "$HOME" ]; then return ; fi
     if [ "$OSTYPE" != "cygwin" ] && [ "$opt_screen" = "yes" ]; then screen -U -R; fi
 fi
