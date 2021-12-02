@@ -107,6 +107,7 @@ alias ps${TAG}="ps -u $USER -o pid,args --forest"
 alias pstree="pstree -hap -u $USER"
 alias pstree${TAG}="pstree -ha"
 alias ls='ls -thrF --color=auto --show-control-chars'
+alias ll='ls -althrF --color=auto --show-control-chars'
 alias dir='ls -al -F --color=auto| grep /'
 alias grep='grep --color=auto'
 alias env='env|sort'
