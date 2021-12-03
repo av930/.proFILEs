@@ -28,8 +28,8 @@ elif [ "$LOGIN_MODE" = "DOCKER" ]; then
     PS1="\n${debian_chroot:+($debian_chroot)}$red\u@${CURR_IP}:$yellow\$PWD\[$NCOL\$\n\$ "
 
 elif [ "$color_prompt" = yes ]; then
-    PS1="\n${debian_chroot:+($debian_chroot)}$GREEN\u@$(get_ip):$CYAN\$PWD\[$NCOL\$\n\$ "
-    #PS1="\n${debian_chroot:+($debian_chroot)}$GREEN\u@$(get_ip):$CYAN\$PWD\[\033[00m\]\$\n\$ "
+    PS1="\n${debian_chroot:+($debian_chroot)}$GREEN\u@${CURR_IP}:$CYAN\$PWD\[$NCOL\$\n\$ "
+    #PS1="\n${debian_chroot:+($debian_chroot)}$GREEN\u@${CURR_IP}:$CYAN\$PWD\[\033[00m\]\$\n\$ "
     #PS1="\n${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\$PWD\[\033[00m\]\$\n\$ "
 
 else
@@ -50,7 +50,7 @@ function launch_cur_dir()
 {
     home_name=$(dirname $HOME)
     #print current path as windows type
-    pathwithIP=$(pwd|sed "s:$home_name:\/\/$(get_ip):"|sed 's:\/:\\:g')
+    pathwithIP=$(pwd|sed "s:$home_name:\/\/${CURR_IP}"|sed 's:\/:\\:g')
     pathwithDrive=$(pwd|sed "s:${HOME}:Y\::"|sed 's:\/:\\:g')
     echo "$pathwithDrive" | tee ${HOME}/.proFILEs/.path.log
 }

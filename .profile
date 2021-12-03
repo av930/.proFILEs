@@ -48,7 +48,7 @@ readarray -t a <<<"$(hostname -I) $SSH_CONNECTION"
 }
 
 CURR_IP=$(get_ip)
-export proFILEdir proFILEdirOS LANG CURR_IP
+export proFILEdir proFILEdirOS LANG CURR_IP get_ip
 export red RED green GREEN yellow YELLOW blue BLUE cyan CYAN magenta brown NCOL
 
 
