@@ -29,7 +29,8 @@ umask 022
 #### profile alias
 #global TAG for alias for banning conflict for builtin commands
 export TAG='l'
-export alldot='* .[^.]*'
+export dotall='* .[^.]*'
+export dotfile='.[^.]*'
 
 alias bashg="cd ${proFILEdir}"
 alias bashu="git -C ${proFILEdir} pull"
