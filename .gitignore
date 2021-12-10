@@ -2,6 +2,7 @@
 ######################
 .gitconfig.user
 tempdir/*
+.idea/*
 
 
 # Compiled source #
