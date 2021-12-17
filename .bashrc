@@ -105,7 +105,7 @@ alias moveup='mv * .[^.]* ..'
 #### find
 alias du${TAG}='echo subdir size is; du -sh'
 alias ps${TAG}="ps -u $USER -o pid,args --forest"
-alias pstree="pstree -hap -u $USER"
+alias pstree="pstree -hap -u $USER | more"
 alias pstree${TAG}="pstree -ha"
 alias ls='ls -thrF --color=auto --show-control-chars'
 alias ll='ls -althrF --color=auto --show-control-chars'

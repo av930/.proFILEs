@@ -5,8 +5,7 @@ func_su(){
     echo account is [$account]
 
     expect -c "
-    spawn su -s \"${proFILEdir}/func_su.sh ${CURR_IP}\" - ${account}
-
+    spawn su -s \"${proFILEdir}/func_su.sh\" - ${account}
     expect {
         \"Password: \" { send \"!devops12\r\" }
     }
@@ -15,7 +14,7 @@ func_su(){
     "
 }
 
-alias sul="func_su vc.integrator"
+alias sul="func_su"
 if [ "$USER" == "vc.integrator" ]; then
     echo "login as [$USER]"
 fi
