@@ -146,8 +146,9 @@ hardstatus alwayslastline '%{= kB}[%H]%{= kW}%-Lw%{= kG}%50> %n*%f %t%{= kW}%+Lw
 ## defshell -bash 와 같은 구문
 # shell -$SHELL
 # shell                 zsh
- shell                 bash
-
+# shell                 bash
+  shell "$HOME/.proFILEs/scw"
+#  shell "$HOME/.proFILEs/.profile"
 ## log file
  deflog on
  logfile $HOME/.proFILEs/tempdir/screenlog
