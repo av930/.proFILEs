@@ -40,7 +40,7 @@
 [color]
     ui = auto
 [difftool "sourcetree"]
-    cmd = 'D:/.gradle/OneDrive/_MyProgram/_IDEditor/_BC30/BComp.exe' \"$LOCAL\" \"$REMOTE\"
+    cmd = 'D:/.gradle/OneDrive/_MyProgram/_IDEditor/_BC40/BComp.exe' \"$LOCAL\" \"$REMOTE\"
 [mergetool "sourcetree"]
-    cmd = 'D:/.gradle/OneDrive/_MyProgram/_IDEditor/_BC30/BComp.exe' \"$LOCAL\" \"$REMOTE\" \"$BASE\" \"$MERGED\"
+    cmd = 'D:/.gradle/OneDrive/_MyProgram/_IDEditor/_BC40/BComp.exe' \"$LOCAL\" \"$REMOTE\" \"$BASE\" \"$MERGED\"
     trustExitCode = true
