@@ -56,7 +56,6 @@ function copy_tools() {
     ln -fs  ${proFILEdirOS}/.gitconfig    $HOME/.gitconfig
 
 
-    ln -fs  ${proFILEdir}/.bash_aliases   $HOME/.bash_aliases
     if [ -f "$HOME/.profile" ]; then mv "$HOME/.profile" "$HOME/.profile_backup";  fi
     ln -fs  ${proFILEdir}/.profile      $HOME/.profile
 
@@ -85,7 +84,6 @@ function remove_tools() {
           $HOME/.indent.pro   \
           $HOME/.gitignore    \
           $HOME/.gitconfig    \
-          $HOME/.bash_aliases \
           $HOME/.profile      \
 
     return 0
