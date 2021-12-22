@@ -1,9 +1,9 @@
 printf '[%s] called: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
 ############################## COMMON .bashrc #####################################
 :<< COMMENT
-# 1. below code should be inserted in .bashrc
-# 2. or replaced by .bash_aliases to include this file
-# usually end of file is ok, or user dependent postion is ok, or after these line
+# 1. below code called from .profile
+# 2. otherwise it could be called from .bashrc or .bash_aliases from HOME.
+# 3. this line located in usually end of file, or user dependent postion, or after these line
 #    . ~/.bash_aliases , . /etc/bash_completion
 printf '[%s] runned: [%s] sourced\n' "$0" "$BASH_SOURCE"
 if [ -f "${proFILEdir}/.bashrc" ]; then source "${proFILEdir}/.bashrc"; fi
