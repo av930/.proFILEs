@@ -3,6 +3,12 @@ printf '[%s] called: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
 # The absolute path must be eliminated within this file
 # 이 파일에는 절대 path가 없어야 합니다.
 ############################## Prompt DEFINE #####################################
+#gen_alias.sh is automatically generated everytime login windows by windows format
+#USERPROFILE path sometimes has a space and special chars
+if [ $(expr match "$OSTYPE" 'cygwin') -ne 0 ]; then
+    dos2unix $(cygpath -p ${USERPROFILE}/gen_alias.sh) >/dev/null 2>&1
+    source $(cygpath -p ${USERPROFILE}/gen_alias.sh)
+fi
 
 
 ############################### Tool ALIAS #####################################
@@ -69,7 +75,7 @@ function start-gdb()
     echo "cgdb -d $GDB -x gdbclient.cmds $1"
     cgdb -d $GDB -x "gdbclient.cmds" $1
 
-}    
+}
 
 
 ############################### ENV DEFINE ######################################
@@ -77,6 +83,6 @@ alias setsdk='set-android-sdk'
 function set-android-sdk(){
     export PATH=${SRC_SDK}/platform-tools:${SRC_SDK}/tools:$PATH;
     export ANDROID_PRODUCT_OUT=${SRC_FULL}/out/target/product/generic
-    export USE_CYGWIN=1 #refer HOST_windows-x86.mk for cygwin building 
+    export USE_CYGWIN=1 #refer HOST_windows-x86.mk for cygwin building
 
 }
