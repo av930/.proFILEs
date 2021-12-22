@@ -5,7 +5,8 @@ func_su(){
     echo account is [$account]
 
     expect -c "
-    spawn su -s \"${proFILEdir}/func_su.sh\" - ${account}
+    #spawn su -s \"${proFILEdir}/func_su.sh\" - ${account}
+    spawn su - ${account}
     expect {
         \"Password: \" { send \"!devops12\r\" }
     }
