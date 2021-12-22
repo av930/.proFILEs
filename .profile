@@ -21,8 +21,12 @@ NCOL='\e[0m';
 
 # find proFILEs path
 ##################################################################
-proFILEdir="${BASH_SOURCE%/*}/.proFILEs"
+#proFILEdir="${BASH_SOURCE%/*}/.proFILEs"
+#in case of link file
+#if [ ! -L "$HOME/$BASH_SOURCE" ]; then ln -fs  ${proFILEdir}/$1 $HOME/$1; fi
+proFILEdir=".proFILEs"
 proFILEdirOS='unknown'
+
 if [ $(expr match "$OSTYPE" 'cygwin') -ne 0 ]
 then proFILEdirOS=${proFILEdir}/cygwin
 else proFILEdirOS=${proFILEdir}/linux
