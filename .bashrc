@@ -95,6 +95,7 @@ alias scxx="screen -ls | tail -n +2 | head -n -2 | awk '{print $1}' | xargs -I {
 alias dokcer='docker'
 alias scp${TAG}='echo "scp ${USER}@$CURR_IP:${HOME}/filename .\n scp filename ${USER}@$CURR_IP:${HOME}/"'
 alias ssh${TAG}='echo ssh -p 22 ${USER}@$CURR_IP'
+alias sshl${TAG}='echo ssh vc.integrator@localhost -p '
 alias repo${TAG}='echo repo sync -qcj4; repo sync -qcj4'
 
 ###############################
@@ -107,7 +108,9 @@ alias du${TAG}='echo subdir size is; du -sh'
 alias ps${TAG}="ps -u $USER -o pid,args --forest"
 alias pstree="pstree -hap -u $USER | more"
 alias pstree${TAG}="pstree -ha"
-alias ls='ls -thrF --color=auto --show-control-chars'
+alias ls='ls -F --color=auto --show-control-chars'
+alias lls='echo -n size-base; ls -agohrS'
+alias llt='echo -n time-base; ls -agohrt'
 alias ll='ls -althrF --color=auto --show-control-chars'
 alias dir='ls -al -F --color=auto| grep /'
 alias grep='grep --color=auto'
