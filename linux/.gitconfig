@@ -3,7 +3,7 @@
     path = ~/.proFILEs/user.gitconfig
 
 
-################ command config    
+################ command config
 
 #git config --global diff.tool bc
 #git config --global merge.tool win
@@ -31,3 +31,5 @@
 
 [color]
     ui = auto
+
+

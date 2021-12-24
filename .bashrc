@@ -1,9 +1,9 @@
 printf '[%s] called: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
 ############################## COMMON .bashrc #####################################
 :<< COMMENT
-# 1. below code should be inserted in .bashrc
-# 2. or replaced by .bash_aliases to include this file
-# usually end of file is ok, or user dependent postion is ok, or after these line
+# 1. below code called from .profile
+# 2. otherwise it could be called from .bashrc or .bash_aliases from HOME.
+# 3. this line located in usually end of file, or user dependent postion, or after these line
 #    . ~/.bash_aliases , . /etc/bash_completion
 printf '[%s] runned: [%s] sourced\n' "$0" "$BASH_SOURCE"
 if [ -f "${proFILEdir}/.bashrc" ]; then source "${proFILEdir}/.bashrc"; fi
@@ -29,11 +29,12 @@ umask 022
 #### profile alias
 #global TAG for alias for banning conflict for builtin commands
 export TAG='l'
-export alldot='* .[^.]*'
+export dotall='* .[^.]*'
+export dotfile='.[^.]*'
 
 alias bashg="cd ${proFILEdir}"
 alias bashu="git -C ${proFILEdir} pull"
-alias bashs="source ${proFILEdir}/.profile"
+alias bashs="source ${proFILEdir%/*}/.profile"
 alias bashe="vi ${proFILEdir}/.bashrc"
 
 
@@ -69,7 +70,7 @@ alias hisgrep='history | egrep -i --color=auto'
 # screen configuration
 # alias byobu='byobu -U $*'
 alias sc='screen -ls'
-alias scr='screen -U -R'
+alias scr="screen -U -R -c ${proFILEdir}/.screenrc"
 alias scl="screen -U -R -c ${proFILEdir}/.screenrc_spilt"
 alias scx='kill_screen'
 function kill_screen()
@@ -90,9 +91,11 @@ alias scxx="screen -ls | tail -n +2 | head -n -2 | awk '{print $1}' | xargs -I {
 
 ###############################
 #### utility
+
 alias dokcer='docker'
-alias scp${TAG}='echo "scp ${USER}@$(get_ip):${HOME}/filename .\n scp filename ${USER}@$(get_ip):${HOME}/"'
-alias ssh${TAG}='echo ssh -p 22 ${USER}@$(get_ip)'
+alias scp${TAG}='echo "scp ${USER}@$CURR_IP:${HOME}/filename .\n scp filename ${USER}@$CURR_IP:${HOME}/"'
+alias ssh${TAG}='echo ssh -p 22 ${USER}@$CURR_IP'
+alias sshl${TAG}='echo ssh vc.integrator@localhost -p '
 alias repo${TAG}='echo repo sync -qcj4; repo sync -qcj4'
 
 ###############################
@@ -103,9 +106,12 @@ alias moveup='mv * .[^.]* ..'
 #### find
 alias du${TAG}='echo subdir size is; du -sh'
 alias ps${TAG}="ps -u $USER -o pid,args --forest"
-alias pstree="pstree -hap -u $USER"
+alias pstree="pstree -hap -u $USER | more"
 alias pstree${TAG}="pstree -ha"
-alias ls='ls -thrF --color=auto --show-control-chars'
+alias ls='ls -F --color=auto --show-control-chars'
+alias lls='echo -n size-base; ls -agohrS'
+alias llt='echo -n time-base; ls -agohrt'
+alias ll='ls -althrF --color=auto --show-control-chars'
 alias dir='ls -al -F --color=auto| grep /'
 alias grep='grep --color=auto'
 alias env='env|sort'
@@ -231,17 +237,6 @@ fi
  RET=$pathname
  return 0
 }
-
-#ip=192.168.0.1
-function get_ip(){
-readarray -t a <<<"$(hostname -I) $SSH_CONNECTION"
-  for ip in ${a[@]}; do
-    max=$(grep -o $ip <<< ${a[*]} | wc -l)
-    if [ $max -eq 2 ] ;then echo $ip && break; fi
-  done
-#return $ip
-}
-
 
 
 
