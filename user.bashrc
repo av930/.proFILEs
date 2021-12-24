@@ -1,14 +1,12 @@
 printf '[%s] called: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
 
-func_ssh(){
+func_su(){
     if [ "$1" == "" ];then account=vc.integrator;else account=$1; fi
     echo account is [$account]
 
     expect -c "
-
-    spawn su - ${account}
-    #set send_human {.1 .3 1 .05 2}
-
+    spawn su -s \"${proFILEdir}/func_su.sh\" - ${account}
+    #spawn su - ${account}
     expect {
         \"Password: \" { send \"!devops12\r\" }
     }
@@ -17,4 +15,7 @@ func_ssh(){
     "
 }
 
-alias sul="func_ssh vc.integrator"
+alias sul="func_su"
+if [ "$USER" == "vc.integrator" ]; then
+    echo "login as [$USER]"
+fi

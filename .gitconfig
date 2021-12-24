@@ -3,7 +3,7 @@
     template=~/.proFILEs/gitcommit_message
 
 
-################ command config    
+################ command config
 #git config --global core.autocrlf input
 [core]
     editor = vim
@@ -20,7 +20,7 @@
 [filter "lfs"]
     smudge = git-lfs smudge -- %f
     clean = git-lfs clean -- %f
-################ gui config    
+################ gui config
 [color]
     ui = auto
     branch = true
@@ -31,9 +31,10 @@
 [alias]
     alias   = config --get-regexp ^alias\\.
     df      = difftool -t bc
-    tagcur  = describe --tags --abbrev=0 --match 
+    tagcur  = describe --tags --abbrev=0 --match
     loga    = log --oneline --decorate --graph -n 15 --all
     logo    = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr)%Creset %C(blue)<%an>%Creset' --abbrev-commit --date=relative
     space   = diff --cached --no-color > stage.diff && git apply --index -R stage.diff && git apply --index --whitespace=fix stage.diff && rm -f stage.diff
     ci      = commit --verbose
+    pushfor = push origin HEAD:refs/for/
 
