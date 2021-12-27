@@ -4,7 +4,7 @@ printf '[%s] called: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
 DEVTOOLS=/cygdrive/d/.gradle/OneDrive/_MyProgram
 SETTING=/cygdrive/d/.gradle/OneDrive/_MySetting
 
-SRC_WORK=/cygdrive/d/.gradle/SRC_WORK
+SRC_WORK=/cygdrive/d/.gradle/SRC-working
 SRC_SDK=$DEVTOOLS/_Android/android-sdk-windows
 SRC_FULL=$(cygpath -wp ${SRC_WORK}/nativeAOSP)
 
