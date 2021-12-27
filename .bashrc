@@ -96,6 +96,8 @@ alias dokcer='docker'
 alias scp${TAG}='echo "scp ${USER}@$CURR_IP:${HOME}/filename .\n scp filename ${USER}@$CURR_IP:${HOME}/"'
 alias ssh${TAG}='echo ssh -p 22 ${USER}@$CURR_IP'
 alias sshl${TAG}='echo ssh vc.integrator@localhost -p '
+
+alias rsyncl='echo rsync -auvht --exclude-from=exclude.txt --port=873 172.21.74.32::$USER/SRC_DIR/*  .'
 alias repo${TAG}='echo repo sync -qcj4; repo sync -qcj4'
 
 ###############################
