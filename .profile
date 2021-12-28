@@ -10,7 +10,8 @@ printf '[%s] called: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
 #LANG=ko_KR.euckr
 
 #현재 검증된 version
-LANG=ko_KR.UTF-8
+#LANG=ko_KR.UTF-8
+LC_ALL=C.UTF-8
 
 ##### color code
 red='\e[0;31m';     RED='\e[1;31m';     green='\e[0;32m';       GREEN='\e[1;32m';
@@ -53,7 +54,7 @@ readarray -t a <<<"$(hostname -I) $SSH_CONNECTION"
 }
 
 CURR_IP=$(get_ip)
-export proFILEdir proFILEdirOS LANG CURR_IP get_ip
+export proFILEdir proFILEdirOS LC_ALL CURR_IP get_ip
 export red RED green GREEN yellow YELLOW blue BLUE cyan CYAN magenta brown NCOL
 
 

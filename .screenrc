@@ -34,14 +34,14 @@ pow_detach_msg "Screen session of \$LOGNAME \$:cr:\$:nl:ended."
 
 ## msg instead of bell which rang in hidden window
 bell_msg "BELL RING in window %."
-## pass on the "beep" (CTRL-G) by adding a '~': 
+## pass on the "beep" (CTRL-G) by adding a '~':
 bell                  "bell     in %n (%t) [%w:%s]~"
 ## no annoying audible bell, please use visual bell instead of sound
 vbell                 on
 ## vbell_msg:            Message shown when the "virtual bell" rings.
 vbell_msg             " *beep* *beep* "
 
- 
+
 ## Time there is activity on that window is hidden, to tell it
 defmonitor on
 ## Message when there is movement of the window that is hidden
@@ -55,9 +55,9 @@ altscreen on
 # rendition so kc
 
 ## increase the scroll buffer
-defscrollback         40000           # default: 100, 
+defscrollback         40000           # default: 100,
 
-  
+
 ## ===============================================================
 ## STATUS BAR & CAPTION
 ## ===============================================================
@@ -82,8 +82,8 @@ hardstatus on
 # hardstatus alwayslastline '%{= kB}[%H]%{= kW}%-Lw%{= kG}%50> %n*%f %t%{= kW}%+Lw%< %{kC}%50=%d/%m/%Y %{kB}%80=%c%='
 # hardstatus alwayslastline '%{= kB}[%H]%{= kW}%-Lw%{= kG}%50> %n*%f %t%{= kW}%+Lw%< %{= kC}%-= %Y/%m/%d (%c %a)'
 hardstatus alwayslastline '%{= kB}[%H]%{= kW}%-Lw%{= kG}%50> %n*%f %t%{= kW}%+Lw%< %{= kC}%-= %Y/%m/%d (%c %a)'
- 
- 
+
+
 
 ## "sorendition": set the colors for the "messages" and "text marking"
 ## (ie text you mark in copy mode, it also effects the hardstatus and caption):
@@ -154,7 +154,7 @@ deflog on
 logfile $HOME/.proFILEs/tempdir/screenlog
 logfile flush 1800
 logtstamp on
-log on 
+log on
 
 ## ===============================================================
 ## KEY-binding
@@ -181,7 +181,7 @@ bindkey "^x" quit
 # reload .screenrc
 bind r eval "source $HOME/.screenrc" "echo '.screenrc reloaded!'"
 
-## WINDOW handle 
+## WINDOW handle
 ## ---------------------------------------------------------------
 ## create & kill current window (exit)
 ## kill for buffer, # remove for window
@@ -201,8 +201,8 @@ bindkey "^p" focus up
 bindkey "^q" remove
 
 ## switch window
-bind k prev 
-bind j next 
+bind k prev
+bind j next
 ## window listup
 bind l windowlist -b
 
@@ -224,6 +224,6 @@ bind -c resize = eval 'resize -1' 'command -c resize'
 
 ## enter scroll mode and F1/F2 scroll up & down
 bindkey -k k1 eval "copy" "stuff ^u"
-bindkey -k k; eval "copy" "stuff ^d"
+bindkey -k k2 eval "copy" "stuff ^d"
 bindkey -m -k k1 stuff ^u
-bindkey -m -k k; stuff ^d
+bindkey -m -k k2 stuff ^d
