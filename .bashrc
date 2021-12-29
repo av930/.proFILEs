@@ -95,7 +95,7 @@ alias scxx="screen -ls | tail -n +2 | head -n -2 | awk '{print $1}' | xargs -I {
 alias dokcer='docker'
 alias scp${TAG}='echo "scp ${USER}@$CURR_IP:${HOME}/filename .\n scp filename ${USER}@$CURR_IP:${HOME}/"'
 alias ssh${TAG}='echo ssh -p 22 ${USER}@$CURR_IP'
-alias sshl${TAG}='echo ssh vc.integrator@localhost -p '
+alias sshl${TAG}='ssh vc.integrator@localhost -p "$@"'
 
 alias rsyncl='echo rsync -auvht --exclude-from=exclude.txt --port=873 172.21.74.32::$USER/SRC_DIR/*  .'
 alias repo${TAG}='echo repo sync -qcj4; repo sync -qcj4'
@@ -104,6 +104,8 @@ alias repo${TAG}='echo repo sync -qcj4; repo sync -qcj4'
 #### move
 alias findrm='findandremove'
 alias moveup='mv * .[^.]* ..'
+# combine mkdir & cd : below all space is essential!!!
+alias mkcd='_mkcd(){ mkdir -p "$1"; cd "$1";}; _mkcd'
 
 #### find
 alias du${TAG}='echo subdir size is; du -sh'
