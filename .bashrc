@@ -105,6 +105,8 @@ alias repo${TAG}='echo repo sync -qcj4; repo sync -qcj4'
 alias findrm='findandremove'
 alias moveup='mv * .[^.]* ..'
 # combine mkdir & cd : below all space is essential!!!
+alias cat${TAG}='_catl(){ cat -n "$1"| more ;}; _catl'
+alias catl${TAG}='_catll(){ cat -nA "$1"| more ;}; _catll'
 alias mkcd='_mkcd(){ mkdir -p "$1"; cd "$1";}; _mkcd'
 
 #### find
