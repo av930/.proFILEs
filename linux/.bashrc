@@ -50,7 +50,7 @@ function launch_cur_dir()
 {
     home_name=$(dirname $HOME)
     #print current path as windows type
-    pathwithIP=$(pwd|sed "s:$home_name:\/\/${CURR_IP}"|sed 's:\/:\\:g')
+    #pathwithIP=$(pwd|sed "s:$home_name:\/\/${CURR_IP}"|sed 's:\/:\\:g')
     pathwithDrive=$(pwd|sed "s:${HOME}:Y\::"|sed 's:\/:\\:g')
     echo "$pathwithDrive" | tee ${HOME}/.proFILEs/.path.log
 }
