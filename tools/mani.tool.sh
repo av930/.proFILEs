@@ -19,11 +19,16 @@
 ##============================================================================
 # Setting by User
 
+DEBUG=echo #DEBUG=[echo|:], : means no-operation
+FILE_LOG=debug.log
 FILE_OUT=out.txt
+FILE_CACHE=out.cache
 FILE_WORK=out_work.txt
+DIR_OUT=DIR_OUT
 
 
-CUR_DIR=${BASH_SOURCE%/*}
+
+SCRIPT_DIR=${BASH_SOURCE%/*}
 
 ##--------------------------- Settup Environments-----------------------------
 ##============================================================================
@@ -99,62 +104,63 @@ function show_menu_do(){
 
 
 
-function run_ddms(){
-## ---------------------------------------------------------------------------
-	echo run ddms.bat
-    ddms${BAT}&
-    return 1
-}
-
-
 function create_avd(){
 ## ---------------------------------------------------------------------------
 
-if [ "${OS_TYPE}" == "windows" ];then 
+if [ "${OS_TYPE}" == "windows" ];then
     echo ${SRC_SDK}/"AVD Manager.exe"&
     ${SRC_SDK}/"AVD Manager.exe"&
-else 
+else
     android &
 fi
     return 1
 }
 
 
-function create_sd(){
-## ---------------------------------------------------------------------------
-	echo all SD card List
-    if [ "${OS_TYPE}" == "windows" ];then 
-        SDCARD_PATH=$(cygpath -wp ${SRC_SDK}/../AVD/${SD_NAME}.iso)
-    else 
-        SDCARD_PATH=$(~/${SD_NAME}.iso)
-    fi
-	ls -hs  ${SDCARD_PATH}
-
-	read -p "put a sdcard size ex(16M or 2G): " SD_SIZE
-    read -p "put a sdcard name ex(SD36M): " SD_NAME
-
-    echo  "mksdcard ${SD_SIZE} ${SDCARD_PATH}"
-    mksdcard ${SD_SIZE} ${SDCARD_PATH}
-    return 1
-}
-
-
-function update_sdk(){
-## ---------------------------------------------------------------------------
-    echo ${SRC_SDK}/"SDK Manager.exe"&
-    android
-    return 1
-}
 
 
 function handle_git(){
 ## ---------------------------------------------------------------------------
-    #cat $FILE_WORK | awk -f mani.handler.awk -v VAR2="${SHELL_VAR2}" 
+    #cat $FILE_WORK | awk -f mani.handler.awk -v VAR2="${SHELL_VAR2}"
     # COMMAND($1) TARGET($2) RESULT($3) NAME($4) PATH($5) REVISION($6) UPSTREAM($7)
+    #echo "awk -F'[\t]' -f ${SCRIPT_DIR}/mani_handler.awk $FILE_WORK"
+    rm -f $FILE_LOG $FILE_WORK.tmp
+    RNAME=(); RFETCH=(); RREVISION=(); RPUSHURL=();
 
-    awk -F'[\t]' -f mani.handler.awk $FILE_WORK
-    #awk -F'[\t]' '/^COMMAND/,NR<FNR { if ($1=="check-git-url") git ls-remote  }' $FILE_WORK
+    cat $FILE_WORK | sed $'s/\r$//' | while IFS=$'\t' read -r -a col
+    do
+        GCOMMAND=${col[0]}; GTARGET=${col[1]}; RET=${col[2]}; GNAME=${col[3]}; GPATH=${col[4]}; GREVISION=${col[5]}; GUPSTREAM=${col[6]}; 
+        $DEBUG "##DEBUG [${col[@]}]"
+        $DEBUG "##DEBUG [COMMAND:$GCOMMAND] [TARGET:$GTARGET] [RET:$RET] [NAME:$GNAME] [PATH:$GPATH] [REVISION:$GREVISION] [UPSTREAM:$GUPSTREAM]"
+        
+        case $GCOMMAND in
+        CMDLIST|COMMAND|"")
+            $DEBUG "#### skip line $GCOMMAND"
+            ;;
+        register-remote)
+            $DEBUG "#### read remote info     [NAME FETCH REVISION PUSHURL]"
+            RNAME+=($GNAME); RFETCH+=($GPATH); RREVISION+=($GREVISION); RPUSHURL+=($GUPSTREAM);
+            ;;
+        select-default)
+            $DEBUG "#### read default setting [REMOTE DEST-branch REVISION UPSTREAM]"
+            DREMOTE=$GNAME; DDESTBRANCH=$GPATH; DREVISION=$GREVISION; DUPSTREAM=$GUPSTREAM;
+            ;;
+        check-remote-url)
+            $DEBUG "#### check remote is valid"
+            git remote -v
+            RET="A"
+            ;;
+        check-remote-branch)
+            $DEBUG "#### check remote branch/tag info"
+            git ls-remote
+            RET=$?
+            ;;
+        esac
+        printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$GCOMMAND" "$GTARGET" "$RET" "$GNAME" "$GPATH" "$GREVISION" "$GUPSTREAM" >> $FILE_WORK.tmp
+    done #> $FILE_LOG
 
+    ## output file
+    mv $FILE_WORK.tmp $FILE_WORK
     return 1
 }
 
@@ -165,16 +171,33 @@ function xml2reformat(){
     echo "1. remove multi-blanks to one blank"
     echo "2. reformat input manifest and generate $FILE_OUT"
     ls -gohrt *.xml
-    read -p "please input manifest.xml to reformat: " file_input
-    echo "$file_input >>>> $FILE_OUT"
+    read -p "please input manifest.xml or enter (use lastfile): " file_input
+
+    if [ "$file_input" = "" ]; then
+        file_input=$( tail -n 1 $FILE_CACHE )
+    else
+        echo $file_input >> $FILE_CACHE
+    fi
+
+
+    ## make all blank to one, add ">" or "/>" as last column
+    echo "[$file_input >>>> $FILE_OUT.tmp]"
     cat $file_input |  sed 's/[[:blank:]]\+/ /g' | sed -E 's/(.*")(\/|>)/\1 \2/' > $FILE_OUT.tmp
-    echo  "cat $FILE_OUT.tmp | awk -f ${CUR_DIR}/mani_reformat.awk > $FILE_OUT"
-    cat $FILE_OUT.tmp | awk -f ${CUR_DIR}/mani_reformat.awk > $FILE_OUT
-    echo "$FILE_OUT >>>> $FILE_WORK"
-    echo "cat $FILE_OUT | awk -f ${CUR_DIR}/mani_commander.awk > $FILE_WORK"
-    cat $FILE_OUT | awk -f ${CUR_DIR}/mani_commander.awk > $FILE_WORK
-    ## rm -f $FILE_OUT.tmp >/dev/null    
-    if [ -f $FILE_OUT ]; then echo "[$file_input] >>>> [$FILE_OUT] "; fi
+
+    ## reorder manifest elements and generate reformatted out file
+    echo  "cat $FILE_OUT.tmp | awk -f ${SCRIPT_DIR}/mani_reformat.awk > $FILE_OUT"
+    cat $FILE_OUT.tmp | awk -f ${SCRIPT_DIR}/mani_reformat.awk > $FILE_OUT
+
+    ##  make brief commander file to handle manifest.xml
+    echo "[$FILE_OUT >>>> $FILE_WORK]"
+    echo "cat $FILE_OUT | awk -f ${SCRIPT_DIR}/mani_commander.awk > $FILE_WORK"
+    cat $FILE_OUT | awk -f ${SCRIPT_DIR}/mani_commander.awk | sed 's/"//g'  > $FILE_WORK
+    
+    ## add valid command in header of file
+    echo -e "CMDLIST\tregister-remote\tselect-default\tcheck-remote-url\tcheck-remote-branch" \
+        |cat - $FILE_WORK > $FILE_WORK.tmp
+    mv $FILE_WORK.tmp $FILE_WORK
+    rm -f $FILE_OUT.tmp >/dev/null
     return 1
 }
 

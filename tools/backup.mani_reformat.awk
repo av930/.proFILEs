@@ -6,14 +6,13 @@ BEGIN {
     ## excel이 csv파일 로드시 groups="ABC, 123"같이 ,와 ", 공백이 섞인것을 제대로 parsing못해, 구분자를 ;로 변경함
     ## 따라서 manifest.xml안에는 ;가 포함되어 있지 않아야함. 
     FS=" "; OFS="\t"
-    #FPAT="([^ ]+=\"[^\"]+\")"  #field형식 정의
-    SofColumn=1; LofColumn=13   #start of data is from col 1 in awk, 4 data exist.
+    #FPAT="([^ ]+=\"[^\"]+\")" #field형식 정의
+    SofColumn=1; LofColumn=13
 }
 
 #### Main Process
 ## hemote section
 /<remote/ {
-    for (i=0; i<=LofColumn+1; i++) {remote[i]=" "}
     remote[SofColumn]="<remote"
     for(i=SofColumn; i<=NF; i++) {
         if (match($i, "name="))          {remote[SofColumn+01]=$i}
@@ -30,7 +29,6 @@ BEGIN {
 
 ## default section
 /<default/ {
-    for (i=0; i<=LofColumn+1; i++) {defaults[i]=" "}
     defaults[SofColumn]="<default"
     for(i=SofColumn; i<=NF; i++) {
         if (match($i, "remote="))        {defaults[SofColumn+01]=$i}
@@ -51,7 +49,6 @@ BEGIN {
 #name=""; path=""; groups=""; revision=""; upstream=""; destbranch=""
 /<project/ {
     NofProj++
-    for (i=0; i<=LofColumn+1; i++) {project[i]=" "}    
     project[SofColumn]="<project"
     for(i=SofColumn; i<=NF; i++) {
         if (match($i, "name="))          {project[SofColumn+01]=$i}
@@ -107,5 +104,5 @@ BEGIN {
 
 #### Post Process
 END {
-
+    if ( DEBUG == "true" ) {printf "#ofProjects=[%s] %s #ofLines=[%s]", NofProj, OFS, FNR}
 }
