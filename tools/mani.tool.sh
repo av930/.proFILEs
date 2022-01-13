@@ -23,8 +23,10 @@ DEBUG=echo #DEBUG=[echo|:], : means no-operation
 FILE_LOG=debug.log
 FILE_OUT=out.txt
 FILE_CACHE=out.cache
-FILE_WORK=out_work.txt
+FILE_REPO=out.repo.txt
+FILE_GIT=out.git.txt
 DIR_OUT=DIR_OUT
+
 
 
 
@@ -118,22 +120,15 @@ fi
 
 
 
-
-function handle_git(){
+function handle_repo(){
 ## ---------------------------------------------------------------------------
-    #cat $FILE_WORK | awk -f mani.handler.awk -v VAR2="${SHELL_VAR2}"
-    # COMMAND($1) TARGET($2) RESULT($3) NAME($4) PATH($5) REVISION($6) UPSTREAM($7)
-    #echo "awk -F'[\t]' -f ${SCRIPT_DIR}/mani_handler.awk $FILE_WORK"
-    rm -f $FILE_LOG $FILE_WORK.tmp
+    rm -f $1.tmp
     RNAME=(); RFETCH=(); RREVISION=(); RPUSHURL=();
+    RET=0
 
-    cat $FILE_WORK | sed $'s/\r$//' | while IFS=$'\t' read -r -a col
+    cat $1 | sed $'s/\r$//' | while IFS=$'\t' read -r -a col
     do
-        GCOMMAND=${col[0]}; GTARGET=${col[1]}; RET=${col[2]}; GNAME=${col[3]}; GPATH=${col[4]}; GREVISION=${col[5]}; GUPSTREAM=${col[6]}; 
-        $DEBUG "##DEBUG [${col[@]}]"
-        $DEBUG "##DEBUG [COMMAND:$GCOMMAND] [TARGET:$GTARGET] [RET:$RET] [NAME:$GNAME] [PATH:$GPATH] [REVISION:$GREVISION] [UPSTREAM:$GUPSTREAM]"
-        
-        case $GCOMMAND in
+        case ${col[0]%% } in
         CMDLIST|COMMAND|"")
             $DEBUG "#### skip line $GCOMMAND"
             ;;
@@ -143,25 +138,67 @@ function handle_git(){
             ;;
         select-default)
             $DEBUG "#### read default setting [REMOTE DEST-branch REVISION UPSTREAM]"
-            DREMOTE=$GNAME; DDESTBRANCH=$GPATH; DREVISION=$GREVISION; DUPSTREAM=$GUPSTREAM;
+            DREMOTE=$GNAME; DDESTBRANCH=$GPATH; DREVISION=$GREVISION; DUPSTREAM=$GUPSTREAM; 
+            ;;
+        esac
+        
+        echo -e "${col[0]}\t${col[1]}\t${col[2]}\t${col[3]}\t${col[4]}\t${col[5]}\t${col[6]}" >> $1.tmp
+    done
+    
+    ## output file
+    $DEBUG; mv $1.tmp $1
+    return $RET
+}
+
+
+function handle_git(){
+## ---------------------------------------------------------------------------
+    #cat $FILE_GIT | awk -f mani.handler.awk -v VAR2="${SHELL_VAR2}"
+    #COMMAND($1) TARGET($2) RESULT($3) NAME($4) PATH($5) REVISION($6) UPSTREAM($7)
+    #echo "awk -F'[\t]' -f ${SCRIPT_DIR}/mani_handler.awk $1"
+    rm -f $1.tmp
+    FLAG_FORALL=false
+    RET=$2 #repeat
+
+    cat $1 | sed $'s/\r$//' | while IFS=$'\t' read -r -a col
+    do
+        GCOMMAND=${col[0]%% }; GTARGET=${col[1]%% }; RESULT=${col[2]}; GNAME=${col[3]}; GPATH=${col[4]}; GREVISION=${col[5]}; GUPSTREAM=${col[6]}; 
+        $DEBUG "##DEBUG [${col[@]}]"
+        $DEBUG "##DEBUG [COMMAND:$GCOMMAND] [TARGET:$GTARGET] [RESULT:$RESULT] [NAME:$GNAME] [PATH:$GPATH] [REVISION:$GREVISION] [UPSTREAM:$GUPSTREAM]"
+        if [ "$FORALL_FLAG" = "true" ];then GCOMMAND=$FORALL_CMD && GTARGET=$FORALL_TARGET; fi
+        
+        case $GCOMMAND in
+        CMDLIST|COMMAND|"")
+            $DEBUG "#### skip line $GCOMMAND"
+            ;;
+        FORALL)
+            if [ "$GTARGET" != "noop" ]; then 
+                echo -e "#### this command is applied to all git [$GCOMMAND $GTARGET]"
+                echo -e "#### original command will be ignored !!!"
+                FORALL_FLAG=true; FORALL_CMD=$GTARGET; FORALL_TARGET=$RESULT
+            fi
             ;;
         check-remote-url)
             $DEBUG "#### check remote is valid"
             git remote -v
-            RET="A"
+            RESULT="A"
             ;;
         check-remote-branch)
             $DEBUG "#### check remote branch/tag info"
             git ls-remote
-            RET=$?
+            RESULT=$?
             ;;
         esac
-        printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$GCOMMAND" "$GTARGET" "$RET" "$GNAME" "$GPATH" "$GREVISION" "$GUPSTREAM" >> $FILE_WORK.tmp
+        
+        #printf 구문에서는 \t 저장시 \t이 누락되는 error가 발생함, 또한 echo -e를 사용하지 않고 echo를 사용해도 \t들이 누락되는 현상 발생
+        #printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$GCOMMAND" "$GTARGET" "$RESULT" "$GNAME" "$GPATH" "$GREVISION" "$GUPSTREAM" >> $1.tmp
+        echo -e "$GCOMMAND\t$GTARGET\t$RESULT\t$GNAME\t$GPATH\t$GREVISION\t$GUPSTREAM" >> $1.tmp
     done #> $FILE_LOG
 
+    let "RET--"
     ## output file
-    mv $FILE_WORK.tmp $FILE_WORK
-    return 1
+    $DEBUG; mv $1.tmp $1
+    return $RET
 }
 
 
@@ -176,27 +213,29 @@ function xml2reformat(){
     if [ "$file_input" = "" ]; then
         file_input=$( tail -n 1 $FILE_CACHE )
     else
-        echo $file_input >> $FILE_CACHE
+        echo "$file_input" >> $FILE_CACHE
     fi
 
 
     ## make all blank to one, add ">" or "/>" as last column
     echo "[$file_input >>>> $FILE_OUT.tmp]"
     cat $file_input |  sed 's/[[:blank:]]\+/ /g' | sed -E 's/(.*")(\/|>)/\1 \2/' > $FILE_OUT.tmp
+    $DEBUG  "cat $FILE_OUT.tmp | awk -f ${SCRIPT_DIR}/mani.reformat.awk > $FILE_OUT"
+    cat $FILE_OUT.tmp | awk -f ${SCRIPT_DIR}/mani.reformat.awk > $FILE_OUT
 
-    ## reorder manifest elements and generate reformatted out file
-    echo  "cat $FILE_OUT.tmp | awk -f ${SCRIPT_DIR}/mani_reformat.awk > $FILE_OUT"
-    cat $FILE_OUT.tmp | awk -f ${SCRIPT_DIR}/mani_reformat.awk > $FILE_OUT
+    ##  make header to handle remote
+    echo "[$FILE_OUT >>>> $FILE_REPO]"
+    $DEBUG "cat $FILE_OUT | awk -f ${SCRIPT_DIR}/mani.repo.awk > $FILE_REPO"
+    cat $FILE_OUT | awk -f ${SCRIPT_DIR}/mani.repo.awk | sed 's/[[:blank:]]\+$//g'| sed 's/"//g' > $FILE_REPO
 
-    ##  make brief commander file to handle manifest.xml
-    echo "[$FILE_OUT >>>> $FILE_WORK]"
-    echo "cat $FILE_OUT | awk -f ${SCRIPT_DIR}/mani_commander.awk > $FILE_WORK"
-    cat $FILE_OUT | awk -f ${SCRIPT_DIR}/mani_commander.awk | sed 's/"//g'  > $FILE_WORK
+    ##  make body to handle git
+    echo "[$FILE_OUT >>>> $FILE_GIT]"
+    $DEBUG "cat $FILE_OUT | awk -f ${SCRIPT_DIR}/mani.git.awk > $FILE_GIT"
+    cat $FILE_OUT | awk -f ${SCRIPT_DIR}/mani.git.awk | sed 's/[[:blank:]]\+$//g'| sed 's/"//g' > $FILE_GIT
     
     ## add valid command in header of file
-    echo -e "CMDLIST\tregister-remote\tselect-default\tcheck-remote-url\tcheck-remote-branch" \
-        |cat - $FILE_WORK > $FILE_WORK.tmp
-    mv $FILE_WORK.tmp $FILE_WORK
+    echo -e "CMDLIST\tcheck-remote-url\tcheck-remote-branch" |cat - $FILE_GIT > $FILE_GIT.tmp
+    mv $FILE_GIT.tmp $FILE_GIT
     rm -f $FILE_OUT.tmp >/dev/null
     return 1
 }
@@ -250,11 +289,15 @@ function handler_menu(){
         case $REPLY in
          1) xml2reformat;           break;;
          2) reformat2xml;           break;;
-         3) handle_git;             break;;
+         3) echo "process command file: $FILE_GIT/$FILE_GIT generated"
+            handle_repo $FILE_REPO
+            handle_git $FILE_GIT 1
+            if [[ $? -lt 1 ]]; then break;else continue; fi; 
+            ;;
          4) create_sd;              break;;
          5) update_sdk;             break;;
          6) logcat_filter;          break;;
-		 7) log_filter;             break;;
+         7) log_filter;             break;;
          *) return 0;
         esac
     done
