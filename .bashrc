@@ -22,8 +22,11 @@ COMMENT
 #### basic terminal setting
 stty -ixon
 
-#default file option on create time
-umask 022
+#### default file option on create time
+#umask 022 #private read by others
+umask 002 #share read/write with group
+#umask 077 #secret read by only me
+#sudo gpasswd -a temp_user temp_group
 
 ###############################
 #### profile alias
