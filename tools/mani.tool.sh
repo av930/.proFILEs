@@ -106,15 +106,23 @@ function show_menu_do(){
 
 
 
-function create_avd(){
+function get_repoinit_cmd(){
 ## ---------------------------------------------------------------------------
 
-if [ "${OS_TYPE}" == "windows" ];then
-    echo ${SRC_SDK}/"AVD Manager.exe"&
-    ${SRC_SDK}/"AVD Manager.exe"&
-else
-    android &
-fi
+    REMOTE=$(git remote -v |grep fetch |awk '{print $2}')
+    BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
+    FILE_TEMPA=$(ls -Art ../*.xml | tail -n 1)
+    count=$(grep -c include $(ls -Art ../*.xml | tail -n 1))
+    
+    if [ -L "${FILE_TEMPA}" ];then 
+        FILE_TEMPB=$(readlink "${FILE_TEMPA}")
+        FILE_MANI=${FILE_TEMPB#*/}
+    elif [ $count -eq 1 ]; then
+        FILE_MANI=$(grep include $(ls -Art ../*.xml | tail -n 1)|sed -E 's/<.*name="(.*)".\/>/\1/')
+    else
+        FILE_MANI=default.xml
+    fi
+    echo "repo init -u $REMOTE -b $BRANCH -m $FILE_MANI"
     return 1
 }
 
@@ -138,13 +146,13 @@ function handle_repo(){
             ;;
         select-default)
             $DEBUG "#### read default setting [REMOTE DEST-branch REVISION UPSTREAM]"
-            DREMOTE=$GNAME; DDESTBRANCH=$GPATH; DREVISION=$GREVISION; DUPSTREAM=$GUPSTREAM; 
+            DREMOTE=$GNAME; DDESTBRANCH=$GPATH; DREVISION=$GREVISION; DUPSTREAM=$GUPSTREAM;
             ;;
         esac
-        
+
         echo -e "${col[0]}\t${col[1]}\t${col[2]}\t${col[3]}\t${col[4]}\t${col[5]}\t${col[6]}" >> $1.tmp
     done
-    
+
     ## output file
     $DEBUG; mv $1.tmp $1
     return $RET
@@ -162,17 +170,17 @@ function handle_git(){
 
     cat $1 | sed $'s/\r$//' | while IFS=$'\t' read -r -a col
     do
-        GCOMMAND=${col[0]%% }; GTARGET=${col[1]%% }; RESULT=${col[2]}; GNAME=${col[3]}; GPATH=${col[4]}; GREVISION=${col[5]}; GUPSTREAM=${col[6]}; 
+        GCOMMAND=${col[0]%% }; GTARGET=${col[1]%% }; RESULT=${col[2]}; GNAME=${col[3]}; GPATH=${col[4]}; GREVISION=${col[5]}; GUPSTREAM=${col[6]};
         $DEBUG "##DEBUG [${col[@]}]"
         $DEBUG "##DEBUG [COMMAND:$GCOMMAND] [TARGET:$GTARGET] [RESULT:$RESULT] [NAME:$GNAME] [PATH:$GPATH] [REVISION:$GREVISION] [UPSTREAM:$GUPSTREAM]"
         if [ "$FORALL_FLAG" = "true" ];then GCOMMAND=$FORALL_CMD && GTARGET=$FORALL_TARGET; fi
-        
+
         case $GCOMMAND in
         CMDLIST|COMMAND|"")
             $DEBUG "#### skip line $GCOMMAND"
             ;;
         FORALL)
-            if [ "$GTARGET" != "noop" ]; then 
+            if [ "$GTARGET" != "noop" ]; then
                 echo -e "#### this command is applied to all git [$GCOMMAND $GTARGET]"
                 echo -e "#### original command will be ignored !!!"
                 FORALL_FLAG=true; FORALL_CMD=$GTARGET; FORALL_TARGET=$RESULT
@@ -189,7 +197,7 @@ function handle_git(){
             RESULT=$?
             ;;
         esac
-        
+
         #printf 구문에서는 \t 저장시 \t이 누락되는 error가 발생함, 또한 echo -e를 사용하지 않고 echo를 사용해도 \t들이 누락되는 현상 발생
         #printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$GCOMMAND" "$GTARGET" "$RESULT" "$GNAME" "$GPATH" "$GREVISION" "$GUPSTREAM" >> $1.tmp
         echo -e "$GCOMMAND\t$GTARGET\t$RESULT\t$GNAME\t$GPATH\t$GREVISION\t$GUPSTREAM" >> $1.tmp
@@ -232,7 +240,7 @@ function xml2reformat(){
     echo "[$FILE_OUT >>>> $FILE_GIT]"
     $DEBUG "cat $FILE_OUT | awk -f ${SCRIPT_DIR}/mani.git.awk > $FILE_GIT"
     cat $FILE_OUT | awk -f ${SCRIPT_DIR}/mani.git.awk | sed 's/[[:blank:]]\+$//g'| sed 's/"//g' > $FILE_GIT
-    
+
     ## add valid command in header of file
     echo -e "CMDLIST\tcheck-remote-url\tcheck-remote-branch" |cat - $FILE_GIT > $FILE_GIT.tmp
     mv $FILE_GIT.tmp $FILE_GIT
@@ -284,18 +292,18 @@ function handler_menu(){
     printf "${YELLOW}========== What do you Want? ========== ${NCOL}\n"
     local COLUMNS=20
     PS3="=== PLZ Command! === : "
-    select CHOICE in xml2reformat reformat2xml handle_all handle_git handle_repo
+    select CHOICE in xml2reformat reformat2xml handle_all handle_git handle_repo get_repoinit
     do
         case $REPLY in
-         1) xml2reformat;                   break;;
-         2) reformat2xml;                   break;;
+         1) xml2reformat;                                       break;;
+         2) reformat2xml;                                       break;;
          3) echo "process command file: $FILE_GIT/$FILE_GIT generated"
             handle_repo $FILE_REPO
             handle_git $FILE_GIT 1
-            if [[ $? -lt 1 ]]; then break;else continue; fi; 
-            ;;
-         4) handle_repo $FILE_REPO;         break;;
-         5) handle_git $FILE_GIT;           break;;
+            if [[ $? -lt 1 ]]; then break;else continue; fi;         ;;
+         4) handle_repo $FILE_REPO;                             break;;
+         5) handle_git $FILE_GIT;                               break;;
+         6) get_repoinit_cmd;                                   break;;
          *) return 0;
         esac
     done
@@ -312,7 +320,7 @@ function handler_menu(){
 # Print Preface
 ## ---------------------------------------------------------------------------
 
-printf ${GREEN}
+printf ${green}
 cat << PREFACE
     choose [option:ex) -abs]
     ==============================================
@@ -320,9 +328,8 @@ cat << PREFACE
 
     current settings
     ----------------------------------------------
-	    SRC_SDK=${SRC_SDK}
-	    OPT_AVD_PATH=${OPT_AVD_PATH}
-	    OPT_SD_FILE=${OPT_SD_FILE}
+        OPT_AVD_PATH=${OPT_AVD_PATH}
+        OPT_SD_FILE=${OPT_SD_FILE}
     ----------------------------------------------
     param=a)vd create, e)mul, s)d-card
 PREFACE
