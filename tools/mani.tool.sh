@@ -284,20 +284,18 @@ function handler_menu(){
     printf "${YELLOW}========== What do you Want? ========== ${NCOL}\n"
     local COLUMNS=20
     PS3="=== PLZ Command! === : "
-    select CHOICE in xml2reformat reformat2xml handle_git create_sd update_sdk logcat_filter log_filter
+    select CHOICE in xml2reformat reformat2xml handle_all handle_git handle_repo
     do
         case $REPLY in
-         1) xml2reformat;           break;;
-         2) reformat2xml;           break;;
+         1) xml2reformat;                   break;;
+         2) reformat2xml;                   break;;
          3) echo "process command file: $FILE_GIT/$FILE_GIT generated"
             handle_repo $FILE_REPO
             handle_git $FILE_GIT 1
             if [[ $? -lt 1 ]]; then break;else continue; fi; 
             ;;
-         4) create_sd;              break;;
-         5) update_sdk;             break;;
-         6) logcat_filter;          break;;
-         7) log_filter;             break;;
+         4) handle_repo $FILE_REPO;         break;;
+         5) handle_git $FILE_GIT;           break;;
          *) return 0;
         esac
     done
