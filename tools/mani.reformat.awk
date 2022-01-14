@@ -59,12 +59,13 @@ BEGIN {
         if (match($i, "groups="))        {project[SofColumn+03]=$i}
         if (match($i, "revision="))      {project[SofColumn+04]=$i}
         if (match($i, "upstream="))      {project[SofColumn+05]=$i}
-        if (match($i, "dest-branch="))   {project[SofColumn+06]=$i}
-        if (match($i, "sync-c="))        {project[SofColumn+07]=$i}
-        if (match($i, "sync-s="))        {project[SofColumn+08]=$i}
-        if (match($i, "sync-tags="))     {project[SofColumn+09]=$i}
-        if (match($i, "clone-depth="))   {project[SofColumn+10]=$i}
-        if (match($i, "force-path="))    {project[SofColumn+11]=$i}
+        if (match($i, "remote="))        {project[SofColumn+06]=$i}
+        if (match($i, "dest-branch="))   {project[SofColumn+07]=$i}
+        if (match($i, "sync-c="))        {project[SofColumn+08]=$i}
+        if (match($i, "sync-s="))        {project[SofColumn+09]=$i}
+        if (match($i, "sync-tags="))     {project[SofColumn+10]=$i}
+        if (match($i, "clone-depth="))   {project[SofColumn+11]=$i}
+        if (match($i, "force-path="))    {project[SofColumn+12]=$i}
     }
     project[LofColumn]=$NF"\n"
     j=1; while(j<=LofColumn) {printf "%s%s", OFS, project[j++]}

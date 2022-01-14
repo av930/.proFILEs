@@ -28,34 +28,15 @@ FILE_CACHE=out.cache
 FILE_REPO=out.repo.txt
 FILE_GIT=out.git.txt
 DIR_OUT=DIR_OUT
-CURR_FILE_MANI=""
+CURR_REMOTE=NA
+CURR_BRANCH=NA
+CURR_FILE_MANI=NA
 
 
 ##--------------------------- Settup Environments-----------------------------
 ##============================================================================
 # determine whether arrays are zero-based (bash) or one-based (zsh)
-CURR_REMOTE=$(git remote -v |grep fetch |awk '{print $2}')
-CURR_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
 
-
-
-
-function get_repoinit_cmd(){
-## ---------------------------------------------------------------------------
-    FILE_TEMPA=$(ls -Art ../*.xml | tail -n 1)
-    count=$(grep -c include $(ls -Art ../*.xml | tail -n 1))
-    
-    if [ -L "${FILE_TEMPA}" ];then 
-        FILE_TEMPB=$(readlink "${FILE_TEMPA}")
-        CURR_FILE_MANI=${FILE_TEMPB#*/}
-    elif [ $count -eq 1 ]; then
-        CURR_FILE_MANI=$(grep include $(ls -Art ../*.xml | tail -n 1)|sed -E 's/<.*name="(.*)".\/>/\1/')
-    else
-        CURR_FILE_MANI=default.xml
-    fi
-    echo "repo init -u $CURR_REMOTE -b $CURR_BRANCH -m $CURR_FILE_MANI"
-    return 1
-}
 
 
 
@@ -120,15 +101,13 @@ function show_menu_do(){
  }
 
 
-function branch_remove(){
-## ---------------------------------------------------------------------------
 
-    CURR_REMOTE=$(git remote -v |grep fetch |awk '{print $2}')
-    CURR_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
+function get_repoinit_cmd(){
+## ---------------------------------------------------------------------------
+    REMOTE=$(git remote -v |grep fetch |awk '{print $2}')
+    BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
     FILE_TEMPA=$(ls -Art ../*.xml | tail -n 1)
     count=$(grep -c include $(ls -Art ../*.xml | tail -n 1))
-
-    #git push origin --delete ${branch}
     
     if [ -L "${FILE_TEMPA}" ];then 
         FILE_TEMPB=$(readlink "${FILE_TEMPA}")
@@ -138,9 +117,11 @@ function branch_remove(){
     else
         FILE_MANI=default.xml
     fi
-    echo "repo init -u $CURR_REMOTE -b $CURR_BRANCH -m $FILE_MANI"
+    CURR_REMOTE=$REMOTE; CURR_BRANCH=$BRANCH; CURR_FILE_MANI=$FILE_MANI
+    echo "repo init -u $CURR_REMOTE -b $CURR_BRANCH -m $CURR_FILE_MANI"
     return 1
 }
+
 
 
 
@@ -203,16 +184,23 @@ function handle_git(){
                 FORALL_FLAG=true; FORALL_CMD=$GTARGET; FORALL_TARGET=$RESULT
             fi
             ;;
-        check-remote-url)
+        remote-check-url)
             $DEBUG "#### check remote is valid"
             git remote -v
             RESULT="A"
             ;;
-        check-remote-branch)
+        remote-check-branch)
             $DEBUG "#### check remote branch/tag info"
             git ls-remote
             RESULT=$?
             ;;
+        remote-delete-branch)
+            $DEBUG "#### delete remote branch/tag info"
+            #git push origin --delete ${branch}
+            git ls-remote
+            RESULT=$?
+            ;;
+            
         esac
 
         #printf 구문에서는 \t 저장시 \t이 누락되는 error가 발생함, 또한 echo -e를 사용하지 않고 echo를 사용해도 \t들이 누락되는 현상 발생
@@ -233,10 +221,11 @@ function xml2reformat(){
     echo "1. remove multi-blanks to one blank"
     echo "2. reformat input manifest and generate $FILE_OUT"
     ls -gohrt *.xml
-    read -p "please input manifest.xml or enter (use lastfile): " file_input
+    file_c=$( tail -n 1 $FILE_CACHE )
+    read -p "please input manifest.xml or enter (use ${file_c}}: " file_input
 
     if [ "$file_input" = "" ]; then
-        file_input=$( tail -n 1 $FILE_CACHE )
+        file_input=${file_c}
     else
         echo "$file_input" >> $FILE_CACHE
     fi
