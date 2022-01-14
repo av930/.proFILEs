@@ -15,34 +15,49 @@
 # ----------   -----------     ---------------------------------------------
 # 2011/12/02   joongkeun.kim   Initial release.
 # ==========================================================================
+
+
 ##--------------------------- Uset Setting-----------------------------
 ##============================================================================
-# Setting by User
-
 DEBUG=echo #DEBUG=[echo|:], : means no-operation
+SCRIPT_DIR=${BASH_SOURCE%/*}
+
 FILE_LOG=debug.log
 FILE_OUT=out.txt
 FILE_CACHE=out.cache
 FILE_REPO=out.repo.txt
 FILE_GIT=out.git.txt
 DIR_OUT=DIR_OUT
+CURR_FILE_MANI=""
 
-
-
-
-SCRIPT_DIR=${BASH_SOURCE%/*}
 
 ##--------------------------- Settup Environments-----------------------------
 ##============================================================================
 # determine whether arrays are zero-based (bash) or one-based (zsh)
-_xarray=(a b c)
-if [ -z "${_xarray[${#_xarray[@]}]}" ]
-then
-    _arrayoffset=1
-else
-    _arrayoffset=0
-fi
-unset _xarray
+CURR_REMOTE=$(git remote -v |grep fetch |awk '{print $2}')
+CURR_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
+
+
+
+
+function get_repoinit_cmd(){
+## ---------------------------------------------------------------------------
+    FILE_TEMPA=$(ls -Art ../*.xml | tail -n 1)
+    count=$(grep -c include $(ls -Art ../*.xml | tail -n 1))
+    
+    if [ -L "${FILE_TEMPA}" ];then 
+        FILE_TEMPB=$(readlink "${FILE_TEMPA}")
+        CURR_FILE_MANI=${FILE_TEMPB#*/}
+    elif [ $count -eq 1 ]; then
+        CURR_FILE_MANI=$(grep include $(ls -Art ../*.xml | tail -n 1)|sed -E 's/<.*name="(.*)".\/>/\1/')
+    else
+        CURR_FILE_MANI=default.xml
+    fi
+    echo "repo init -u $CURR_REMOTE -b $CURR_BRANCH -m $CURR_FILE_MANI"
+    return 1
+}
+
+
 
 
 printf ${CYAN}
@@ -105,14 +120,15 @@ function show_menu_do(){
  }
 
 
-
-function get_repoinit_cmd(){
+function branch_remove(){
 ## ---------------------------------------------------------------------------
 
-    REMOTE=$(git remote -v |grep fetch |awk '{print $2}')
-    BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
+    CURR_REMOTE=$(git remote -v |grep fetch |awk '{print $2}')
+    CURR_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
     FILE_TEMPA=$(ls -Art ../*.xml | tail -n 1)
     count=$(grep -c include $(ls -Art ../*.xml | tail -n 1))
+
+    #git push origin --delete ${branch}
     
     if [ -L "${FILE_TEMPA}" ];then 
         FILE_TEMPB=$(readlink "${FILE_TEMPA}")
@@ -122,9 +138,10 @@ function get_repoinit_cmd(){
     else
         FILE_MANI=default.xml
     fi
-    echo "repo init -u $REMOTE -b $BRANCH -m $FILE_MANI"
+    echo "repo init -u $CURR_REMOTE -b $CURR_BRANCH -m $FILE_MANI"
     return 1
 }
+
 
 
 
