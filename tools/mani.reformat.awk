@@ -7,7 +7,7 @@ BEGIN {
     ## 따라서 manifest.xml안에는 ;가 포함되어 있지 않아야함. 
     FS=" "; OFS="\t"
     #FPAT="([^ ]+=\"[^\"]+\")"  #field형식 정의
-    SofColumn=1; LofColumn=13   #start of data is from col 1 in awk, 4 data exist.
+    SofColumn=1; LofColumn=14   #start of data is from col 1 in awk, 4 data exist.
 }
 
 #### Main Process
