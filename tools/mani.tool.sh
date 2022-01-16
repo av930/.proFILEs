@@ -32,6 +32,8 @@ DIR_OUT=DIR_OUT
 CURR_REMOTE=NA
 CURR_BRANCH=NA
 CURR_FILE_MANI=NA
+CURR_REPO_URL=NA
+CURR_REFERENCE=NA
 
 
 printf ${CYAN}
@@ -110,12 +112,27 @@ function move_parentdir(){
 }
 
 
+
 function get_repoinit_cmd(){
+## ---------------------------------------------------------------------------
+    get_current_repo
+    
+    if [ "$CURR_REFERENCE" != "" ];then 
+        EXTRA_OPTION="--reference $CURR_REFERENCE"; 
+    fi
+    echo "repo init -u $CURR_REMOTE -b $CURR_BRANCH -m $CURR_FILE_MANI" --repo-url $CURR_REPO_URL $EXTRA_OPTION
+}
+
+
+function get_current_repo(){
 ## ---------------------------------------------------------------------------
     pushd $(git rev-parse --show-toplevel) >/dev/null
     
     REMOTE=$(git remote -v |grep fetch |awk '{print $2}')
     BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
+    REPO_URL=$(cat ../repo/.git/config |grep url|sed 's/.*=\(.*\)/\1/')
+    REFERENCE=$(cat ../manifests.git/config |grep reference|sed 's/.*=\(.*\)/\1/')
+    
     FILE_TEMPA=$(ls -Art ../*.xml | tail -n 1)
     count=$(grep -c include ${FILE_TEMPA})
     
@@ -127,8 +144,8 @@ function get_repoinit_cmd(){
     else
         FILE_MANI=default.xml
     fi
-    CURR_REMOTE=$REMOTE; CURR_BRANCH=$BRANCH; CURR_FILE_MANI=$FILE_MANI
-    echo "repo init -u $CURR_REMOTE -b $CURR_BRANCH -m $CURR_FILE_MANI"
+    CURR_REMOTE=$REMOTE; CURR_BRANCH=$BRANCH; CURR_FILE_MANI=$FILE_MANI; CURR_REPO_URL=$REPO_URL; CURR_REFERENCE=$REFERENCE
+    #echo "repo init -u $CURR_REMOTE -b $CURR_BRANCH -m $CURR_FILE_MANI" --repo-url $CURR_REPO_URL --reference $CURR_REFERENCE
     
     popd >/dev/null
     return 1
