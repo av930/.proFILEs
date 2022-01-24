@@ -96,6 +96,7 @@ alias scxx="screen -ls | tail -n +2 | head -n -2 | awk '{print $1}' | xargs -I {
 #### utility
 
 alias dokcer='docker'
+alias docekr='docker'
 alias scp${TAG}='echo "scp ${USER}@$CURR_IP:${HOME}/filename .\n scp filename ${USER}@$CURR_IP:${HOME}/"'
 alias ssh${TAG}='echo ssh -p 22 ${USER}@$CURR_IP'
 alias sshl${TAG}='ssh vc.integrator@localhost -p "$@"'
