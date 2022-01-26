@@ -64,6 +64,7 @@ export PROMPT_COMMAND="update_history; $PROMPT_COMMAND"
 
 alias his='history 100'
 alias hisgrep='history $HISTFILESIZE | egrep -i --color=auto'
+alias aligrep='alias | egrep -i --color=auto'
 
 
 ###############################
@@ -96,12 +97,12 @@ alias scxx="screen -ls | tail -n +2 | head -n -2 | awk '{print $1}' | xargs -I {
 
 alias dokcer='docker'
 alias docekr='docker'
-alias scp${TAG}='echo "scp ${USER}@$CURR_IP:${HOME}/filename .\n scp filename ${USER}@$CURR_IP:${HOME}/"'
-alias ssh${TAG}='echo ssh -p 22 ${USER}@$CURR_IP'
-alias sshl${TAG}='ssh vc.integrator@localhost -p "$@"'
+alias scpe='echo "scp ${USER}@$CURR_IP:${HOME}/filename .\n scp filename ${USER}@$CURR_IP:${HOME}/"'
+alias ssh${TAG}='ssh vc.integrator@localhost -p "$@"'
+alias sshe='echo ssh -p 22 ${USER}@$CURR_IP '
 
-alias rsyncl='echo rsync -auvht --exclude-from=exclude.txt --port=873 172.21.74.32::$USER/SRC_DIR/*  .'
-alias repo${TAG}='echo repo sync -qcj4; repo sync -qcj4'
+alias rsyne='echo rsync -auvht --exclude-from=exclude.txt --port=873 172.21.74.32::$USER/SRC_DIR/*  .'
+alias repoe='echo repo sync -qcj4 --no-tags'
 
 ###############################
 #### move
