@@ -1,21 +1,21 @@
 printf '[%s] called: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
 
 func_su(){
-    if [ "$1" == "" ];then account=vc.integrator;else account=$1; fi
-    echo account is [$account]
+    if [ "$1" == "first" ];then pd=!devops12;else pd=!dlatl00; fi
+    acc=vc.integrator
+    echo account is [$acc]
 
     expect -c "
-    spawn su -s \"${proFILEdir}/func_su.sh\" - ${account}
-    #spawn su - ${account}
+    #spawn su -s \"${proFILEdir}/func_su.sh\" - ${acc}
+    #spawn su - ${acc}
+    spawn su - ${acc} -c \"LOGIN_IP=${CURR_IP} bash\"
     expect {
-        \"Password: \" { send \"!devops12\r\" }
+        \"Password: \" { send \"${pd}\r\" }
     }
 
     interact
     "
 }
 
-alias sul="func_su"
-if [ "$USER" == "vc.integrator" ]; then
-    echo "login as [$USER]"
-fi
+alias sul="func_su first"
+alias sull="func_su"
