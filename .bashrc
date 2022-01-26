@@ -46,25 +46,24 @@ alias bashe="vi ${proFILEdir}/.bashrc"
 #export HISTCONTROL=ignoredups:ignorespace same to export HISTCONTROL=ignoreboth
 export HISTCONTROL='erasedups:ignorespace'
 #history filter out
-export HISTIGNORE='pwd:history*:'
+export HISTIGNORE='pwd:history*:ls'
 # for setting history length see HISTSIZE and HISTFILESIZE in bash(1)
-export HISTSIZE=10000
+export HISTSIZE=500
 export HISTFILESIZE=40000
 export HISTTIMEFORMAT='[%F %T]  '
 
 function update_history(){
     history -a
-    history -c
-    history -r
+    #history -c
+    #history -r
     shopt -u histappend
 }
 #update history only login
-update_history
-#export PROMPT_COMMAND="history -a; history -c; history -r; $PROMPT_COMMAND"
-#shopt -s histappend
+#update_history
+export PROMPT_COMMAND="update_history; $PROMPT_COMMAND"
 
 alias his='history 100'
-alias hisgrep='history | egrep -i --color=auto'
+alias hisgrep='history $HISTFILESIZE | egrep -i --color=auto'
 
 
 ###############################
