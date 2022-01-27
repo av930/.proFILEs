@@ -1,1 +1,4 @@
+#change dir to HOME
+cd ~
+# open my profile packages
 bash --rcfile $HOME/.proFILEs/.profile
