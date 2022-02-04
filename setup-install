@@ -21,7 +21,7 @@ DST=$HOME
 ######################################################################
 function winpop() {
     echo $USERNAME SUCCESS! copy from $1  to $2;
-    #$1은 첫번째 인자, $2하면 두번째인자...로 무한대 지원가능 
+    #$1은 첫번째 인자, $2하면 두번째인자...로 무한대 지원가능
     #echo 대신 net send 이용가능
     return 0
 }
@@ -44,7 +44,7 @@ function copy_tools() {
     set -x
     pushd ${proFILEdir}
 
-    cp ${1} default.config $HOME/.profile.config
+    if [ ! -f $HOME/.profile.config ]; then cp ${1} default.config $HOME/.profile.config; fi
 
     cp ${1}R .byobu/ $HOME/
     ln -fs  ${proFILEdir}/.inputrc        $HOME/.inputrc
@@ -101,18 +101,17 @@ if [ "$confirm" = "c" ]; then
 elif [ "$confirm" = "u" ]; then
     copy_tools -uvf
 elif [ "$confirm" = "b" ]; then
-    #backup을 만듦 
-    copy_tools -ibuvf 
+    copy_tools -ibuvf
 elif [ "$confirm" = "r" ]; then
     remove_tools
-else 
+else
     print "nothing happend, canceled all job"
 fi
 
 ######################################################################
 # post check
 ######################################################################
-if [ ! $(which sceen) ]; then 
+if [ ! $(which screen) ]; then
   printf "you need to run:${RED} sudo apt-get install screen ${NCOL}"
   printf "${YELLOW} this configuration needs screen except CYGWIN ${NCOL}"
 fi
