@@ -64,8 +64,6 @@ export PROMPT_COMMAND="update_history; $PROMPT_COMMAND"
 
 alias his='history 100'
 alias hisgrep='history $HISTFILESIZE | egrep -i --color=auto'
-alias aligrep='alias | egrep -i --color=auto'
-
 
 ###############################
 #### screen alias
@@ -106,8 +104,15 @@ alias repoe='echo repo sync -qcj4 --no-tags'
 
 ###############################
 #### move
-alias findrm='findandremove'
 alias moveup='mv * .[^.]* ..'
+alias findrm='findandremove'
+function findandremove()
+{
+    if [ "$1" == "" ]; then echo [WARNING] plz input filename!!
+    else find . -name "$1" -exec rm -rf \{\} \;
+    fi
+}
+
 # combine mkdir & cd : below all space is essential!!!
 alias cat${TAG}='_catl(){ cat -n "$1"| more ;}; _catl'
 alias catl${TAG}='_catll(){ cat -nA "$1"| more ;}; _catll'
@@ -124,47 +129,30 @@ alias llt='echo -n time-base; ls -agohrt'
 alias ll='ls -althrF --color=auto --show-control-chars'
 alias dir='ls -al -F --color=auto| grep /'
 alias grep='grep --color=auto'
-alias env='env|sort'
-alias showpath='echo $PATH|sed "s/:/:\n/g"'
-alias findgrep='findandgrep'
-
-alias grepo="goup .repo"
-alias gup="goup"
-alias gg="godown_withmenu"
-alias ga="goaround_withmenu"
-
-###############################
-#### copy & paste http://sourceforge.net/projects/commandlinecopypaste/
-# ex-copy: pwd | cc, ex-paste: cd $(cv)
-#command line copy+paste dir
-export CLCP_DIR="${proFILEdir}"
-#command line clipboard file
-export CLCF="${proFILEdir}/.path.log"
-alias copy_cc="sh ${CLCP_DIR}/cc.sh"
-alias coyp_cv="cat ${CLCF}"
-#alias lll="launch_cur_dir | copy_cc; copy_cv"
-alias lll="launch_cur_dir"
-
-
-###############################
-#### vi startup option
-alias  vi="VIMINIT=':so ~/.vim/.vimrc' MYVIMRC='~/.vim/.vimrc' vim $*"
-alias  vimp="VIMINIT=':so ~/.viu/.vimrc_backup' MYVIMRC='~/.viu/.vimrc_backup' vim $* -V9myLog"
-alias  vimu="VIMINIT=':so ~/.viu/.vimrc' MYVIMRC='~/.viu/.vimrc' vim $*"
-alias  vimo="VIMINIT=':so ~/.vio/.vimrc' MYVIMRC='~/.vio/.vimrc' vim $* -V9myLog"
-
-#go file on symbol definition
-alias vimt='vi -t'
-
-
-function findandgrep() { find . -name $1 -print | xargs grep -e "$2";}
-function findandremove()
-{
-    if [ "$1" == "" ]; then echo [WARNING] plz input filename!!
-    else find . -name "$1" -exec rm -rf \{\} \;
-    fi
+alias grepalias='alias | egrep -i --color=auto'
+alias filegrep='fileandgrep'
+function fileandgrep() {
+    echo "you should go topdir first !!"
+    echo "cmd) rgrep --color --include="*file*" "string" ./;"
+    read -p "ex) filegrep *.txt string :"
+    rgrep --color --include="*$1*" "$2" ./;
 }
 
+alias findgrep='findandgrep'
+function findandgrep() {
+    find . \( -name "*/*.repo" -o -name "*/*.git" \) -prune -o -name "*$1*" | xargs grep -rn --color "$2"
+}
+
+alias greppro='grepinprofile'
+function grepinprofile() { find "$proFILEdir" -name "*" | xargs grep -rn --color "$1" ;}
+
+alias env='env|sort'
+alias showpath='echo $PATH|sed "s/:/:\n/g"'
+
+alias gorepo="goup .repo"
+alias goup="goup"
+alias godown="godown_withmenu"
+alias gonear="goaround_withmenu"
 function goup()
 {
     local TOPFILE=${proFILEdir}
@@ -190,6 +178,7 @@ show_menu_do "$INPUT"
 cd ${RET}
 }
 
+
 function goaround_withmenu(){
 local INPUT
 #find sub dirtory
@@ -204,6 +193,28 @@ if [ "${RET##*/}" = "${PWD##*/}" ]; then goup "$@";fi
 }
 
 
+###############################
+#### copy & paste http://sourceforge.net/projects/commandlinecopypaste/
+# ex-copy: pwd | cc, ex-paste: cd $(cv)
+#command line copy+paste dir
+export CLCP_DIR="${proFILEdir}"
+#command line clipboard file
+export CLCF="${proFILEdir}/.path.log"
+alias copy_cc="sh ${CLCP_DIR}/cc.sh"
+alias coyp_cv="cat ${CLCF}"
+#alias lll="launch_cur_dir | copy_cc; copy_cv"
+alias lll="launch_cur_dir"
+
+
+###############################
+#### vi startup option
+alias  vi="VIMINIT=':so ~/.vim/.vimrc' MYVIMRC='~/.vim/.vimrc' vim $*"
+alias  vimp="VIMINIT=':so ~/.viu/.vimrc_backup' MYVIMRC='~/.viu/.vimrc_backup' vim $* -V9myLog"
+alias  vimu="VIMINIT=':so ~/.viu/.vimrc' MYVIMRC='~/.viu/.vimrc' vim $*"
+alias  vimo="VIMINIT=':so ~/.vio/.vimrc' MYVIMRC='~/.vio/.vimrc' vim $* -V9myLog"
+
+#go file on symbol definition
+alias vimt='vi -t'
 
 
 ###############################
