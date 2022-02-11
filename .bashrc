@@ -19,9 +19,6 @@ COMMENT
 #either disable flow control by issuing:
 
 ###############################
-#### basic terminal setting
-stty -ixon
-
 #### default file option on create time
 #umask 022 #private read by others
 umask 002 #share read/write with group
@@ -42,11 +39,15 @@ alias bashe="vi ${proFILEdir}/.bashrc"
 
 
 ###############################
+## default value is ctrl+r backward, ctrl+shift+r forward
+## if current shell is interractive, add shortcut ctrl-s for forward-search
+[[ $- == *i* ]] && stty -ixon
+
 #### history merge after terminal exit
 #export HISTCONTROL=ignoredups:ignorespace same to export HISTCONTROL=ignoreboth
 export HISTCONTROL='erasedups:ignorespace'
 #history filter out
-export HISTIGNORE='pwd:history*:ls'
+export HISTIGNORE='pwd:history*:popd'
 # for setting history length see HISTSIZE and HISTFILESIZE in bash(1)
 export HISTSIZE=500
 export HISTFILESIZE=40000
