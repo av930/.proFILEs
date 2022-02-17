@@ -6,7 +6,7 @@
 source ./prelibrary
 
 printf ${CYAN}
-cat << PREFACE
+cat << PREFACE > /dev/null
 ============================================================================
 ---------------------------           +             ------------------------
 -----------------------                                ---------------------
@@ -22,7 +22,6 @@ DEBUG="echo"
 
 ##--------------------------- Menu Functions --------------------------------
 ##============================================================================
-
 function gitclone_devenv(){
 ## ---------------------------------------------------------------------------
     clone_path=$1
@@ -84,7 +83,6 @@ function docker_formatprint(){
 }
 
 
-
 function list(){
 ## ---------------------------------------------------------------------------
     $DEBUG "[$1] [$2] [$3]"
@@ -102,7 +100,8 @@ function list(){
 function build(){
 ## ---------------------------------------------------------------------------
 
-    if [ "$1" = "hello" ];then 
+    if [ "$1" = "hello" ];then
+        printf "${red}========== "$1" ========== ${NCOL}\n"
         DOC_F=dockerfile.hello
         echo "make simplest dockerfile for test"
         echo "FROM ubuntu:18.04" > $DOC_F
@@ -113,7 +112,7 @@ function build(){
     fi
 
     list images
-    
+
     local today=$(date +"%y%m%d%H")
     printf "\n\nplease input your own input or use default [enter] !!!\n"
     read -p "input Dockerfile name or enter [default:Dockerfile]: " cntr_file
@@ -139,18 +138,19 @@ function start(){
     if [ "$cntr_img" = "" ];then cntr_img=${recent_name}; fi
     if [ "$cntr_name" = "" ];then cntr_name=${recent_name}; fi
 
-    if [ "$1" = "run" ];then 
+    if [ "$1" = "run" ];then
+        printf "${red}========== "$1" ========== ${NCOL}\n"
         docker run --name ${cntr_name} ${cntr_img} /bin/bash
         exit
     fi
 
-    local i=7000 
+    local i=7000
     while (( i < 10000 )); do
         if [[ ! "${list_port[*]}" =~ "$i" ]]; then cntr_port="$i"; break; fi
         ((i=i+10))
     done
 
-    mkdir -p ${home_dir}/Docker_WorkingSRC 
+    mkdir -p ${home_dir}/Docker_WorkingSRC
     docker run                                                                  \
         -dit --init --privileged --cap-add=ALL --restart="always"               \
         --name ${cntr_name}                                                     \
@@ -175,7 +175,7 @@ function start(){
         -v ${home_dir}/mirror:${home_dir}/mirror:ro                             \
         -v ${home_dir}/Docker_WorkingSRC:${home_dir}/Docker_WorkingSRC:rw       \
         ${cntr_img} /bin/bash -c 'sudo service ssh start && /bin/bash'
-    
+
         #if [ $? -eq 0 ]; then list ps; fi
     return 0
 }
@@ -186,20 +186,22 @@ function stoprmrmi(){
     local reply
     case $1 in
         ##stop, rm, rmi
-        stoprm) 
+        stoprm)
             list ps
+            printf "${red}========== "$1" ========== ${NCOL}\n"
             read -p "input Container name or enter [mandatory]: " cntr_name
-            docker stop ${cntr_name} 
+            docker stop ${cntr_name}
             docker rm ${cntr_name} ;;
-        remove)  
+        remove)
             list images
+            printf "${red}========== "$1" ========== ${NCOL}\n"            
             printf "[docker rmi] command will be executed!! otherwise use [dock stop]\n"
             read -p "input Image ID/Repository or enter [mandatory]: " cntr_img
             docker rmi ${cntr_img}
 
             if [ $? -ne 0 ]; then
                 read -p "docker rmi ${cntr_img} --force [Enter or Ctrl+C]: " reply
-                if [ "$reply" = "" ]; then 
+                if [ "$reply" = "" ]; then
                     docker rmi ${cntr_img} --force
                 fi
             fi
@@ -212,12 +214,13 @@ function exec(){
 ## ---------------------------------------------------------------------------
     local reply
     list ps --all
+    printf "${red}========== "${FUNCNAME[0]}" ========== ${NCOL}\n"
     read -p "input Container name or enter [mandatory]: " cntr_name
     printf '%s\n' \
     "1) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash"\
     "2) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash"\
     "3) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash"
-    
+
     read -p "input Your choice [Number]: " reply
     case ${reply} in
     1) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash;;
@@ -231,11 +234,12 @@ function debug(){
 ## ---------------------------------------------------------------------------
     local reply
     list ps --all
+    printf "${red}========== "${FUNCNAME[0]}" ========== ${NCOL}\n"
     read -p "input Container name or enter [mandatory]: " cntr_name
     printf '%s\n' \
     "1) docker logs --tail 100 --follow --timestamps ${cntr_name}"\
     "2) docker logs --tail 100 --follow --timestamps ${cntr_name}"
-    
+
     read -p "input Your choice [Number]: " reply
     case ${reply} in
     1) docker logs --tail 100 --follow --timestamps ${cntr_name} ;;
@@ -253,44 +257,61 @@ function clear(){
     docker container prune
     docker image prune
     "
-
     docker system prune --all
     docker images --all
-
-    docker image --all
     exit
 }
 
 
 function handler_menu(){
 ## ---------------------------------------------------------------------------
-    cmd_lists=(list build_start stop_rm build start stop restart logs testcode clear test)
-    for cmd in "${cmd_lists[@]}"
+printf ${green}
+cat << PREFACE
+==============================================
+ the menu for docker tools
+ ----------------------------------------------
+ account=$account, user_id=$(id -u ${account}), group_id=$user_id
+ home_dir=${home_dir}"
+ ----------------------------------------------
+ supported command: ex) dock list
+     info) list, images, images --all, ps, ps --all
+     image) build, hello
+     run) start, run, exec, debug
+     delete) stop, rm, rmi, remove, clear
+==============================================
+PREFACE
+printf ${NCOL}
+
+
+    local COLUMNS=20
+    PS3="=== Please input command! [Enter:menu, Ctrl+c:exit] === : "
+    select CHOICE in list images ps build hello start run stop remove clear exec debug
     do
-        if [ "$cmd" = "$1" ]; then handle_commands $cmd && exit;fi
+        handle_commands $CHOICE
+
     done
-    echo "[dock $@] is not permitted!!, please check supported commands"
 }
+
 
 function handle_commands(){
 ## ---------------------------------------------------------------------------
 local ret=0
     case $1 in
         list) list "${@:2}"                                        ;;
-          mages) list images                                       ;;
+          images) list images                                      ;;
           ps) list ps                                              ;;
         build) build "${@:2}"                                      ;;
           hello) build hello;                                      ;;
         start) start;                                              ;;
           run) start run                                           ;;
+          exec) exec                                               ;;
+          debug) debug                                             ;;
         stop|rm) stoprmrmi stoprm                                  ;;
           rmi|remove) stoprmrmi remove                             ;;
-        clear) clear;                                              ;;          
-        exec) exec ;;
-        debug) debug;;     
-        *)
-            docker "${@}"
-        return $ret;;
+        clear) clear;                                              ;;
+        "") handler_menu "${@}"                                    ;;
+        *) docker "${@}"
+          return $ret;;
     esac
 }
 
@@ -308,26 +329,11 @@ group_id=$user_id
 #$1: command, #$2: conatainer name, #$3: container port, #$4: image name
 cntr_cmd=$1; cntr_name=$2; cntr_port=$3; cntr_img=$4; cntr_file=''
 list_port=()
-$DEBUG "cntr_cmd=[$1] cntr_name=[$2] cntr_port=[$3] cntr_img=[$4]"
+#$DEBUG "cntr_cmd=[$1] cntr_name=[$2] cntr_port=[$3] cntr_img=[$4]"
 
 ## ---------------------------------------------------------------------------
 # Print Preface
 ## ---------------------------------------------------------------------------
-
-printf ${green}
-cat << PREFACE > /dev/null
-    choose [option:ex) -abs]
-    ==============================================
-    the menu for dock tools
-
-    current settings
-    ----------------------------------------------
-    account=$account, user_id=$(id -u ${account}), group_id=$user_id
-    home_dir=${home_dir}"
-    ----------------------------------------------
-    param=a)vd create, e)mul, s)d-card
-PREFACE
-printf ${NCOL}
 
 handle_commands $@
 if [ $? -ne 0 ];then echo "needto_handle_menu"; fi
