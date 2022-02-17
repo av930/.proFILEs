@@ -1,0 +1,333 @@
+#!/bin/bash
+# ==========================================================================
+#  readme    : docker handler
+#  mail      : joongkeun.kim@lge.com/av9300@gmail.com
+# ==========================================================================
+source ./prelibrary
+
+printf ${CYAN}
+cat << PREFACE
+============================================================================
+---------------------------           +             ------------------------
+-----------------------                                ---------------------
+--------------------       WELCOME TO Docker Control      ------------------
+============================================================================
+PREFACE
+printf ${NCOL}
+
+##---------------------------------------------------------- DEBUG OPTION
+#DEBUG=["echo -e"|:], : means no-operation
+DEBUG="echo"
+##============================================================================
+
+##--------------------------- Menu Functions --------------------------------
+##============================================================================
+
+function gitclone_devenv(){
+## ---------------------------------------------------------------------------
+    clone_path=$1
+    if [ "$clone_path" = "" ]; then clone_path="${home_dir}/.devenv" ;fi
+    if [ ! -e "${clone_path}" ]; then
+        git clone ssh://vgit.lge.com:29420/devops/scm/infra/devenv.git -b devenv ${clone_path}
+        chmod 600 ${clone_path}/ci/home/.ssh/id_rsa*
+    fi
+}
+
+
+function docker_formatprint(){
+## ---------------------------------------------------------------------------
+    index=0; line=-1;
+
+    #extract only "print format" from commands.
+    cmd=( $(echo "$*" |sed 's/.*format *\({{.*}}|\).*/\1/;s/{{//g;s/}}|//g;s/\./ /g') )
+    #declare -p cmd
+    $DEBUG ${#cmd[@]}
+
+
+    printf "${yellow}\n==================================================================================================="
+    printf "\n      %s" "$*"
+    printf "\n--------------------------------------------------------------------------------------------------\n\n${NCOL}"
+
+    ##read as file from command result < <("$cmd")
+
+    readarray -t arrayline < <("$@")
+    arrayline=("${cmd[*]/%/|}" "${arrayline[@]}")
+    #declare -p arrayline
+
+    ##read one line from array "${arrayline[@]}"
+    for line in "${arrayline[@]}"; do
+        ##read one item from line "${line}"
+        while read -d'|' item; do
+            ##default handler for all items. remove spaces.
+            width=-14;
+
+            ##custom handler for each item.
+            case ${cmd[$index]} in
+                ##width: display column width, minus left align, string replace
+                CreatedAt)              width=-18; item=${item%:*};;
+                Status)                 width=12;  item=${item/#Restarting*/NotWorking};;
+                Ports)                  width=6;   temp=${item##*:}; item=${temp%->*};list_port+=(${item}) ;;
+                Size)                   width=8;   item=${item/%(vir*/};;
+                Image|Repository)       width=20;  item=${item##*/} ;;
+                Tag)                    width=8;;
+                Names)                  width=30;;
+                Repository)             width=17;;
+                ID)                     width=14;;
+                *)                      width=16;;
+            esac
+            #printf "%d:" "${index}"
+            printf "%${width}s|" "${item}"
+            index=$(( ++index % ${#cmd[@]} ))
+        done <<< "${line}"
+        printf "\n--------------------------------------------------------------------------------------------------\n"
+    done
+}
+
+
+
+function list(){
+## ---------------------------------------------------------------------------
+    $DEBUG "[$1] [$2] [$3]"
+    case $1 in
+        ##width: display column width, minus left align, string replace
+        images) docker_formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|' ${@:2};;
+        ps) docker_formatprint docker ps --format '{{.CreatedAt}}|{{.Size}}|{{.Ports}}|{{.Status}}|{{.Image}}|{{.Names}}|' ${@:2};;
+        *)  docker_formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|'
+            docker_formatprint docker ps --format '{{.CreatedAt}}|{{.Size}}|{{.Ports}}|{{.Status}}|{{.Image}}|{{.Names}}|'
+            ;;
+    esac
+}
+
+
+function build(){
+## ---------------------------------------------------------------------------
+
+    if [ "$1" = "hello" ];then 
+        DOC_F=dockerfile.hello
+        echo "make simplest dockerfile for test"
+        echo "FROM ubuntu:18.04" > $DOC_F
+        echo "CMD ["echo", "HelloWorld!"]" >> $DOC_F
+        echo docker build -f $DOC_F -t $DOC_F .
+        docker build -f $DOC_F -t $DOC_F .
+        exit
+    fi
+
+    list images
+    
+    local today=$(date +"%y%m%d%H")
+    printf "\n\nplease input your own input or use default [enter] !!!\n"
+    read -p "input Dockerfile name or enter [default:Dockerfile]: " cntr_file
+    read -p "input Image name or enter [default:$today]: " cntr_img
+
+    if [ "$cntr_file" = "" ];then cntr_file="Dockerfile"; fi
+    if [ "$cntr_img" = "" ];then cntr_img=$today; fi
+    docker build -f ${cntr_file} -t ${cntr_img} . "$@" |& tee -a log.docker
+}
+
+
+function start(){
+## ---------------------------------------------------------------------------
+    $DEBUG "$LINENO:[$cntr_cmd] [$cntr_name] [$cntr_port] [$cntr_img]"
+    list
+
+    local recent_name=$(docker images --format '{{.Repository}}' |sed -n '1p'| sed 's/.*\///p')
+
+    printf "\n\nPlease input your own input or use default [enter] !!!\n"
+    printf "or you can also use simple start & run with [run]\n\n"
+    read -p "input Image ID/Repository or enter [default:$recent_name]: " cntr_img
+    read -p "input Container name or enter [default:$recent_name]: " cntr_name
+    if [ "$cntr_img" = "" ];then cntr_img=${recent_name}; fi
+    if [ "$cntr_name" = "" ];then cntr_name=${recent_name}; fi
+
+    if [ "$1" = "run" ];then 
+        docker run --name ${cntr_name} ${cntr_img} /bin/bash
+        exit
+    fi
+
+    local i=7000 
+    while (( i < 10000 )); do
+        if [[ ! "${list_port[*]}" =~ "$i" ]]; then cntr_port="$i"; break; fi
+        ((i=i+10))
+    done
+
+    mkdir -p ${home_dir}/Docker_WorkingSRC 
+    docker run                                                                  \
+        -dit --init --privileged --cap-add=ALL --restart="always"               \
+        --name ${cntr_name}                                                     \
+        -u ${user_id}:${group_id}                                               \
+        -p ${cntr_port}:22                                                      \
+        -v /etc/group:/etc/group:ro                                             \
+        -v /etc/passwd:/etc/passwd:ro                                           \
+        -v /etc/shadow:/etc/shadow:ro                                           \
+        -v /etc/timezone:/etc/timezone:ro                                       \
+        -v /etc/localtime:/etc/localtime:ro                                     \
+        -v /lib/modules:/lib/modules:ro                                         \
+        -v /usr/local/bin:/usr/local/bin:ro                                     \
+        -v /usr/bin/git-lfs:/usr/bin/git-lfs:ro                                 \
+        -v /etc/ssh:/etc/ssh:ro                                                 \
+        -v ${home_dir}/.ssh:${home_dir}/.ssh:ro                                 \
+        -v ${home_dir}/.profile:${home_dir}/.profile:ro                         \
+        -v ${home_dir}/.bashrc:${home_dir}/.bashrc:ro                           \
+        -v ${home_dir}/.gitconfig:${home_dir}/.gitconfig:ro                     \
+        -v ${home_dir}/.git_templete:${home_dir}/.git_templete:ro               \
+        -v ${home_dir}/.jfrog:${home_dir}/.jfrog:rw                             \
+        -v ${home_dir}/.vc_script:${home_dir}/.vc_script:ro                     \
+        -v ${home_dir}/mirror:${home_dir}/mirror:ro                             \
+        -v ${home_dir}/Docker_WorkingSRC:${home_dir}/Docker_WorkingSRC:rw       \
+        ${cntr_img} /bin/bash -c 'sudo service ssh start && /bin/bash'
+    
+        #if [ $? -eq 0 ]; then list ps; fi
+    return 0
+}
+
+
+function stoprmrmi(){
+## ---------------------------------------------------------------------------
+    local reply
+    case $1 in
+        ##stop, rm, rmi
+        stoprm) 
+            list ps
+            read -p "input Container name or enter [mandatory]: " cntr_name
+            docker stop ${cntr_name} 
+            docker rm ${cntr_name} ;;
+        remove)  
+            list images
+            printf "[docker rmi] command will be executed!! otherwise use [dock stop]\n"
+            read -p "input Image ID/Repository or enter [mandatory]: " cntr_img
+            docker rmi ${cntr_img}
+
+            if [ $? -ne 0 ]; then
+                read -p "docker rmi ${cntr_img} --force [Enter or Ctrl+C]: " reply
+                if [ "$reply" = "" ]; then 
+                    docker rmi ${cntr_img} --force
+                fi
+            fi
+            ;;
+    esac
+}
+
+
+function exec(){
+## ---------------------------------------------------------------------------
+    local reply
+    list ps --all
+    read -p "input Container name or enter [mandatory]: " cntr_name
+    printf '%s\n' \
+    "1) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash"\
+    "2) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash"\
+    "3) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash"
+    
+    read -p "input Your choice [Number]: " reply
+    case ${reply} in
+    1) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash;;
+    2) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash;;
+    3) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash;;
+    esac
+}
+
+
+function debug(){
+## ---------------------------------------------------------------------------
+    local reply
+    list ps --all
+    read -p "input Container name or enter [mandatory]: " cntr_name
+    printf '%s\n' \
+    "1) docker logs --tail 100 --follow --timestamps ${cntr_name}"\
+    "2) docker logs --tail 100 --follow --timestamps ${cntr_name}"
+    
+    read -p "input Your choice [Number]: " reply
+    case ${reply} in
+    1) docker logs --tail 100 --follow --timestamps ${cntr_name} ;;
+    esac
+}
+
+
+function clear(){
+## ---------------------------------------------------------------------------
+    temp_img=$(docker ps | awk "/${cntr_name}/ {print \$2}" | grep -v ID)
+    echo    "############### [WARNING] ###############"
+    echo    "!! [docker system prune] command will be executed !!
+    docker network prune
+    docker volume prune
+    docker container prune
+    docker image prune
+    "
+
+    docker system prune --all
+    docker images --all
+
+    docker image --all
+    exit
+}
+
+
+function handler_menu(){
+## ---------------------------------------------------------------------------
+    cmd_lists=(list build_start stop_rm build start stop restart logs testcode clear test)
+    for cmd in "${cmd_lists[@]}"
+    do
+        if [ "$cmd" = "$1" ]; then handle_commands $cmd && exit;fi
+    done
+    echo "[dock $@] is not permitted!!, please check supported commands"
+}
+
+function handle_commands(){
+## ---------------------------------------------------------------------------
+local ret=0
+    case $1 in
+        list) list "${@:2}"                                        ;;
+          mages) list images                                       ;;
+          ps) list ps                                              ;;
+        build) build "${@:2}"                                      ;;
+          hello) build hello;                                      ;;
+        start) start;                                              ;;
+          run) start run                                           ;;
+        stop|rm) stoprmrmi stoprm                                  ;;
+          rmi|remove) stoprmrmi remove                             ;;
+        clear) clear;                                              ;;          
+        exec) exec ;;
+        debug) debug;;     
+        *)
+            docker "${@}"
+        return $ret;;
+    esac
+}
+
+
+
+##============================================================================
+## Main
+##============================================================================
+#user setting
+account=vc.integrator
+home_dir="/data001/${account}"
+user_id=$(id -u ${account})
+group_id=$user_id
+
+#$1: command, #$2: conatainer name, #$3: container port, #$4: image name
+cntr_cmd=$1; cntr_name=$2; cntr_port=$3; cntr_img=$4; cntr_file=''
+list_port=()
+$DEBUG "cntr_cmd=[$1] cntr_name=[$2] cntr_port=[$3] cntr_img=[$4]"
+
+## ---------------------------------------------------------------------------
+# Print Preface
+## ---------------------------------------------------------------------------
+
+printf ${green}
+cat << PREFACE > /dev/null
+    choose [option:ex) -abs]
+    ==============================================
+    the menu for dock tools
+
+    current settings
+    ----------------------------------------------
+    account=$account, user_id=$(id -u ${account}), group_id=$user_id
+    home_dir=${home_dir}"
+    ----------------------------------------------
+    param=a)vd create, e)mul, s)d-card
+PREFACE
+printf ${NCOL}
+
+handle_commands $@
+if [ $? -ne 0 ];then echo "needto_handle_menu"; fi
