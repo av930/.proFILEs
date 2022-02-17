@@ -3,7 +3,7 @@
 #  readme    : docker handler
 #  mail      : joongkeun.kim@lge.com/av9300@gmail.com
 # ==========================================================================
-source ./prelibrary
+source ${SCRIPT_DIR}/prelibrary
 
 printf ${CYAN}
 cat << PREFACE > /dev/null
@@ -65,8 +65,11 @@ function docker_formatprint(){
                 ##width: display column width, minus left align, string replace
                 CreatedAt)              width=-18; item=${item%:*};;
                 Status)                 width=12;  item=${item/#Restarting*/NotWorking};;
+                State)                  width=10;  ;;
                 Ports)                  width=6;   temp=${item##*:}; item=${temp%->*};list_port+=(${item}) ;;
-                Size)                   width=8;   item=${item/%(vir*/};;
+                Size)                   width=8;   item=${item/%(vir*/}
+                #Container size takes time too long, don't use size in docker ps
+                ;;
                 Image|Repository)       width=20;  item=${item##*/} ;;
                 Tag)                    width=8;;
                 Names)                  width=30;;
@@ -89,9 +92,9 @@ function list(){
     case $1 in
         ##width: display column width, minus left align, string replace
         images) docker_formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|' ${@:2};;
-        ps) docker_formatprint docker ps --format '{{.CreatedAt}}|{{.Size}}|{{.Ports}}|{{.Status}}|{{.Image}}|{{.Names}}|' ${@:2};;
+        ps) docker_formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.Status}}|{{.State}}|{{.Image}}|{{.Names}}|' ${@:2};;
         *)  docker_formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|'
-            docker_formatprint docker ps --format '{{.CreatedAt}}|{{.Size}}|{{.Ports}}|{{.Status}}|{{.Image}}|{{.Names}}|'
+            docker_formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.Status}}|{{.State}}|{{.Image}}|{{.Names}}|'
             ;;
     esac
 }
@@ -194,7 +197,7 @@ function stoprmrmi(){
             docker rm ${cntr_name} ;;
         remove)
             list images
-            printf "${red}========== "$1" ========== ${NCOL}\n"            
+            printf "${red}========== "$1" ========== ${NCOL}\n"
             printf "[docker rmi] command will be executed!! otherwise use [dock stop]\n"
             read -p "input Image ID/Repository or enter [mandatory]: " cntr_img
             docker rmi ${cntr_img}
