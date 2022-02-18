@@ -3,7 +3,7 @@
 #  readme    : docker handler
 #  mail      : joongkeun.kim@lge.com/av9300@gmail.com
 # ==========================================================================
-source ${SCRIPT_DIR}/prelibrary
+source ${BASH_SOURCE%/*}/prelibrary
 
 printf ${CYAN}
 cat << PREFACE > /dev/null
@@ -33,7 +33,30 @@ function gitclone_devenv(){
 }
 
 
-function docker_formatprint(){
+function repository(){
+## ---------------------------------------------------------------------------
+    local repo_path=${repository_url}/devops-docker
+    local path
+    printf "${red}========== "$1" ========== ${NCOL}\n"
+    docker login ${repository_url}/artifactory-devops-docker.jfrog.io
+    
+    case $1 in
+        pull) 
+            echo docker pull ${repository_url}/devops-docker/${2};;
+        push) 
+            list images
+            read -p "input Image name or enter [mandatory]: " cntr_img
+            read -p "input Repository path [mandatory]: " path
+            if [ "$cntr_img" = "" ];then echo "image is mandatory"; return 1; fi
+            
+            docker tag ${cntr_img} ${repo_path}/${path}
+            docker push ${repo_path}/${cntr_img}
+            ;;
+    esac
+}
+
+
+function formatprint(){
 ## ---------------------------------------------------------------------------
     index=0; line=-1;
 
@@ -91,10 +114,10 @@ function list(){
     $DEBUG "[$1] [$2] [$3]"
     case $1 in
         ##width: display column width, minus left align, string replace
-        images) docker_formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|' ${@:2};;
-        ps) docker_formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.Status}}|{{.State}}|{{.Image}}|{{.Names}}|' ${@:2};;
-        *)  docker_formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|'
-            docker_formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.Status}}|{{.State}}|{{.Image}}|{{.Names}}|'
+        images) formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|' ${@:2};;
+        ps) formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.Status}}|{{.State}}|{{.Image}}|{{.Names}}|' ${@:2};;
+        *)  formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|'
+            formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.Status}}|{{.State}}|{{.Image}}|{{.Names}}|'
             ;;
     esac
 }
@@ -301,8 +324,7 @@ function handle_commands(){
 local ret=0
     case $1 in
         list) list "${@:2}"                                        ;;
-          images) list images                                      ;;
-          ps) list ps                                              ;;
+          images|ps) list "${@:1}"                                 ;;
         build) build "${@:2}"                                      ;;
           hello) build hello;                                      ;;
         start) start;                                              ;;
@@ -312,6 +334,7 @@ local ret=0
         stop|rm) stoprmrmi stoprm                                  ;;
           rmi|remove) stoprmrmi remove                             ;;
         clear) clear;                                              ;;
+        pull|push) repository "${@:1}"                             ;;
         "") handler_menu "${@}"                                    ;;
         *) docker "${@}"
           return $ret;;
@@ -328,6 +351,7 @@ account=vc.integrator
 home_dir="/data001/${account}"
 user_id=$(id -u ${account})
 group_id=$user_id
+repository_url="10.158.4.241:8082"
 
 #$1: command, #$2: conatainer name, #$3: container port, #$4: image name
 cntr_cmd=$1; cntr_name=$2; cntr_port=$3; cntr_img=$4; cntr_file=''
