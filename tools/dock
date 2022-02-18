@@ -92,7 +92,7 @@ function repo_cmd(){
 
 function formatprint(){
 ## ---------------------------------------------------------------------------
-    local index=0, line=-1;
+    local index=0;
 
     #extract only "print format" from commands.
     list_port=()
