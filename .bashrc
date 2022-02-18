@@ -44,27 +44,29 @@ alias bashe="vi ${proFILEdir}/.bashrc"
 [[ $- == *i* ]] && stty -ixon
 
 #### history merge after terminal exit
-#export HISTCONTROL=ignoredups:ignorespace same to export HISTCONTROL=ignoreboth
-export HISTCONTROL='erasedups:ignorespace'
+#export HISTCONTROL=ignoredups:ignorespace same to
+#export HISTCONTROL='erasedups:ignorespace'
+export HISTCONTROL='ignoreboth'
 #history filter out
-export HISTIGNORE='pwd:history*:popd'
+export HISTIGNORE='pwd:his*:popd'
 # for setting history length see HISTSIZE and HISTFILESIZE in bash(1)
 export HISTSIZE=500
 export HISTFILESIZE=40000
-export HISTTIMEFORMAT='[%F %T]  '
+export HISTTIMEFORMAT='[%Y-%m-%d_%H] '
 
+#update history only login
 function update_history(){
     history -a
     #history -c
     #history -r
-    shopt -u histappend
 }
-#update history only login
 #update_history
 export PROMPT_COMMAND="update_history; $PROMPT_COMMAND"
+shopt -s cmdhist
+shopt -s lithist
 
 alias his='history 100'
-alias hisgrep='history $HISTFILESIZE | egrep -i --color=auto'
+alias hisgrep='cat .bash_history | egrep -i --color=auto'
 
 ###############################
 #### screen alias
