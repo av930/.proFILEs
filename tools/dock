@@ -20,8 +20,8 @@ printf ${NCOL}
 DEBUG=:
 ##============================================================================
 ## color definition, BOLD is brighter
-red='\e[0;31m';  RED='\e[1;31m';  green='\e[0;32m';  GREEN='\e[1;32m';  yellow='\e[0;33m';   YELLOW='\e[1;33m';  
-blue='\e[0;34m'; BLUE='\e[1;34m'; cyan='\e[0;36m';   CYAN='\e[1;36m';   magenta='\e[0;35m';  brown='\e[0;33m';   NCOL='\e[0m';
+red='\e[0;31m';  RED='\e[1;31m';  green='\e[0;32m';  GREEN='\e[1;32m';  yellow='\e[0;33m';   YELLOW='\e[1;33m';
+blue='\e[0;34m'; BLUE='\e[1;34m'; cyan='\e[0;36m';   CYAN='\e[1;36m';   magenta='\e[0;35m';  NCOL='\e[0m';
 
 #user setting
 account=vc.integrator
@@ -31,12 +31,15 @@ group_id=$user_id
 repo_url="10.158.4.241:8082"
 
 #$1: command, #$2: conatainer name, #$3: container port, #$4: image name
-cntr_cmd=$1; cntr_name=$2; cntr_port=$3; cntr_img=$4; cntr_file=''; 
+cntr_cmd=$1; cntr_name=$2; cntr_port=$3; cntr_img=$4; cntr_file='';
 #$DEBUG "cntr_cmd=[$1] cntr_name=[$2] cntr_port=[$3] cntr_img=[$4]"
 
 
 ##--------------------------- Menu Functions --------------------------------
 ##============================================================================
+function echorun(){ echo "\$ $@" ; "$@" ; }
+
+
 function gitclone_devenv(){
 ## ---------------------------------------------------------------------------
     clone_path=$1
@@ -50,12 +53,12 @@ function gitclone_devenv(){
 
 function list_repo(){
 ## ---------------------------------------------------------------------------
-    local i=0, printlist
+    local i=0 printlist
     # Read the files of a directory
     listimg=( $(curl -s -u 'admin'  ${repo_url}/artifactory/api/docker/devops-docker/v2/_catalog  |sed -n '2p' | sed 's/.*\[\(.*\)\].*/\1/'| tr -d '[\[\]",]') )
-    printlist=$(declare -p listimg | sed 's/.*(\(.*\)).*/\1/') 
+    printlist=$(declare -p listimg | sed 's/.*(\(.*\)).*/\1/')
     printf "%s\n" ${printlist}
-    
+
     if [ "${listimg[0]}" = "errors" ];then echo "please verify your ID/PW"; exit 0;fi
 }
 
@@ -66,21 +69,23 @@ function repo_cmd(){
     local path
     printf "${red}========== "$1" ========== ${NCOL}\n"
     docker login ${repo_url}/artifactory-devops-docker.jfrog.io
-    
+
     case $1 in
-        repolist) 
-            list_repo;;
-        pull) 
+        find)
+            list_repo
+            echo "[link] http://${repo_url}/ui/repos/tree/General/devops-docker%2Fcommon"
+            ;;
+        pull)
             list_repo
             read -p "input Image name or enter [mandatory]: " input_img
             docker pull ${repo_url}/devops-docker/${listimg[${input_img}]}
             ;;
-        push) 
+        push)
             list images
             read -p "input Image name or enter [mandatory]: " cntr_img
             read -p "input Repository path [ex) vw/imgname]: " path
             if [ "$cntr_img" = "" ];then echo "image is mandatory"; return 1; fi
-            
+
             echo docker tag ${cntr_img} ${repo_path}/${path}
             docker tag ${cntr_img} ${repo_path}/${path}
             echo docker push ${repo_path}/${path}
@@ -92,7 +97,7 @@ function repo_cmd(){
 
 function formatprint(){
 ## ---------------------------------------------------------------------------
-    local index=0;
+    local index=0 line;
 
     #extract only "print format" from commands.
     list_port=()
@@ -103,7 +108,7 @@ function formatprint(){
 
     printf "${yellow}\n==================================================================================================="
     printf "\n      %s" "$*"
-    printf "\n--------------------------------------------------------------------------------------------------\n\n${NCOL}"
+    printf "\n---------------------------------------------------------------------------------------------------\n\n${NCOL}"
 
     ##read as file from command result < <("$cmd")
 
@@ -119,20 +124,20 @@ function formatprint(){
             width=-14;
 
             ##custom handler for each item.
-            case ${cmd[$index]} in
+            case ${cmd[${index}]} in
                 ##width: display column width, minus left align, string replace
-                CreatedAt)              width=-18; item=${item%:*};;
-                Status)                 width=12;  item=${item/#Restarting*/NotWorking};;
+                CreatedAt)              width=-16; item=${item%:*};;
                 State)                  width=10;  ;;
-                Ports)                  width=6;   temp=${item##*:}; item=${temp%->*};list_port+=(${item}) ;;
+                Status)                 width=12;  item=${item/#Restarting*/NotWorking};;
+                Ports)                  width=5;   temp=${item##*:}; item=${temp%->*};list_port+=(${item}) ;;
                 Size)                   width=8;   item=${item/%(vir*/}
                 #Container size takes time too long, don't use size in docker ps
                 ;;
-                Image|Repository)       width=20;  item=${item##*/} ;;
+                Image|Repository)       width=16;  item=${item##*/} ;;
                 Tag)                    width=8;;
                 Names)                  width=30;;
                 Repository)             width=17;;
-                ID)                     width=14;;
+                ID)                     width=13;;
                 *)                      width=16;;
             esac
             #printf "%d:" "${index}"
@@ -150,36 +155,54 @@ function list(){
     case $1 in
         ##width: display column width, minus left align, string replace
         images) formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|' ${@:2};;
-        ps) formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.Status}}|{{.State}}|{{.Image}}|{{.Names}}|' ${@:2};;
+        ps) formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.ID}}|{{.Image}}|{{.Names}}|' ${@:2};;
         *)  formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|'
-            formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.Status}}|{{.State}}|{{.Image}}|{{.Names}}|'
+            formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.Image}}|{{.Names}}|'
             ;;
     esac
+}
+
+
+function hello(){
+## ---------------------------------------------------------------------------
+    local tmppath
+
+    printf "${red}========== "${FUNCNAME[0]}" ========== ${NCOL}\n"
+    DOC_F=dockerfile.hello
+    echo "make simplest dockerfile for test"
+    echo "FROM ubuntu:18.04" > $DOC_F
+    echo 'ENTRYPOINT ["/bin/bash", "-c"]' >> $DOC_F
+    echo 'CMD "echo HelloWorld!"' >> $DOC_F
+
+    tmppath=$(readlink -f $DOC_F);
+    if [ "${tmppath%/*}" = "${HOME}" ];then
+        echo "You must move your [$DOC_F] to other dir not in HOME. " && exit;
+    fi
+    docker build -f $DOC_F -t $DOC_F .
+    echo "please find generated dockerfile ${DOC_F}: "
+    echo
+    readlink -f $DOC_F
+    exit
 }
 
 
 function build(){
 ## ---------------------------------------------------------------------------
 
-    if [ "$1" = "hello" ];then
-        printf "${red}========== "$1" ========== ${NCOL}\n"
-        DOC_F=dockerfile.hello
-        echo "make simplest dockerfile for test"
-        echo "FROM ubuntu:18.04" > $DOC_F
-        echo "CMD ["echo", "HelloWorld!"]" >> $DOC_F
-        echo docker build -f $DOC_F -t $DOC_F .
-        docker build -f $DOC_F -t $DOC_F .
-        exit
-    fi
-
+    local tmppath
     list images
 
+    printf "${red}========== "${FUNCNAME[0]}" ========== ${NCOL}\n"
     local today=$(date +"%y%m%d%H")
     printf "\n\nplease input your own input or use default [enter] !!!\n"
     read -p "input Dockerfile name or enter [default:Dockerfile]: " cntr_file
     read -p "input Image name or enter [default:$today]: " cntr_img
 
     if [ "$cntr_file" = "" ];then cntr_file="Dockerfile"; fi
+    tmppath=$(readlink -f $cntr_file);
+    if [ "${tmppath%/*}" = "${HOME}" ];then
+        echo "You must move your [$cntr_file] to other dir not in HOME. " && exit;
+    fi
     if [ "$cntr_img" = "" ];then cntr_img=$today; fi
     docker build -f ${cntr_file} -t ${cntr_img} . "$@" |& tee -a log.docker
 }
@@ -201,8 +224,8 @@ function start(){
 
     if [ "$1" = "run" ];then
         printf "${red}========== "$1" ========== ${NCOL}\n"
-        docker run --name ${cntr_name} ${cntr_img} /bin/bash
-        exit
+        echorun docker run -dit --name ${cntr_name} ${cntr_img} /bin/bash -c 'echo helloworld'
+        return 0
     fi
 
     local i=7000
@@ -244,13 +267,12 @@ function start(){
 
 function stoprmrmi(){
 ## ---------------------------------------------------------------------------
-    local reply
     case $1 in
         ##stop, rm, rmi
         stoprm)
-            list ps
+            list ps --all
             printf "${red}========== "$1" ========== ${NCOL}\n"
-            read -p "input Container name or enter [mandatory]: " cntr_name
+            read -p "input Container name/ID [mandatory]: " cntr_name
             docker stop ${cntr_name}
             docker rm ${cntr_name} ;;
         remove)
@@ -261,8 +283,8 @@ function stoprmrmi(){
             docker rmi ${cntr_img}
 
             if [ $? -ne 0 ]; then
-                read -p "docker rmi ${cntr_img} --force [Enter or Ctrl+C]: " reply
-                if [ "$reply" = "" ]; then
+                read -p "docker rmi ${cntr_img} --force [Enter or Ctrl+C]: "
+                if [ "$REPLY" = "" ]; then
                     docker rmi ${cntr_img} --force
                 fi
             fi
@@ -273,20 +295,20 @@ function stoprmrmi(){
 
 function exec(){
 ## ---------------------------------------------------------------------------
-    local reply
+
     list ps --all
     printf "${red}========== "${FUNCNAME[0]}" ========== ${NCOL}\n"
-    read -p "input Container name or enter [mandatory]: " cntr_name
+    read -p "input Container name/ID [mandatory]: " cntr_name
     printf '%s\n' \
-    "1) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash"\
-    "2) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash"\
-    "3) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash"
+    "docker exec -w ${home_dir} -it ${cntr_name} /bin/bash"
+    #"2) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash"\
+    #"3) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash"
 
-    read -p "input Your choice [Number]: " reply
-    case ${reply} in
-    1) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash;;
-    2) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash;;
-    3) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash;;
+    read -p "please enter to run : "
+    case ${REPLY} in
+    "") docker exec -it ${cntr_name} /bin/bash;;
+    #2) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash;;
+    #3) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash;;
     esac
 }
 
@@ -308,7 +330,7 @@ function debug(){
 }
 
 
-function clear(){
+function clean(){
 ## ---------------------------------------------------------------------------
     temp_img=$(docker ps | awk "/${cntr_name}/ {print \$2}" | grep -v ID)
     echo    "############### [WARNING] ###############"
@@ -328,28 +350,26 @@ function handler_menu(){
 ## ---------------------------------------------------------------------------
 printf ${green}
 cat << PREFACE
-==============================================
+==============================================================
  the menu for docker tools
- ----------------------------------------------
+ -------------------------------------------------------------
  account=$account, user_id=$(id -u ${account}), group_id=$user_id
  home_dir=${home_dir}"
- ----------------------------------------------
+ -------------------------------------------------------------
  supported command: ex) dock list
      info) list, images, images --all, ps, ps --all
      image) build, hello
      run) start, run, exec, debug
-     delete) stop, rm, rmi, remove, clear
-==============================================
+     delete) stop, rm, rmi, remove, clean
+==============================================================
 PREFACE
 printf ${NCOL}
 
-
-    local COLUMNS=20
-    PS3="=== Please input command! [Enter:menu, Ctrl+c:exit] === : "
-    select CHOICE in list images ps build hello start run stop remove clear exec debug
+    local COLUMNS=60
+    PS3=$'\e[00;35m=== Please input command! [Enter:menu, Ctrl+c:exit] === : \e[0m'
+    select CHOICE in list images ps build hello start run exec stop remove clean debug find pull push
     do
         handle_commands $CHOICE
-
     done
 }
 
@@ -360,17 +380,17 @@ local ret=0
     case $1 in
         list) list "${@:2}"                                                 ;;
           images|ps) list "${@:1}"                                          ;;
-          image) read -p "correct cmd is [dock images], enter:"; list images;;
+          image) list images "${@:2}"                                       ;;
         build) build "${@:2}"                                               ;;
-          hello) build hello;                                               ;;
+          hello) hello;                                               ;;
         start) start;                                                       ;;
           run) start run                                                    ;;
           exec) exec                                                        ;;
           debug) debug                                                      ;;
         stop|rm) stoprmrmi stoprm                                           ;;
           rmi|remove) stoprmrmi remove                                      ;;
-        clear) clear;                                                       ;;
-        pull|push|repolist) repo_cmd "${@:1}"                               ;;
+        clean) clean;                                                       ;;
+        pull|push|find) repo_cmd "${@:1}"                               ;;
         "") handler_menu "${@}"                                             ;;
         *) docker "${@}"
           return $ret;;

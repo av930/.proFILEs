@@ -44,9 +44,9 @@ alias bashe="vi ${proFILEdir}/.bashrc"
 [[ $- == *i* ]] && stty -ixon
 
 #### history merge after terminal exit
-#export HISTCONTROL=ignoredups:ignorespace same to
+#export HISTCONTROL=ignoredups:ignorespace same to #export HISTCONTROL='ignoreboth'
 #export HISTCONTROL='erasedups:ignorespace'
-export HISTCONTROL='ignoreboth'
+export HISTCONTROL='erasedups'
 #history filter out
 export HISTIGNORE='pwd:his*:popd'
 # for setting history length see HISTSIZE and HISTFILESIZE in bash(1)
