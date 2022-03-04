@@ -131,7 +131,7 @@ function formatprint(){
                 Status)                 width=12;  item=${item/#Restarting*/NotWorking};;
                 Ports)                  width=5;   temp=${item##*:}; item=${temp%->*};list_port+=(${item}) ;;
                 Size)                   width=8;   item=${item/%(vir*/}
-                #Container size takes time too long, don't use size in docker ps
+                #Container size takes time too long, dont use size in docker ps
                 ;;
                 Image|Repository)       width=16;  item=${item##*/} ;;
                 Tag)                    width=8;;

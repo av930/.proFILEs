@@ -74,7 +74,7 @@ alias hisgrep='cat .bash_history | egrep -i --color=auto'
 # screen configuration
 # alias byobu='byobu -U $*'
 alias sc='screen -ls'
-alias scr="screen -U -R -c ${proFILEdir}/.screenrc"
+alias scr="screen -U -c ${proFILEdir}/.screenrc -RR "
 alias scl="screen -U -R -c ${proFILEdir}/.screenrc_spilt"
 alias scx='kill_screen'
 function kill_screen()
