@@ -1,0 +1,8 @@
+leadingchar    leadingspace
+    leadingspace and followingspace
+	leadingtab vtab \backslash
+	leadingtab    space endingbackslash\
+tab space vtab esc line and underblankline.
+	    
+
+(){}[]!@#$%^&*()_+ endoffile

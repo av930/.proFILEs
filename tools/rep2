@@ -12,6 +12,7 @@ source ${SCRIPT_DIR}/prelibrary
 #user setting
 account=vc.integrator
 mirror="/data001/${account}"/mirror
+file_error=~/.repoconfig/repo.error
 path_mirror=/data001/vc.integrator/mirror
 rm -f ${file_error}
 
@@ -62,10 +63,11 @@ function runRepoInitcheckError(){
     echo "\$ $@"  
     "$@" 2> >(tee -a ${file_error})
     #"$@" | tee -a ${file_error}
-
-    if [ $? -ne 0 ];then runSSHcheckError ssh -p vc.integrator@vgit.lge.com:29430;fi
-
-    
+    case $? in
+     0) ;;
+     1) echo Generic error, usually because invalid command line options or malformed configuration;;
+     2) echo Connection failed;;
+    esac
 }
  
  
@@ -133,7 +135,7 @@ function getRepoCMD(){
 # get repo command from exising repo project
 # $1 show repo command (default: save info to each variable such as REMOTE_URL, BRANCH_REPO, ...)
     findFileLocation .repo/manifests 5
-    if [ -d "${REPO_PATH}" ];then cd ${REPO_PATH};else err "you are not in repo project";exit;fi
+    if [ -d "${REPO_PATH}" ];then cd ${REPO_PATH};else error "you are not in repo project";exit;fi
     
     local count file_tempa file_tempb 
         
@@ -218,7 +220,7 @@ function repoInit(){
     #option handle
     local url revision manifest platform reference depth repo_url extra
     if ! options=$(getopt -l reference:,depth:,repo-url:,no-clone-bundle,partial-clone,no-tags,mirror -o b:m:p:u: -- "$@")
-    then err 'please check "repo init --help"'; exit 1; fi
+    then error 'please check "repo init --help"'; exit 1; fi
 
     #reset legacy positional parameter except $options
     eval set -- "$options"
@@ -242,44 +244,151 @@ function repoInit(){
 
     #revision handle
     if [ -z "${revision}" ];then
-        printf "usage: rep init -b [branch] [-m manifest.xml] \n";
+        printf "usage: vrepo init -b [branch] [-m manifest.xml] \n";
         bar outline         
-        printf "ex: rep init -b lampauto_s_release -m all.xml \n";
-        printf "ex: rep init -u https://android.googlesource.com/platform/manifest -b android-12.1.0_r1 \n";
-        printf "ex: rep init -u ssh://lampgd1.lge.com:29418/platform/manifest.git -b lampauto_r_release \n -m lampauto/lampauto-gm-recent.xml --reference=/data001/vc.integrator/mirror/lampauto_r_release/ \n --repo-url=ssh://lamp.lge.com:29418/repo/git-repo.git \n";
+        printf "ex: vrepo init -b lampauto_s_release -m all.xml \n";
+        printf "ex: vrepo init -u https://android.googlesource.com/platform/manifest -b android-12.1.0_r1 \n";
+        printf "ex: vrepo init -u ssh://lampgd1.lge.com:29418/platform/manifest.git -b lampauto_r_release \n -m lampauto/lampauto-gm-recent.xml --reference=/data001/vc.integrator/mirror/lampauto_r_release/ \n --repo-url=ssh://lamp.lge.com:29418/repo/git-repo.git \n";
         exit
     fi
 
     #url handle with replication server
     local file_info=$(mktemp)
-    if [ -z "${url}" ] || [ "${url}" != "${url/lamp/}" ]; then 
-        bar outline 'repo server info' > ${file_info}
-        findProperREPLServer ${file_info}
-        url="ssh://${REPL_SERVER}/platform/manifest.git"; 
-    fi
+    bar outline 'repo server info' > ${file_info}
+    findProperREPLServer ${file_info}
+    if [ -z "${url}" ] || [ "${url}" != "${url/lamp/}" ]; then url="ssh://${REPL_SERVER}/platform/manifest.git"; fi
     if [ -z "${reference}" ];then reference="${reference:-${path_mirror}/${revision}}"; fi
     if [ -z "${repo_url}" ] || [ "${url}" != "${url/lamp/}" ];then repo_url='ssh://lamp.lge.com:29418/repo/git-repo.git';fi;
 
     cmd_repoinit="repo init ${url:+-u ${url}} ${revision:+-b ${revision}} ${manifest:+-m ${manifest}} ${platform:+-p ${platform}} ${reference:+--reference=${reference}} ${depth:+--depth=${depth}} ${repo_url:+--repo-url=${repo_url}} ${extra} $@"
 
     #make final repo init cmd
-    bar outline "executed command:" >> ${file_info}
-    printf "${cmd_repoinit}\n" >> ${file_info}
-
+    bar outline "generated full command:\n" >> ${file_info}
+    printf "${cmd_repoinit}" >> ${file_info}
+    
     #execute cmd
     time runRepoInitcheckError ${cmd_repoinit}
-    
-    grep -nEe "(fatal|fail|error)" ${file_error} >/dev/null
-    if [ $? -eq 0 ]; then 
-        bar outline "check error">> ${file_info}
-        err "${file_error}" >> ${file_info}
-    fi
+    bar outline >> ${file_info}
+    printf "${red}error logfile: ${file_error} ${NCOL}\n" >> ${file_info}
+    bar outline >> ${file_info}
     
     #show repo info
-    bar outline >> ${file_info}
     cat ${file_info}; rm -f ${file_info}
     return
 }
+
+function repoInit_(){
+## ---------------------------------------------------------------------------
+# repo init helper
+# $1 short repo init command
+    #option handle
+    local repo_URL url_repl url revision manifest opt left
+    while getopts m:b:u:c opt 2> /dev/null; do
+       case $opt in
+          u) url=$OPTARG;;
+          b) revision=$OPTARG;;
+          m) manifest=$OPTARG
+            read -p [$manifest]
+          ;; 
+          c) current=$OPTARG;;
+          *) left=${left} $OPTARG;;
+       esac
+    done
+
+    #revision handle
+    if [ -z "${revision}" ]; then 
+        printf "usage: vrepo init -b [branch] [-m manifest.xml] \n";
+        bar outline         
+        printf "ex: vrepo init -b lampauto_s_release -m all.xml \n";
+        printf "ex: vrepo init -u https://android.googlesource.com/platform/manifest -b android-12.1.0_r1 \n";
+        printf "ex: vrepo init -u ssh://lampgd1.lge.com:29418/platform/manifest.git -b lampauto_r_release \n -m lampauto/lampauto-gm-recent.xml --reference=/data001/vc.integrator/mirror/lampauto_r_release/ \n --repo-url=ssh://lamp.lge.com:29418/repo/git-repo.git \n";
+        echo "${revision}"
+        exit
+    fi
+    
+    local path_mirror='--reference=/data001/vc.integrator/mirror'
+    local url_mirror=${path_mirror}/${revision}
+
+    #url handle with replication server
+    local file_info=$(mktemp)
+    bar outline 'repo server info' > ${file_info}
+    findProperREPLServer ${file_info}
+    
+    
+    local cmd_repoinit="repo init $@ ${url_mirror}"
+    if [ -z "${url}" ];               then cmd_repoinit="${cmd_repoinit} -u ssh://${REPL_SERVER}/platform/manifest.git"; fi
+    if [[ "${revision}" =~ "lamp" ]]; then 
+        cmd_repoinit="${cmd_repoinit} --repo-url=ssh://lamp.lge.com:29418/repo/git-repo.git"; 
+    else 
+        cmd_repoinit="${cmd_repoinit}"; 
+    fi
+
+    if [ -n "${current}" ];           then cmd_repoinit="${cmd_repoinit} -c ${current}"  ;fi    
+
+    #make final repo init cmd
+    bar outline >> ${file_info}
+    printf "generated full command:\n" >> ${file_info}
+    printf "${cmd_repoinit}\n" >> ${file_info}
+    
+    #execute cmd
+    time runRepoInitcheckError ${cmd_repoinit}
+    bar outline >> ${file_info}
+    printf "${red}error logfile: ${file_error} ${NCOL}\n" >> ${file_info}
+    bar outline >> ${file_info}
+    
+    #show repo info
+    cat ${file_info}; rm -f ${file_info}
+    return
+}
+
+function repoInit__(){
+## ---------------------------------------------------------------------------
+# repo init helper
+# $1 short repo init command
+    if ! options=$(getopt -o u:b:m:cp: -l repo-url:,mirror:,reference:,depth:,no-tags,no-clone-bundle,partial-clone -- "$@")
+    then
+        echo "ERROR: print usage"
+        exit 1
+    fi
+
+    #reset legacy positional parameter except $options
+    eval set -- $options
+    while true; do
+        case "$1" in
+            -u|--manifest-url) 
+                echo >&2 "$1 was triggered!, OPTARG: $2"
+                shift 2;;
+            -b|--manifest-branch)    
+                echo >&2 "$1 was triggered!, OPTARG: $2"
+                shift 2;; #when option has sub param, should shift 2
+            -m|--manifest-name)
+                echo >&2 "$1 was triggered!, OPTARG: $2"
+                shift 2;;
+            -c|--current-branch)
+                echo >&2 "$1 was triggered!, OPTARG: $2"
+                shift ;; 
+            --mirror|--reference|--depth|--repo-url)
+                echo >&2 "$1 was triggered!, OPTARG: $2"
+                shift 2;;
+            --no-clone-bundle|--partial-clone|--no-tags)
+                echo >&2 "$1 was triggered!"
+                shift;;
+            --)           
+                shift 
+                break ;;
+            *)           
+                shift 
+                break ;;               
+        esac
+    done
+
+    echo -------------------- leftover
+    echo "$@"
+
+    exit
+}
+
+
 
 
 
@@ -330,7 +439,7 @@ cat << PREFACE
 ==============================================================
  the menu for repo tools
  -------------------------------------------------------------
- supported command: ex) rep info
+ supported command: ex) vrepo info
      info) info
      download) init sync auto
 ==============================================================
