@@ -66,7 +66,7 @@ shopt -s cmdhist
 shopt -s lithist
 
 alias his='history 100'
-alias hisgrep='cat .bash_history | egrep -i --color=auto'
+alias hisgrep='cat ~/.bash_history | egrep -i --color=auto'
 
 ###############################
 #### screen alias
@@ -133,6 +133,7 @@ alias ll='ls -althrF --color=auto --show-control-chars'
 alias dir='ls -al -F --color=auto| grep /'
 alias grep='grep --color=auto'
 alias grepalias='alias | egrep -i --color=auto'
+alias findrecent='_findrecent(){ find . -ctime -"$1" -a -type f | xargs ls -l ;}; _findrecent'
 alias filegrep='fileandgrep'
 function fileandgrep() {
     echo "you should go topdir first !!"
