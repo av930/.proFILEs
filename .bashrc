@@ -28,6 +28,7 @@ umask 002 #share read/write with group
 ###############################
 #### profile alias
 #global TAG for alias for banning conflict for builtin commands
+ECHO='e'
 export TAG='l'
 export allfile='* .[^.]*'
 export dotfile='.[^.]*'
@@ -73,9 +74,15 @@ alias hisgrep='cat ~/.bash_history | egrep -i --color=auto'
 
 # screen configuration
 # alias byobu='byobu -U $*'
-alias sc='screen -ls'
-alias scr="screen -U -c ${proFILEdir}/.screenrc -RR "
-alias scl="screen -U -R -c ${proFILEdir}/.screenrc_spilt"
+alias sc${TAG}='screen -ls'
+alias sc="screen -U -c ${proFILEdir}/.screenrc -RR "
+alias sc$ECHO='printf "Usage
+screen -U -R -c ${proFILEdir}/.screenrc_spilt
+screen -U -c ${proFILEdir}/.screenrc -RR
+screen -dR -c ${proFILEdir}/.screenrc
+screen -ls | tail -n +2 | head -n -2 | awk {print $1} | xargs -I {} screen -S {} -X quit
+"'
+
 alias scx='kill_screen'
 function kill_screen()
 {
@@ -91,20 +98,26 @@ function kill_screen()
        done
     fi
 }
-alias scxx="screen -ls | tail -n +2 | head -n -2 | awk '{print $1}' | xargs -I {} screen -S {} -X quit"
 
 ###############################
 #### utility
 
-alias dokcer='docker'
-alias docekr='docker'
-alias scpe='echo "scp ${USER}@$CURR_IP:${HOME}/filename .\n scp filename ${USER}@$CURR_IP:${HOME}/"'
-alias ssh${TAG}='ssh vc.integrator@localhost -p "$@"'
-alias sshe='echo ssh -p 22 ${USER}@$CURR_IP '
-
-alias rsyne='echo rsync -auvht --exclude-from=exclude.txt --port=873 172.21.74.32::$USER/SRC_DIR/*  .'
-alias repoe='echo repo sync -qcj4 --no-tags'
-
+alias scp$ECHO='printf "Usage
+scp -p <port> <user>@<src-ip>:<full-path-filename> .
+scp filename -p <port> <user>@<dest-ip>:<full-path-dest-dir>/
+docker cp <container-id>:<full-path-filename> .
+docker cp <filename> <container-id>:<full-path-dest-dir>/
+"'
+alias ssh$ECHO='printf "Usage
+ssh -p <port> <user>@<dest-ip>
+scp ${USER}@$CURR_IP:${HOME}/filename .
+"'
+alias rsync$ECHO='printf "Usage
+rsync -auvht --exclude-from=exclude.txt --port=873 172.21.74.32::$USER/SRC_DIR/* .
+"'
+alias repo$ECHO='printf "Usage
+repo sync -qcj4 --no-tags --no-clone-bundle
+"'
 ###############################
 #### move
 alias moveup='mv * .[^.]* ..'
@@ -212,13 +225,12 @@ alias lll="launch_cur_dir"
 
 ###############################
 #### vi startup option
-alias  vi="VIMINIT=':so ~/.vim/.vimrc' MYVIMRC='~/.vim/.vimrc' vim $*"
-alias  vimp="VIMINIT=':so ~/.viu/.vimrc_backup' MYVIMRC='~/.viu/.vimrc_backup' vim $* -V9myLog"
-alias  vimu="VIMINIT=':so ~/.viu/.vimrc' MYVIMRC='~/.viu/.vimrc' vim $*"
-alias  vimo="VIMINIT=':so ~/.vio/.vimrc' MYVIMRC='~/.vio/.vimrc' vim $* -V9myLog"
-
-#go file on symbol definition
-alias vimt='vi -t'
+alias vi$ECHO='printf "Usage
+VIMINIT=:so ~/.vim/.vimrc MYVIMRC=~/.vim/.vimrc vim $*
+VIMINIT=:so ~/.viu/.vimrc_backup MYVIMRC=~/.viu/.vimrc_backup vim $* -V9myLog
+VIMINIT=:so ~/.viu/.vimrc MYVIMRC=~/.viu/.vimrc vim $*
+VIMINIT=:so ~/.vio/.vimrc MYVIMRC=~/.vio/.vimrc vim $* -V9myLog
+"'
 
 
 ###############################
