@@ -360,6 +360,8 @@ local ret=0
         sync) runRepoSynccheckError                     ;;
         info) getRepoInfo
               bar inline "repo info"
+              read -p "repo info for all repository [enter:continue| ctrl+c/q:exit]: "
+              if [ "$REPLY" = "q" ];then exit;fi
               repo info                                 ;;
         "") handleMenu "${@}"                           ;;
         *) repo "${@}"
