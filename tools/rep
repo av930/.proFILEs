@@ -11,8 +11,7 @@ SCRIPT_DIR=${BASH_SOURCE%/*}
 source ${SCRIPT_DIR}/prelibrary
 #user setting
 account=vc.integrator
-mirror="/data001/${account}"/mirror
-path_mirror=/data001/vc.integrator/mirror
+path_mirror="/data001/${account}"/mirror
 rm -f ${file_error}
 
 
