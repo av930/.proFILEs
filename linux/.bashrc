@@ -21,20 +21,19 @@ if [ -n "$force_color_prompt" ]; then
 	color_prompt=
     fi
 fi
-if [ "$LOGIN_MODE" = "SU" ]; then
-    PS1="\n${debian_chroot:+($debian_chroot)}$green\u@${CURR_IP}:$cyan\$PWD\[$NCOL\$\n\$ "
 
-elif [ "$LOGIN_MODE" = "DOCKER" ]; then
-    PS1="\n${debian_chroot:+($debian_chroot)}$red\u@${CURR_IP}:$yellow\$PWD\[$NCOL\$\n\$ "
 
-elif [ "$color_prompt" = yes ]; then
+if [ "$color_prompt" = yes ]; then
     PS1="\n${debian_chroot:+($debian_chroot)}$GREEN\u@${CURR_IP}:$CYAN\$PWD\[$NCOL\$\n\$ "
     #PS1="\n${debian_chroot:+($debian_chroot)}$GREEN\u@${CURR_IP}:$CYAN\$PWD\[\033[00m\]\$\n\$ "
     #PS1="\n${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\$PWD\[\033[00m\]\$\n\$ "
-
 else
     PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '
 
+fi
+
+if grep -q docker /proc/1/cgroup; then
+    PS1="\n${debian_chroot:+($debian_chroot)}$red\u@${HOSTNAME}:$yellow\$PWD\[$NCOL\$\n\$ "
 fi
 
 ############################### USER DEFINE #####################################
