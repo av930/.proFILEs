@@ -63,7 +63,7 @@ function list_repo(){
 }
 
 
-function repo_cmd(){
+function docker_hub(){
 ## ---------------------------------------------------------------------------
     local repo_path=${repo_url}/devops-docker
     local path
@@ -71,7 +71,7 @@ function repo_cmd(){
     echo "docker login ${repo_url}/artifactory-devops-docker.jfrog.io"
     docker login ${repo_url}/artifactory-devops-docker.jfrog.io
 
-    case $1 in
+    case "${1%%(*}" in
         find)
             list_repo
             echo "[link] http://${repo_url}/ui/repos/tree/General/devops-docker%2Fcommon"
@@ -91,6 +91,8 @@ function repo_cmd(){
             docker tag ${cntr_img} ${repo_path}/${path}
             echo docker push ${repo_path}/${path}
             docker push ${repo_path}/${path}
+            ;;
+         *) echo "[error] please check your command "
             ;;
     esac
 }
@@ -397,7 +399,7 @@ local ret=0
         stop|rm) stoprmrmi stoprm                                           ;;
           rmi|remove) stoprmrmi remove                                      ;;
         clean) clean;                                                       ;;
-        pull|push|find) repo_cmd "${@:1}"                                   ;;
+        pull|push|find) docker_hub "${@:1}"                                   ;;
         "") handler_menu "${@}"                                             ;;
         *) docker "${@}"
           return $ret;;
