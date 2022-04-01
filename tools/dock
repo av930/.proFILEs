@@ -68,6 +68,7 @@ function repo_cmd(){
     local repo_path=${repo_url}/devops-docker
     local path
     printf "${red}========== "$1" ========== ${NCOL}\n"
+    echo "docker login ${repo_url}/artifactory-devops-docker.jfrog.io"
     docker login ${repo_url}/artifactory-devops-docker.jfrog.io
 
     case $1 in
@@ -77,13 +78,13 @@ function repo_cmd(){
             ;;
         pull)
             list_repo
-            read -p "input Image name or enter [mandatory]: " input_img
+            read -p "must input image name [Number]: " input_img
             docker pull ${repo_url}/devops-docker/${listimg[${input_img}]}
             ;;
         push)
             list images
-            read -p "input Image name or enter [mandatory]: " cntr_img
-            read -p "input Repository path [ex) vw/imgname]: " path
+            read -p "must input Image [Name}: " cntr_img
+            read -p "must input Repository path [ex) vw/imgname]: " path
             if [ "$cntr_img" = "" ];then echo "image is mandatory"; return 1; fi
 
             echo docker tag ${cntr_img} ${repo_path}/${path}
@@ -182,7 +183,7 @@ function hello(){
     echo "please find generated dockerfile ${DOC_F}: "
     echo
     readlink -f $DOC_F
-    exit
+    return
 }
 
 
@@ -194,9 +195,9 @@ function build(){
 
     printf "${red}========== "${FUNCNAME[0]}" ========== ${NCOL}\n"
     local today=$(date +"%y%m%d%H")
-    printf "\n\nplease input your own input or use default [enter] !!!\n"
-    read -p "input Dockerfile name or enter [default:Dockerfile]: " cntr_file
-    read -p "input Image name or enter [default:$today]: " cntr_img
+    printf "\n\nplease input your own input or use default [Enter] !!!\n"
+    read -p "input Dockerfile [Name| Enter:Dockerfile]: " cntr_file
+    read -p "input Image [Name| Enter:$today]: " cntr_img
 
     if [ "$cntr_file" = "" ];then cntr_file="Dockerfile"; fi
     tmppath=$(readlink -f $cntr_file);
@@ -217,8 +218,8 @@ function start(){
 
     printf "\n\nPlease input your own input or use default [enter] !!!\n"
     printf "or you can also use simple start & run with [run]\n\n"
-    read -p "input Image ID/Repository or enter [default:$recent_name]: " cntr_img
-    read -p "input Container name or enter [default:$recent_name]: " cntr_name
+    read -p "input Image ID/Repository [ImageID| Repository| Enter:$recent_name]: " cntr_img
+    read -p "input Container [Name| Enter:$recent_name]: " cntr_name
     if [ "$cntr_img" = "" ];then cntr_img=${recent_name}; fi
     if [ "$cntr_name" = "" ];then cntr_name=${recent_name}; fi
 
@@ -272,18 +273,18 @@ function stoprmrmi(){
         stoprm)
             list ps --all
             printf "${red}========== "$1" ========== ${NCOL}\n"
-            read -p "input Container name/ID [mandatory]: " cntr_name
+            read -p "must input Container [Name| ID]: " cntr_name
             docker stop ${cntr_name}
             docker rm ${cntr_name} ;;
         remove)
             list images
             printf "${red}========== "$1" ========== ${NCOL}\n"
             printf "[docker rmi] command will be executed!! otherwise use [dock stop]\n"
-            read -p "input Image ID/Repository or enter [mandatory]: " cntr_img
+            read -p "must input Image ID/Repository or enter [ImageID| Repository]: " cntr_img
             docker rmi ${cntr_img}
 
             if [ $? -ne 0 ]; then
-                read -p "docker rmi ${cntr_img} --force [Enter or Ctrl+C]: "
+                read -p "docker rmi ${cntr_img} --force [Enter:${cntr_img}| Ctrl+C]: "
                 if [ "$REPLY" = "" ]; then
                     docker rmi ${cntr_img} --force
                 fi
@@ -298,13 +299,16 @@ function exec(){
 
     list ps --all
     printf "${red}========== "${FUNCNAME[0]}" ========== ${NCOL}\n"
-    read -p "input Container name/ID [mandatory]: " cntr_name
+    local recent_name=$(docker ps --format '{{.Names}}' |sed -n '1p'| sed 's/.*\///p')
+    
+    read -p "must input Container [ID| Name| Enter:$recent_name]: " cntr_name
+    if [ -z "$cntr_name" ];then cntr_name=${recent_name}; fi
     printf '%s\n' \
     "docker exec -w ${home_dir} -it ${cntr_name} /bin/bash"
     #"2) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash"\
     #"3) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash"
 
-    read -p "please enter to run : "
+    read -p "please confirm to run [Enter] :"
     case ${REPLY} in
     "") docker exec -it ${cntr_name} /bin/bash;;
     #2) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash;;
@@ -318,7 +322,7 @@ function debug(){
     local reply
     list ps --all
     printf "${red}========== "${FUNCNAME[0]}" ========== ${NCOL}\n"
-    read -p "input Container name or enter [mandatory]: " cntr_name
+    read -p "must input Container [Name]: " cntr_name
     printf '%s\n' \
     "1) docker logs --tail 100 --follow --timestamps ${cntr_name}"\
     "2) docker logs --tail 100 --follow --timestamps ${cntr_name}"
@@ -350,24 +354,27 @@ function handler_menu(){
 ## ---------------------------------------------------------------------------
 printf ${green}
 cat << PREFACE
-==============================================================
+===================================================================================================
  the menu for docker tools
- -------------------------------------------------------------
+ -------------------------------------------------------------------------------------------------
  account=$account, user_id=$(id -u ${account}), group_id=$user_id
  home_dir=${home_dir}"
- -------------------------------------------------------------
- supported command: ex) dock list
-     info) list, images, images --all, ps, ps --all
-     image) build, hello
-     run) start, run, exec, debug
-     delete) stop, rm, rmi, remove, clean
-==============================================================
+ -------------------------------------------------------------------------------------------------
+ o step: build/pull(image)>> start(container)>> exec(attach)>> stop(container)>> remove(image)
+ o step: hello(image)>> run(container)>> exec(attach)>> ...
+ 
+ supported command category: ex) dock list
+ common) list, clean
+ image) image/images --all, build, hello, find, pull, push, rmi/remove
+ container) ps/ps --all, start, run, exec, debug, stop/rm
+===================================================================================================
 PREFACE
 printf ${NCOL}
 
-    local COLUMNS=60
-    PS3=$'\e[00;35m=== Please input command! [Enter:menu, Ctrl+c:exit] === : \e[0m'
-    select CHOICE in list images ps build hello start run exec stop remove clean debug find pull push
+    local COLUMNS=120
+    PS3=$'\e[00;35m=== Please input command! [Number:menu, Ctrl+c:exit] === : \e[0m'
+    select CHOICE in 'list(img&cntr)' images ps build 'hello(testimg)' 'start(ex-run)' 'run(normal)' exec \
+    'stop(stop&rm)' remove 'clean(prune all)' 'debug(log)' 'find(search)' pull push
     do
         handle_commands $CHOICE
     done
@@ -377,12 +384,12 @@ printf ${NCOL}
 function handle_commands(){
 ## ---------------------------------------------------------------------------
 local ret=0
-    case $1 in
+    case "${1%%(*}" in
         list) list "${@:2}"                                                 ;;
           images|ps) list "${@:1}"                                          ;;
           image) list images "${@:2}"                                       ;;
         build) build "${@:2}"                                               ;;
-          hello) hello;                                               ;;
+          hello) hello;                                                     ;;
         start) start;                                                       ;;
           run) start run                                                    ;;
           exec) exec                                                        ;;
@@ -390,7 +397,7 @@ local ret=0
         stop|rm) stoprmrmi stoprm                                           ;;
           rmi|remove) stoprmrmi remove                                      ;;
         clean) clean;                                                       ;;
-        pull|push|find) repo_cmd "${@:1}"                               ;;
+        pull|push|find) repo_cmd "${@:1}"                                   ;;
         "") handler_menu "${@}"                                             ;;
         *) docker "${@}"
           return $ret;;
