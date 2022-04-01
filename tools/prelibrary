@@ -72,6 +72,13 @@ function getCurrentIP(){
     done
 }
 
+function code(){
+   case $1 in
+      en) export ENCODE=$( echo $2 | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey );;
+      de) echo "${ENCODE}" | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey ;;
+   esac
+}
+
 
 
 #### ============================================================================
