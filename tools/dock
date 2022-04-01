@@ -37,8 +37,11 @@ cntr_cmd=$1; cntr_name=$2; cntr_port=$3; cntr_img=$4; cntr_file='';
 
 ##--------------------------- Menu Functions --------------------------------
 ##============================================================================
-function echorun(){ echo "\$ $@" ; "$@" ; }
-
+function echorun(){ 
+## ---------------------------------------------------------------------------
+# ex) echo docker images # must call without quote
+    echo "\$ $@" ; "$@"; 
+}
 
 function gitclone_devenv(){
 ## ---------------------------------------------------------------------------
@@ -55,6 +58,7 @@ function list_repo(){
 ## ---------------------------------------------------------------------------
     local i=0 printlist
     # Read the files of a directory
+    echo "curl -s -u 'admin'  ${repo_url}/artifactory/api/docker/devops-docker/v2/_catalog"
     listimg=( $(curl -s -u 'admin'  ${repo_url}/artifactory/api/docker/devops-docker/v2/_catalog  |sed -n '2p' | sed 's/.*\[\(.*\)\].*/\1/'| tr -d '[\[\]",]') )
     printlist=$(declare -p listimg | sed 's/.*(\(.*\)).*/\1/')
     printf "%s\n" ${printlist}
@@ -63,13 +67,13 @@ function list_repo(){
 }
 
 
+
 function docker_hub(){
 ## ---------------------------------------------------------------------------
     local repo_path=${repo_url}/devops-docker
     local path
     printf "${red}========== "$1" ========== ${NCOL}\n"
-    echo "docker login ${repo_url}/artifactory-devops-docker.jfrog.io"
-    docker login ${repo_url}/artifactory-devops-docker.jfrog.io
+    echorun docker login ${repo_url}/artifactory-devops-docker.jfrog.io
 
     case "${1%%(*}" in
         find)
@@ -79,7 +83,7 @@ function docker_hub(){
         pull)
             list_repo
             read -p "must input image name [Number]: " input_img
-            docker pull ${repo_url}/devops-docker/${listimg[${input_img}]}
+            echorun docker pull ${repo_url}/devops-docker/${listimg[${input_img}]}
             ;;
         push)
             list images
@@ -87,10 +91,8 @@ function docker_hub(){
             read -p "must input Repository path [ex) vw/imgname]: " path
             if [ "$cntr_img" = "" ];then echo "image is mandatory"; return 1; fi
 
-            echo docker tag ${cntr_img} ${repo_path}/${path}
-            docker tag ${cntr_img} ${repo_path}/${path}
-            echo docker push ${repo_path}/${path}
-            docker push ${repo_path}/${path}
+            echorun docker tag ${cntr_img} ${repo_path}/${path}
+            echorun docker push ${repo_path}/${path}
             ;;
          *) echo "[error] please check your command "
             ;;
@@ -218,8 +220,7 @@ function start(){
 
     local recent_name=$(docker images --format '{{.Repository}}' |sed -n '1p'| sed 's/.*\///p')
 
-    printf "\n\nPlease input your own input or use default [enter] !!!\n"
-    printf "or you can also use simple start & run with [run]\n\n"
+    printf "\n\nPlease Input Image, ID is more accurate!!!\n"
     read -p "input Image ID/Repository [ImageID| Repository| Enter:$recent_name]: " cntr_img
     read -p "input Container [Name| Enter:$recent_name]: " cntr_name
     if [ "$cntr_img" = "" ];then cntr_img=${recent_name}; fi
