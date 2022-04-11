@@ -73,6 +73,7 @@ function docker_hub(){
     local repo_path=${repo_url}/devops-docker
     local path
     printf "${red}========== "$1" ========== ${NCOL}\n"
+    
     echorun docker login ${repo_url}/artifactory-devops-docker.jfrog.io
 
     case "${1%%(*}" in
@@ -83,6 +84,7 @@ function docker_hub(){
         pull)
             list_repo
             read -p "must input image name [Number]: " input_img
+            if [ -z "$input_img" ]; then echo you have to input image number; return; fi
             echorun docker pull ${repo_url}/devops-docker/${listimg[${input_img}]}
             ;;
         push)
@@ -106,7 +108,7 @@ function formatprint(){
 
     #extract only "print format" from commands.
     list_port=()
-    cmd=( $(echo "$*" |sed 's/.*format *\({{.*}}|\).*/\1/;s/{{//g;s/}}|//g;s/\./ /g') )
+    local cmd=( $(echo "$*" |sed 's/.*format *\({{.*}}|\).*/\1/;s/{{//g;s/}}|//g;s/\./ /g') )
     #declare -p cmd
     $DEBUG ${#cmd[@]}
 
@@ -131,15 +133,15 @@ function formatprint(){
             ##custom handler for each item.
             case ${cmd[${index}]} in
                 ##width: display column width, minus left align, string replace
-                CreatedAt)              width=-16; item=${item%:*};;
-                State)                  width=10;  ;;
-                Status)                 width=12;  item=${item/#Restarting*/NotWorking};;
-                Ports)                  width=5;   temp=${item##*:}; item=${temp%->*};list_port+=(${item}) ;;
-                Size)                   width=8;   item=${item/%(vir*/}
+                CreatedAt)              width=-16; item=${item%:*};; #remove second 
+                Status)                 width=12;  item=${item/#Restarting*/NotWorking};; #change status Restarting to Notworking
+                Ports)                  width=5;   temp=${item##*:}; item=${temp%->*};list_port+=(${item}) ;; #display port shortly
+                Size)                   width=8;   item=${item/%(vir*/} ;;
                 #Container size takes time too long, dont use size in docker ps
-                ;;
-                Image|Repository)       width=16;  item=${item##*/} ;;
-                Tag)                    width=8;;
+                #remove virtual memory 
+                Image|Repository)       width=16;  [[ $list_cmd != images ]] && item=${item##*/} ;; #remove Image path to make it short
+                State)                  width=10;; #only display width control
+                Tag)                    width=8;; 
                 Names)                  width=30;;
                 Repository)             width=17;;
                 ID)                     width=13;;
@@ -157,7 +159,8 @@ function formatprint(){
 function list(){
 ## ---------------------------------------------------------------------------
     $DEBUG "[$1] [$2] [$3]"
-    case $1 in
+    list_cmd=$1
+    case $list_cmd in
         ##width: display column width, minus left align, string replace
         images) formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|' ${@:2};;
         ps) formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.ID}}|{{.Image}}|{{.Names}}|' ${@:2};;
@@ -307,9 +310,8 @@ function exec(){
     read -p "must input Container [ID| Name| Enter:$recent_name]: " cntr_name
     if [ -z "$cntr_name" ];then cntr_name=${recent_name}; fi
     printf '%s\n' \
-    "docker exec -w ${home_dir} -it ${cntr_name} /bin/bash"
-    #"2) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash"\
-    #"3) docker exec -w ${home_dir} -it ${cntr_name} /bin/bash"
+    "docker exec -it ${cntr_name} /bin/bash"
+    #"docker exec -w ${home_dir} -it ${cntr_name} /bin/bash"
 
     read -p "please confirm to run [Enter] :"
     case ${REPLY} in
@@ -337,7 +339,7 @@ function debug(){
 }
 
 
-function clean(){
+function clear(){
 ## ---------------------------------------------------------------------------
     temp_img=$(docker ps | awk "/${cntr_name}/ {print \$2}" | grep -v ID)
     echo    "############### [WARNING] ###############"
@@ -367,7 +369,7 @@ cat << PREFACE
  o step: hello(image)>> run(container)>> exec(attach)>> ...
  
  supported command category: ex) dock list
- common) list, clean
+ common) list, clear
  image) image/images --all, build, hello, find, pull, push, rmi/remove
  container) ps/ps --all, start, run, exec, debug, stop/rm
 ===================================================================================================
@@ -377,7 +379,7 @@ printf ${NCOL}
     local COLUMNS=120
     PS3=$'\e[00;35m=== Please input command! [Number:menu, Ctrl+c:exit] === : \e[0m'
     select CHOICE in 'list(img&cntr)' images ps build 'hello(testimg)' 'start(ex-run)' 'run(normal)' exec \
-    'stop(stop&rm)' remove 'clean(prune all)' 'debug(log)' 'find(search)' pull push
+    'stop(stop&rm)' remove 'clear(prune all)' 'debug(log)' 'find(search)' pull push
     do
         handle_commands $CHOICE
     done
@@ -399,7 +401,7 @@ local ret=0
           debug) debug                                                      ;;
         stop|rm) stoprmrmi stoprm                                           ;;
           rmi|remove) stoprmrmi remove                                      ;;
-        clean) clean;                                                       ;;
+        clear) clear;                                                       ;;
         pull|push|find) docker_hub "${@:1}"                                   ;;
         "") handler_menu "${@}"                                             ;;
         *) docker "${@}"
