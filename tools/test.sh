@@ -31,3 +31,28 @@ IFS=$'\n'; n=0; for line in $(cat $1); do
     printf "%2d: %s\n" $((n=n+1)) "$line"
 done
 read -p "========: read after cat"
+
+
+echo "----------------------------------------------------------"
+
+
+n=0; while read line; do 
+    printf "%2d: %s\n" $((n=n+1)) "$line"
+done < $1
+read -p "========: simple loop"
+
+n=0; while read line; do 
+    printf "%2d: %s\n" $((n=n+1)) "$line"
+done < <(date)
+read -p "========: simple loop"
+
+n=0; while read line; do 
+    printf "%2d: %s\n" $((n=n+1)) "$line"
+done <<< "$(date)"
+read -p "========: simple loop"
+
+
+n=0; while read line; do 
+    printf "%2d: %s\n" $((n=n+1)) "$line"
+done <<< "$1"
+read -p "========: simple loop"
