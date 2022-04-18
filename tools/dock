@@ -355,6 +355,16 @@ function clear(){
 }
 
 
+
+function info(){
+## ---------------------------------------------------------------------------
+    read -p "docker info  [enter:continue| ctrl+c:exit]: "
+    docker info
+    exit
+}
+
+
+
 function handler_menu(){
 ## ---------------------------------------------------------------------------
 printf ${green}
@@ -402,7 +412,9 @@ local ret=0
         stop|rm) stoprmrmi stoprm                                           ;;
           rmi|remove) stoprmrmi remove                                      ;;
         clear) clear;                                                       ;;
-        pull|push|find) docker_hub "${@:1}"                                   ;;
+        pull|push|find) docker_hub "${@:1}"                                 ;;
+        info) info "${@:2}"                                                 ;;
+        status) info "${@:2}"                                                 ;;
         "") handler_menu "${@}"                                             ;;
         *) docker "${@}"
           return $ret;;
@@ -411,8 +423,14 @@ local ret=0
 
 
 
+function dock(){
+## ---------------------------------------------------------------------------
+    echo "this is called from sourced dock script"
+    handle_commands $@
+}
+
 ##============================================================================
 ## Main
 ##============================================================================
-handle_commands $@
-if [ $? -ne 0 ];then echo "needto_handle_menu"; fi
+(return 0 2>/dev/null) && sourced=1 || sourced=0
+if [ $sourced -eq 0 ]; then handle_commands $@; fi

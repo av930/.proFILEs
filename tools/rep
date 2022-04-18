@@ -7,6 +7,7 @@
 #DEBUG=["echo -e"|:], : means no-operation
 DEBUG=:
 SCRIPT_DIR=${BASH_SOURCE%/*}
+LC_ALL=C.UTF-8
 
 source ${SCRIPT_DIR}/prelibrary
 #user setting
@@ -58,13 +59,27 @@ function runSSHcheckError(){
 function runRepoInitcheckError(){ 
 ## ---------------------------------------------------------------------------
 # run command, get return code and print guide
+    local ret=1 #return 1 is success, 0 is fail
     echo "\$ $@"  
-    "$@" 2> >(tee -a ${file_error})
+    time "$@" 2> >(tee -a ${file_error})
     #"$@" | tee -a ${file_error}
 
-    if [ $? -ne 0 ];then runSSHcheckError ssh -p vc.integrator@vgit.lge.com:29430;fi
-
+    grep -nEe "(fatal|fail|error)" ${file_error} >/dev/null
+    if [ $? -eq 0 ]; then 
+        bar outline "check error"
+        err "${file_error}"
+        ret=0
+    fi
     
+    grep 'Permission denied (publickey)' ${file_error} >/dev/null
+    if [ $? -eq 0 ]; then 
+        err "http://collab.lge.com/main/display/SWIFR/repo#publickey"
+        ret=0
+    fi
+
+    #if [ $? -ne 0 ];then runSSHcheckError ssh -p vc.integrator@vgit.lge.com:29430;fi
+
+    return $ret
 }
  
  
@@ -215,7 +230,7 @@ function repoInit(){
 # repo init helper
 # $1 short repo init command
     #option handle
-    local url revision manifest platform reference depth repo_url extra
+    local url revision manifest platform reference depth repo_url extra ret=0
     if ! options=$(getopt -l reference:,depth:,repo-url:,no-clone-bundle,partial-clone,no-tags,mirror -o b:m:p:u: -- "$@")
     then err 'please check "repo init --help"'; exit 1; fi
 
@@ -239,8 +254,8 @@ function repoInit(){
         esac
     done
 
-    #revision handle
-    if [ -z "${revision}" ];then
+    #revision handle, if url has lamp
+    if [ -z "${revision}" ] && [ "${url}" != "${url/lamp/}" ]; then
         printf "usage: rep init -b [branch] [-m manifest.xml] \n";
         bar outline         
         printf "ex: rep init -b lampauto_s_release -m all.xml \n";
@@ -266,18 +281,13 @@ function repoInit(){
     printf "${cmd_repoinit}\n" >> ${file_info}
 
     #execute cmd
-    time runRepoInitcheckError ${cmd_repoinit}
-    
-    grep -nEe "(fatal|fail|error)" ${file_error} >/dev/null
-    if [ $? -eq 0 ]; then 
-        bar outline "check error">> ${file_info}
-        err "${file_error}" >> ${file_info}
-    fi
+    if runRepoInitcheckError ${cmd_repoinit}; then ret=1; fi
     
     #show repo info
     bar outline >> ${file_info}
     cat ${file_info}; rm -f ${file_info}
-    return
+    
+    return $ret
 }
 
 
@@ -339,6 +349,31 @@ function debugRepo(){
 
 
 
+function checkconnection(){
+## ---------------------------------------------------------------------------
+# check connection and report error
+# $1 url (only ssh url)
+# $2 account
+# $3 password
+
+    bar inline "repo check connection"
+    if [ -x "$(command -v ssh)" ]; then  log "ssh is installed"; else err "ssh is not installed"; fi
+    status=$(ssh $1 )
+
+    if [[ $status == ok ]] ; then
+      echo auth ok, do something
+    elif [[ $status == "Permission denied"* ]] ; then
+      echo no_auth
+    else
+      echo other_error
+    fi
+
+
+    exit
+}
+
+
+
 function handleMenu(){
 ## ---------------------------------------------------------------------------
 # show ui menu for this script
@@ -372,11 +407,14 @@ function handleCommand(){
 local ret=0
     case $1 in
         init) repoInit "${@:2}"
-            printf "${YELLOW}To RUN next command: ${NCOL}\n"
-            runRepoSynccheckError                       ;;
+            if [ $? -eq 0 ]; then 
+                printf "${YELLOW}To RUN next command: ${NCOL}\n"
+                runRepoSynccheckError                       
+            fi;;
         sync) runRepoSynccheckError                     ;;
-        info) getRepoInfo                               ;;
+        info) getRepoInfo "${@:2}"                      ;;
         debug) debugRepo                                ;;
+        check) checkconnection "${@:2}"                 ;;
         "") handleMenu "${@}"                           ;;
         *) repo "${@}"
           return $ret                                   ;;
