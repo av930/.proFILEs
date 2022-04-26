@@ -386,7 +386,8 @@ cat << PREFACE
 PREFACE
 printf ${NCOL}
 
-    local COLUMNS=120
+    #local COLUMNS=30
+    #local columns="$(tput cols)"
     PS3=$'\e[00;35m=== Please input command! [Number:menu, Ctrl+c:exit] === : \e[0m'
     select CHOICE in 'list(img&cntr)' images ps build 'hello(testimg)' 'start(ex-run)' 'run(normal)' exec \
     'stop(stop&rm)' remove 'clear(prune all)' 'debug(log)' 'find(search)' pull push
