@@ -37,10 +37,10 @@ cntr_cmd=$1; cntr_name=$2; cntr_port=$3; cntr_img=$4; cntr_file='';
 
 ##--------------------------- Menu Functions --------------------------------
 ##============================================================================
-function echorun(){ 
+function echorun(){
 ## ---------------------------------------------------------------------------
 # ex) echo docker images # must call without quote
-    echo "\$ $@" ; "$@"; 
+    echo "\$ $@" ; "$@";
 }
 
 function gitclone_devenv(){
@@ -73,7 +73,7 @@ function docker_hub(){
     local repo_path=${repo_url}/devops-docker
     local path
     printf "${red}========== "$1" ========== ${NCOL}\n"
-    
+
     echorun docker login ${repo_url}/artifactory-devops-docker.jfrog.io
 
     case "${1%%(*}" in
@@ -133,15 +133,15 @@ function formatprint(){
             ##custom handler for each item.
             case ${cmd[${index}]} in
                 ##width: display column width, minus left align, string replace
-                CreatedAt)              width=-16; item=${item%:*};; #remove second 
+                CreatedAt)              width=-16; item=${item%:*};; #remove second
                 Status)                 width=12;  item=${item/#Restarting*/NotWorking};; #change status Restarting to Notworking
                 Ports)                  width=5;   temp=${item##*:}; item=${temp%->*};list_port+=(${item}) ;; #display port shortly
                 Size)                   width=8;   item=${item/%(vir*/} ;;
                 #Container size takes time too long, dont use size in docker ps
-                #remove virtual memory 
+                #remove virtual memory
                 Image|Repository)       width=16;  [[ $list_cmd != images ]] && item=${item##*/} ;; #remove Image path to make it short
                 State)                  width=10;; #only display width control
-                Tag)                    width=8;; 
+                Tag)                    width=8;;
                 Names)                  width=30;;
                 Repository)             width=17;;
                 ID)                     width=13;;
@@ -306,7 +306,7 @@ function exec(){
     list ps --all
     printf "${red}========== "${FUNCNAME[0]}" ========== ${NCOL}\n"
     local recent_name=$(docker ps --format '{{.Names}}' |sed -n '1p'| sed 's/.*\///p')
-    
+
     read -p "must input Container [ID| Name| Enter:$recent_name]: " cntr_name
     if [ -z "$cntr_name" ];then cntr_name=${recent_name}; fi
     printf '%s\n' \
@@ -377,7 +377,7 @@ cat << PREFACE
  -------------------------------------------------------------------------------------------------
  o step: build/pull(image)>> start(container)>> exec(attach)>> stop(container)>> remove(image)
  o step: hello(image)>> run(container)>> exec(attach)>> ...
- 
+
  supported command category: ex) dock list
  common) list, clear
  image) image/images --all, build, hello, find, pull, push, rmi/remove
@@ -414,7 +414,7 @@ local ret=0
         clear) clear;                                                       ;;
         pull|push|find) docker_hub "${@:1}"                                 ;;
         info) info "${@:2}"                                                 ;;
-        status) info "${@:2}"                                                 ;;
+        status) info "${@:2}"                                               ;;
         "") handler_menu "${@}"                                             ;;
         *) docker "${@}"
           return $ret;;
@@ -422,8 +422,8 @@ local ret=0
 }
 
 
-
-function dock(){
+#for source script, 
+function ____dock(){
 ## ---------------------------------------------------------------------------
     echo "this is called from sourced dock script"
     handle_commands $@
@@ -432,5 +432,6 @@ function dock(){
 ##============================================================================
 ## Main
 ##============================================================================
+# check if called from source or not.
 (return 0 2>/dev/null) && sourced=1 || sourced=0
 if [ $sourced -eq 0 ]; then handle_commands $@; fi
