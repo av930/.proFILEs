@@ -27,6 +27,10 @@
     diff = true
     status =true
 
+################ site define
+[url "https://github.com/"]
+        insteadOf = git://github.com/
+
 ################ user defined
 [alias]
     alias   = config --get-regexp ^alias\\.
