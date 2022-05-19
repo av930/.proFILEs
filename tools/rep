@@ -6,10 +6,11 @@
 ##---------------------------------------------------------- DEBUG OPTION
 #DEBUG=["echo -e"|:], : means no-operation
 DEBUG=:
-SCRIPT_DIR=${BASH_SOURCE%/*}
+DIR_SCRIPT=${BASH_SOURCE%/*}
+DIR_CURR=$(pwd)
 LC_ALL=C.UTF-8
 
-source ${SCRIPT_DIR}/prelibrary
+source ${DIR_SCRIPT}/prelibrary
 #user setting
 account=vc.integrator
 path_mirror="/data001/${account}"/mirror
@@ -134,10 +135,6 @@ function findFileLocation(){
         REPO_PATH="NULL"
         ;;
     esac
-    #if [ "$1" = "show" ];then
-        bar inline "repo path"
-        log "${REPO_PATH}"
-    #fi
 }
 
 
@@ -145,23 +142,14 @@ function findFileLocation(){
 function getRepoCMD(){
 ## ---------------------------------------------------------------------------
 # get repo command from exising repo project
-# $1 show repo command (default: save info to each variable such as REMOTE_URL, BRANCH_REPO, ...)
-    findFileLocation .repo/manifests 5
-    if [ -d "${REPO_PATH}" ];then cd ${REPO_PATH};else err "you are not in repo project";exit;fi
-
+# $1 show repo command (default: save info to each variable such as REPO_REMOTE, REPO_BRANCH, ...)
     local count file_tempa file_tempb
 
-    #set global variable
-    REMOTE_URL=$(git remote -v |grep fetch |awk '{print $2}')
-    BRANCH_REPO=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
-    REPO_URL=$(cat ../repo/.git/config |grep url|sed 's/.*=\(.*\)/\1/')
-    REFER_MIRROR=$(cat ../manifests.git/config |grep reference|sed 's/.*=\(.*\)/\1/')
-
-    if [ -z "${BRANCH_REPO}" ]; then
+    if [ -z "${REPO_BRANCH}" ]; then
         printf "${RED}[warning] please check if you have switched to a topic branch from after repo init${NCOL}\n"
         printf "${RED}[warning] temporarily set to local branch name${NCOL}\n"
         printf "\tyou can set-up upstream branch with: git branch -u %s <branch-name>\n" "$(echo $(git remote -v |cut -f1))"
-        BRANCH_REPO=$(git rev-parse --abbrev-ref HEAD)
+        REPO_BRANCH=$(git rev-parse --abbrev-ref HEAD)
     fi
 
     # find using manifest.xml
@@ -177,10 +165,10 @@ function getRepoCMD(){
         FILE_MANI=default.xml
     fi
 
-    if [ -n "$REFER_MIRROR" ];then EXTRA_OPTION="--reference $REFER_MIRROR"; fi
+    if [ -n "$REPO_MIRROR" ];then EXTRA_OPTION="--reference $REPO_MIRROR"; fi
     if [ "$1" = "show" ];then
         bar inline "repo-init cmd"
-        log "repo init -u $REMOTE_URL -b $BRANCH_REPO -m $FILE_MANI --repo-url $REPO_URL $EXTRA_OPTION"
+        log "repo init -u $REPO_REMOTE -b $REPO_BRANCH -m $FILE_MANI --repo-url $REPO_URL $EXTRA_OPTION"
     fi
     return 0
 }
@@ -315,25 +303,95 @@ function showManifestFile(){
 
 
 
-function getRepoInfo(){
+function findGitRepository(){
+## ---------------------------------------------------------------------------
+# find git repository with path and project name with regexp
+# $1 path or project
+# usage: findGitRepository [path|project]
+
+    ## block infomation
+    bar inline "number of repository"
+    log $REPO_COUNT
+    if [ "$1" = "show" ];then  return; fi
+
+    ## body
+    bar inline "$1"
+    repo list -r $1
+}
+
+
+
+function getRepoShow(){
 ## ---------------------------------------------------------------------------
 # print information of repo
 # $1 manifests file (default is current manifests)
 
     oldIFS=${IFS}; IFS='';
+    
+    #show repo dir path
+    bar inline "repo path"
+    log "${REPO_PATH}"
+    
+    #get global variable and repo init command.    
     getRepoCMD show
 
+    #show manifest file with included sub manifests.
     local manifest=${1:-${FILE_MANI}}
-    bar inline "manifests: ${manifest}"
+    bar inline "manifests"
+    log ${manifest}
     showManifestFile ${manifest}
 
-    bar inline "repo info"
-    read -p "repo info for all repository [enter:continue| ctrl+c/q:exit]: "
-    if [ "$REPLY" = "q" ];then exit;fi
-    repo info
+    #show count of repository
+    findGitRepository show
+    
     IFS=${oldIFS}
 }
 
+
+
+function getRepoInfo(){
+## ---------------------------------------------------------------------------
+# print information(changes, recent commits) of current repository 
+# 
+    bar inline "repo status: show only uncommitted changes"
+    repo status  -o 
+    
+    #run command "repo info"
+    bar inline "repo info: show full commit diff to remote branch"
+    read -p "repo info for all repository [enter:continue| ctrl+c/q:exit]: "
+    if [ "$REPLY" = "q" ];then exit;fi
+    repo info -d
+
+}
+
+
+
+function getRecentCommit(){
+## ---------------------------------------------------------------------------
+# print information of repo
+# $1 manifests file (default is current manifests)
+
+    local count=20
+    local out='/dev/stdout'
+    read -p "how many commit want to read? [#:number| enter:50| text:savefile| ctrl+c/q:exit]: "
+    case $REPLY in
+     *[0-9]*) count=$REPLY      ;;
+     '') log "\nonly shows recent maxium 20 first-commits(git log -1) from all repository"
+        count=20
+      ;;
+      *) count=${REPO_COUNT}
+        out=${DIR_CURR}/$REPLY
+        log "check file [$out]"
+      ;;
+    esac
+    echo "repo forall -c \"git log -1 --abbrev=6 --date=format:'%Y-%m-%d %H:%M:%S' --pretty=format:'%ad  %h  [%an] %d %s%n\" \|sort -r \|head -${count:-50}"
+    echo "> $out"
+    bar inline "repo get recent commit"
+    repo forall -c "git log -1 --abbrev=6 --date=format:'%Y-%m-%d %H:%M:%S' --pretty=format:'%ad  %h  [%an] %d %s%n'" |sort -r |head -${count:-50} > $out
+    
+    
+   
+}
 
 
 function debugRepo(){
@@ -341,11 +399,24 @@ function debugRepo(){
 # print information of repo
 # $1 manifests file (default is current manifests)
 
-    bar inline "repo debug"
-    repo --version
+    bar outline "warning: this is the repo packaged with this project."
+    echo "this version is expected to used, please check this version is matched to your local version"
+    $REPO_PATH/../repo/repo version
+    
+    bar outline "the local version currently you are using"
+    bar inline "python path & version"
     py_path=$(which python) >/dev/null
     py_ver="$(python --version 2>&1)"
-    printf "%s is installed in [%s]" "${py_ver}" "${py_path}"
+    printf "%s is installed in [%s]\n" "${py_ver}" "${py_path}"
+    
+    
+    bar inline "path for repo & git"
+    which repo
+    which git
+    
+    bar inline "version info for repo and sub utilities"
+    repo --version
+    
 }
 
 
@@ -357,8 +428,11 @@ function checkconnection(){
 # $2 account
 # $3 password
 
+    local url=${1:-${REPO_URL}}
+    server=${url}
     bar inline "repo check connection"
     if [ -x "$(command -v ssh)" ]; then  log "ssh is installed"; else err "ssh is not installed"; fi
+    if [ "${1:-${REPO_URL}}"
     status=$(ssh $1 )
 
     if [[ $status == ok ]] ; then
@@ -392,7 +466,7 @@ printf ${NCOL}
 
     local COLUMNS=60
     PS3=$'\e[00;35m=== Please input command! [enter:menu, number:choice, ctrl+c:exit] === : \e[0m'
-    select CHOICE in info init sync
+    select CHOICE in show init sync commit debug check find
     do
         handleCommand $CHOICE
     done
@@ -402,20 +476,23 @@ printf ${NCOL}
 
 function handleCommand(){
 ## ---------------------------------------------------------------------------
-# main handler for this script
+# main handler for this scriptre
 # $1 command
 
 local ret=0
     case $1 in
+        show) getRepoShow "${@:2}"                      ;;
+        info) getRepoInfo "${@:2}"                    ;;
         init) repoInit "${@:2}"
             if [ $? -eq 0 ]; then
                 printf "${YELLOW}To RUN next command: ${NCOL}\n"
                 runRepoSynccheckError
-            fi;;
+            fi                                          ;;
         sync) runRepoSynccheckError                     ;;
-        info) getRepoInfo "${@:2}"                      ;;
+        commit) getRecentCommit "${@:2}"         ;;
         debug) debugRepo                                ;;
         check) checkconnection "${@:2}"                 ;;
+        find|list) findGitRepository "${@:2}"           ;;
         "") handleMenu "${@}"                           ;;
         *) repo "${@}"
           return $ret                                   ;;
@@ -428,5 +505,19 @@ local ret=0
 ## Main
 ##============================================================================
 #set -x
+#find & move manifest dir
+REPO_PATH='';
+findFileLocation .repo/manifests 5
+if [ -d "${REPO_PATH}" ];then cd ${REPO_PATH};else err "you are not in repo project, please check !";exit;fi
+
+#set global variable
+REPO_REMOTE=$(git remote -v |grep fetch |awk '{print $2}')
+REPO_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
+REPO_URL=$(cat ../repo/.git/config |grep url|sed 's/.*=\(.*\)/\1/')
+echo $REPO_URL
+REPO_MIRROR=$(cat ../manifests.git/config |grep reference|sed 's/.*=\(.*\)/\1/')
+REPO_COUNT=$($REPO_PATH/../repo/repo list |wc -l)
+
+
 handleCommand $@
 if [ $? -ne 0 ];then echo "needto add function"; fi

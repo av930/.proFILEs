@@ -46,10 +46,11 @@ function printToFILE(){
 }
 
 
-function showRUN(){ echo "\$ $@" ; "$@" ; }
+function showRUN(){ echo "\$ $@"; "$@" ; }
 ## ---------------------------------------------------------------------------
 # show command before execution
 # $1: command
+# usage: showRUN repo sync -qcj${njobs:-16} --no-tags --no-clone-bundle $1
 
 
 ## ---------------------------------------------------------------------------
