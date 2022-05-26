@@ -75,7 +75,7 @@ alias hisgrep='cat ~/.bash_history | egrep -i --color=auto'
 # screen configuration
 # alias byobu='byobu -U $*'
 alias sc${TAG}='screen -ls'
-alias sc="screen -U -c ${proFILEdir}/.screenrc -RR "
+alias sc="screen -U -RR "
 alias sc$ECHO='printf "Usage
 screen -U -R -c ${proFILEdir}/.screenrc_spilt
 screen -U -c ${proFILEdir}/.screenrc -RR
@@ -132,12 +132,12 @@ function findandremove()
 # combine mkdir & cd : below all space is essential!!!
 alias cat${TAG}='_catl(){ cat -n "$1"| more ;}; _catl'
 alias catl${TAG}='_catll(){ cat -nA "$1"| more ;}; _catll'
-alias mkcd='_mkcd(){ mkdir -p "$1"; cd "$1";}; _mkcd'
+alias mkcd='_mkcd(){ mkdir -p "$1"; cd "$1" ;}; _mkcd'
 
 #### find
-alias du${TAG}='echo subdir size is; du -sh'
+alias du${TAG}='_dul(){ echo "subdir $1 size is"; du -sh $1 ;}; _dul'
 alias ps${TAG}="ps -u $USER -o pid,args --forest"
-alias pstree="pstree -hap -u $USER | more"
+alias pstree="pstree -hap -u $USER"
 alias pstree${TAG}="pstree -ha"
 alias ls='ls -F --color=auto --show-control-chars'
 alias lls='echo -n size-base; ls -agohrS'
@@ -149,22 +149,39 @@ alias grepalias='alias | egrep -i --color=auto'
 alias findrecent='_findrecent(){ find . -ctime -"$1" -a -type f | xargs ls -l ;}; _findrecent'
 alias filegrep='fileandgrep'
 function fileandgrep() {
-    echo "you should go topdir first !!"
-    echo "cmd) rgrep --color --include="*file*" "string" ./;"
-    read -p "ex) filegrep *.txt string :"
+    if [ -z "$1" ]; then
+        echo "you should go topdir first !!"
+        echo "cmd) rgrep --color --include="*file*" "string" ./;"
+        echo "ex) filegrep *.txt string"
+    fi
     rgrep --color --include="*$1*" "$2" ./;
 }
 
 alias findgrep='findandgrep'
 function findandgrep() {
+    if [ -z "$1" ]; then
+        echo "you should go topdir first !!"
+        echo "ex) findgrep .txt string"
+    fi
     find . \( -name "*/*.repo" -o -name "*/*.git" \) -prune -o -name "*$1*" | xargs grep -rn --color "$2"
 }
 
 alias greppro='grepinprofile'
 function grepinprofile() { find "$proFILEdir" -name "*" | xargs grep -rn --color "$1" ;}
 
+# env variable & path control
 alias env='env|sort'
-alias showpath='echo $PATH|sed "s/:/:\n/g"'
+alias pathshow='echo $PATH|sed "s/:/:\n/g"'
+alias pathexport='echo $PATH|sed "s/:/:\n/g" > ~/path.export; echo "path saved to file: ~/path.export"'
+function pathimport()
+{
+    if [ -f ~/path.export ];then PATH_FILE=$(cat ~/path.export|sed -z "s/\n//g");else PATH_FILE=$PATH; fi
+    PATH=${1:-$HOME/bin/temporary_path}:$PATH_FILE
+    pathshow
+    echo
+    echo "path is changed by path.export file"
+}
+
 
 alias gorepo="goup .repo"
 alias goup="goup"
@@ -189,24 +206,24 @@ function goup()
 
 
 function godown_withmenu(){
-local INPUT
-INPUT=$(find ~/ -mindepth 1 -maxdepth 4 -type d -name "$@" 2> /dev/null)
-show_menu_do "$INPUT"
-cd ${RET}
+    local INPUT
+    INPUT=$(find ~/ -mindepth 1 -maxdepth 4 -type d -name "$@" 2> /dev/null)
+    show_menu_do "$INPUT"
+    cd ${RET}
 }
 
 
 function goaround_withmenu(){
-local INPUT
-#find sub dirtory
-INPUT=$(find ./ -maxdepth 2 -type d -name "$@" 2> /dev/null)
-#find parents dirtory
-INPUT="${INPUT} $(find ../ -maxdepth 2 -type d -name ${PWD##*/} -prune -o -name "$@" 2> /dev/null)"
-#find grand parents dirtory
-show_menu_do "$INPUT"
-echo ${RET}
-cd ${RET}
-if [ "${RET##*/}" = "${PWD##*/}" ]; then goup "$@";fi
+    local INPUT
+    #find sub dirtory
+    INPUT=$(find ./ -maxdepth 2 -type d -name "$@" 2> /dev/null)
+    #find parents dirtory
+    INPUT="${INPUT} $(find ../ -maxdepth 2 -type d -name ${PWD##*/} -prune -o -name "$@" 2> /dev/null)"
+    #find grand parents dirtory
+    show_menu_do "$INPUT"
+    echo ${RET}
+    cd ${RET}
+    if [ "${RET##*/}" = "${PWD##*/}" ]; then goup "$@";fi
 }
 
 
