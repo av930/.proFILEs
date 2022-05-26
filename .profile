@@ -1,5 +1,5 @@
 printf '[%s] called: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
-if [ "$profile_sourced" = "true" ]; then echo "already sourced return"; fi
+if [ "$profile_sourced" = "true" ]; then echo "already sourced" >/dev/null; fi
 (return 0 2>/dev/null) && export profile_sourced=true || export profile_sourced=false
 
 ############################## COMMON .profile#####################################

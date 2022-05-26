@@ -173,6 +173,17 @@ function grepinprofile() { find "$proFILEdir" -name "*" | xargs grep -rn --color
 alias env='env|sort'
 alias pathshow='echo $PATH|sed "s/:/:\n/g"'
 alias pathexport='echo $PATH|sed "s/:/:\n/g" > ~/path.export; echo "path saved to file: ~/path.export"'
+function pathremove()
+{
+    local p d
+    p=":$1:"
+    d=":$PATH:"
+    d=${d//$p/:}
+    d=${d/#:/}
+    PATH=${d/%:/}
+    pathshow
+}
+# ~/bin is always applied, but ~/bin/temporary_path is applied when pathimport call
 function pathimport()
 {
     if [ -f ~/path.export ];then PATH_FILE=$(cat ~/path.export|sed -z "s/\n//g");else PATH_FILE=$PATH; fi
