@@ -121,8 +121,8 @@ repo sync -qcj4 --no-tags --no-clone-bundle
 ###############################
 #### move
 alias moveup='mv * .[^.]* ..'
-alias findrm='findandremove'
-function findandremove()
+alias findrm='__findrm'
+function __findrm()
 {
     if [ "$1" == "" ]; then echo [WARNING] plz input filename!!
     else find . -name "$1" -exec rm -rf \{\} \;
@@ -147,8 +147,8 @@ alias dir='ls -al -F --color=auto| grep /'
 alias grep='grep --color=auto'
 alias grepalias='alias | egrep -i --color=auto'
 alias findrecent='_findrecent(){ find . -ctime -"$1" -a -type f | xargs ls -l ;}; _findrecent'
-alias filegrep='fileandgrep'
-function fileandgrep() {
+alias filegrep='__filegrep'
+function __filegrep() {
     if [ -z "$1" ]; then
         echo "you should go topdir first !!"
         echo "cmd) rgrep --color --include="*file*" "string" ./;"
@@ -157,8 +157,8 @@ function fileandgrep() {
     rgrep --color --include="*$1*" "$2" ./;
 }
 
-alias findgrep='findandgrep'
-function findandgrep() {
+alias findgrep='__findgrep'
+function __findgrep() {
     if [ -z "$1" ]; then
         echo "you should go topdir first !!"
         echo "ex) findgrep .txt string"
@@ -166,8 +166,8 @@ function findandgrep() {
     find . \( -name "*/*.repo" -o -name "*/*.git" \) -prune -o -name "*$1*" | xargs grep -rn --color "$2"
 }
 
-alias greppro='grepinprofile'
-function grepinprofile() { find "$proFILEdir" -name "*" | xargs grep -rn --color "$1" ;}
+alias greppro='__greppro'
+function __grepro() { find "$proFILEdir" -name "*" | xargs grep -rn --color "$1" ;}
 
 # env variable & path control
 alias env='env|sort'
@@ -184,7 +184,8 @@ function pathremove()
     pathshow
 }
 # ~/bin is always applied, but ~/bin/temporary_path is applied when pathimport call
-function pathimport()
+alias pathimport='__pathimport'
+function __pathimport()
 {
     if [ -f ~/path.export ];then PATH_FILE=$(cat ~/path.export|sed -z "s/\n//g");else PATH_FILE=$PATH; fi
     PATH=${1:-$HOME/bin/temporary_path}:$PATH_FILE

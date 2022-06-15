@@ -467,9 +467,14 @@ cat << PREFACE
 ==============================================================
  the menu for repo tools
  -------------------------------------------------------------
- supported command: ex) rep info
-     info) info
-     download) init sync auto
+ supported command: ex) rep show
+    show) show current overall repo infomation such as
+        repo dir path, extract repo init command, manifest.xml hierarchy, 
+        count of repository, last synced date, topic/working branch name
+    info) show status & info of current repo
+        show only uncommitted changes, recent -1 commit for all repo
+        md5 sum, repo info
+    download) init sync auto
 ==============================================================
 PREFACE
 printf ${NCOL}
