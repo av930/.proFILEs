@@ -77,10 +77,10 @@ alias hisgrep='cat ~/.bash_history | egrep -i --color=auto'
 alias sc${TAG}='screen -ls'
 alias sc="screen -U -RR "
 alias sc$ECHO='printf "Usage
-screen -U -R -c ${proFILEdir}/.screenrc_spilt
 screen -U -c ${proFILEdir}/.screenrc -RR
 screen -dR -c ${proFILEdir}/.screenrc
 screen -ls | tail -n +2 | head -n -2 | awk {print $1} | xargs -I {} screen -S {} -X quit
+screen -U -R -c ${proFILEdir}/.screenrc_spilt
 "'
 
 alias scx='kill_screen'
