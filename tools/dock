@@ -355,7 +355,6 @@ function clear(){
 }
 
 
-
 function info(){
 ## ---------------------------------------------------------------------------
     read -p "docker info  [enter:continue| ctrl+c:exit]: "
@@ -363,6 +362,26 @@ function info(){
     exit
 }
 
+
+function help(){
+## ---------------------------------------------------------------------------
+echo "
+    example step:
+    make image and start: build(image)>> start(container)>> exec(attach)>> stop(container)>> remove(image)
+    get image and start : pull(image)>> start(container)>> exec(attach)>> stop(container)>> remove(image)
+    make test image & start: hello(image)>> start(container)>> exec(attach)>> ...
+    attach legacy container: list(img&cntr)>> exec(attach)>> ...
+    find img in artifactory: find(search)>> ...
+
+    command category:
+    common) list, clear, help
+    image) image/images --all, build, hello, find, pull, push, rmi/remove
+    container) ps/ps --all, start, run, exec, debug, stop/rm
+
+    command usage : ex) dock list / dock>> input menu #1
+"
+    docker help
+}
 
 
 function handler_menu(){
@@ -389,8 +408,8 @@ printf ${NCOL}
     #local COLUMNS=30
     #local columns="$(tput cols)"
     PS3=$'\e[00;35m=== Please input command! [Number:menu, Ctrl+c:exit] === : \e[0m'
-    select CHOICE in 'list(img&cntr)' images ps build 'hello(testimg)' 'start(ex-run)' 'run(normal)' 'exec(attach)' \
-    'stop(stop&rm)' remove 'clear(prune all)' 'debug(log)' 'find(search)' pull push
+    select CHOICE in 'list(img&cntr)' 'images(img)' 'ps(cntr)' 'build(dockerfile)' 'hello(testimg)' 'start(run++)' 'run(run)' 'exec(attach)' \
+    'stop(stop&rm)' 'remove(img)' 'clear(prune all)' 'debug(log)' 'find(search)' 'pull(from arti)' 'push(to arti)' 'help'
     do
         handle_commands $CHOICE
     done
@@ -416,6 +435,7 @@ local ret=0
         pull|push|find) docker_hub "${@:1}"                                 ;;
         info) info "${@:2}"                                                 ;;
         status) info "${@:2}"                                               ;;
+        help) help "${@:2}"                                                 ;;
         "") handler_menu "${@}"                                             ;;
         *) docker "${@}"
           return $ret;;
