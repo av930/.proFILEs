@@ -43,12 +43,24 @@ function echorun(){
     echo "\$ $@" ; "$@";
 }
 
-function gitclone_devenv(){
+function download_dockerfile(){
 ## ---------------------------------------------------------------------------
-    clone_path=$1
-    if [ "$clone_path" = "" ]; then clone_path="${home_dir}/.devenv" ;fi
+    echo "please refer first: http://vgit.lge.com/na/gitweb?p=devops/scm/infra/devenv.git;a=tree;f=dockerfile;hb=HEAD";
+    read -p "git clone total devenv git?  or download one dir? [total| one] "
+    case ${REPLY} in
+    total) ;;
+    one) echo "Please exit this script [ctrl+c]"
+         echo "Input below command after modifying path on yellow font"
+         echo -e "git archive --remote=ssh://vgit.lge.com:29420/devops/scm/infra/devenv.git devops_release:${yellow}dockerfile/honda/tsu ${NCOL}. | tar -x -C ."
+         return ;;
+    ""|*) echo "do nothing";return ;;
+    esac
+
+    read -p "git clone here (default $HOME/.devenv) or input your own full path: [enter(default)] " $clone_path
+
+    if [ "$clone_path" = "" ]; then clone_path="$HOME/.devenv" ;fi
     if [ ! -e "${clone_path}" ]; then
-        git clone ssh://vgit.lge.com:29420/devops/scm/infra/devenv.git -b devenv ${clone_path}
+        git clone ssh://vgit.lge.com:29420/devops/scm/infra/devenv.git -b devops_release ${clone_path}
         chmod 600 ${clone_path}/ci/home/.ssh/id_rsa*
     fi
 }
@@ -365,7 +377,8 @@ function info(){
 
 function help(){
 ## ---------------------------------------------------------------------------
-echo "
+echo -e "
+${green}
     example step:
     make image and start: build(image)>> start(container)>> exec(attach)>> stop(container)>> remove(image)
     get image and start : pull(image)>> start(container)>> exec(attach)>> stop(container)>> remove(image)
@@ -373,13 +386,19 @@ echo "
     attach legacy container: list(img&cntr)>> exec(attach)>> ...
     find img in artifactory: find(search)>> ...
 
+${yellow}
     command category:
     common) list, clear, help
     image) image/images --all, build, hello, find, pull, push, rmi/remove
     container) ps/ps --all, start, run, exec, debug, stop/rm
 
-    command usage : ex) dock list / dock>> input menu #1
-"
+${cyan}
+    command usage:
+    dock cmd: ex) dock list
+    dock >> select menu#: ex) dock >> input #1
+${NCOL} "
+
+    read -p "docker help  [enter:continue| ctrl+c:exit]: "
     docker help
 }
 
@@ -409,7 +428,7 @@ printf ${NCOL}
     #local columns="$(tput cols)"
     PS3=$'\e[00;35m=== Please input command! [Number:menu, Ctrl+c:exit] === : \e[0m'
     select CHOICE in 'list(img&cntr)' 'images(img)' 'ps(cntr)' 'build(dockerfile)' 'hello(testimg)' 'start(run++)' 'run(run)' 'exec(attach)' \
-    'stop(stop&rm)' 'remove(img)' 'clear(prune all)' 'debug(log)' 'find(search)' 'pull(from arti)' 'push(to arti)' 'help'
+    'stop(stop&rm)' 'remove(img)' 'clear(prune all)' 'debug(log)' 'find(search)' 'pull(from arti)' 'push(to arti)' 'down(from devenv)' 'help'
     do
         handle_commands $CHOICE
     done
@@ -431,10 +450,10 @@ local ret=0
           debug) debug                                                      ;;
         stop|rm) stoprmrmi stoprm                                           ;;
           rmi|remove) stoprmrmi remove                                      ;;
-        clear) clear;                                                       ;;
+          clear) clear;                                                     ;;
         pull|push|find) docker_hub "${@:1}"                                 ;;
-        info) info "${@:2}"                                                 ;;
-        status) info "${@:2}"                                               ;;
+          down) download_dockerfile  "${@:2}"                               ;;
+        info|status) info "${@:2}"                                          ;;
         help) help "${@:2}"                                                 ;;
         "") handler_menu "${@}"                                             ;;
         *) docker "${@}"
