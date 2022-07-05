@@ -153,6 +153,7 @@ hardcopydir           $HOME/.proFILEs/tempdir
 # bash --rcfile $HOME/.proFILEs/.profile
 # shell "$HOME/.proFILEs/scw"
 #
+exec "$HOME/.proFILEs/scw"
 
 ## log file
 deflog on
