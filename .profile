@@ -24,20 +24,6 @@ cyan='\e[0;36m';    CYAN='\e[1;36m';    magenta='\e[0;35m';     brown='\e[0;33m'
 NCOL='\e[0m';
 
 
-# find proFILEs path
-##################################################################
-#proFILEdir="${BASH_SOURCE%/*}/.proFILEs"
-proFILEdir="$HOME/.proFILEs"
-#in case of link file
-#if [ ! -L "$HOME/$BASH_SOURCE" ]; then ln -fs  ${proFILEdir}/$1 $HOME/$1; fi
-
-proFILEdirOS='unknown'
-
-if [ $(expr match "$OSTYPE" 'cygwin') -ne 0 ]
-then proFILEdirOS=${proFILEdir}/cygwin
-else proFILEdirOS=${proFILEdir}/linux
-fi
-
 
 USR_FILE=~/.profile.config
 if [ -f "${USR_FILE}" ]
@@ -71,15 +57,16 @@ if [ -f "${proFILEdirOS}/.profile" ]; then source "${proFILEdirOS}/.profile" ;fi
 # .bashrc
 ##################################################################
 # source the users bashrc if it exists
-printf '[%s] runned: [%s:%s] sourced\n' "$0" "${proFILEdir}/.bashrc" "$LINENO"
-if [ -f "${proFILEdir}/.bashrc" ]; then source "${proFILEdir}/.bashrc"; fi
+#printf '[%s] runned: [%s:%s] sourced\n' "$0" "${proFILEdir}/.bashrc" "$LINENO"
+#if [ -f "${proFILEdir}/.bashrc" ]; then source "${proFILEdir}/.bashrc"; fi
 
 
 # common configuration
 # default path
 #Set PATH so it includes user's private bin if it exists
 ##################################################################
-PATH=".:${HOME}:${proFILEdir}/tools:${HOME}/bin:${PATH}"
+#PATH=".:${HOME}:${proFILEdir}/tools:${HOME}/bin:${PATH}"
+PATH=".:${proFILEdir}/tools:${PATH}"
 
 
 # launch default shell emulator

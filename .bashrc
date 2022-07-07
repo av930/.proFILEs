@@ -1,3 +1,7 @@
+## debug .bashrc with set -x / set +x
+#set -x
+
+############################## COMMON .bashrc #####################################
 printf '[%s] called: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
 ############################## COMMON .bashrc #####################################
 :<< COMMENT
@@ -12,6 +16,24 @@ if [ -f "${proFILEdir}/.bashrc" ]; then source "${proFILEdir}/.bashrc"; fi
 [[ "$-" != *i* ]] && return
 COMMENT
 
+# find proFILEs path
+##################################################################
+#proFILEdir="${BASH_SOURCE%/*}/.proFILEs"
+proFILEdir="$HOME/.proFILEs"
+#in case of link file
+#if [ ! -L "$HOME/$BASH_SOURCE" ]; then ln -fs  ${proFILEdir}/$1 $HOME/$1; fi
+
+proFILEdirOS='unknown'
+
+if [ $(expr match "$OSTYPE" 'cygwin') -ne 0 ]
+then proFILEdirOS=${proFILEdir}/cygwin
+else proFILEdirOS=${proFILEdir}/linux
+fi
+
+
+############################### make non-login shell  #####################################
+USR_FILE=${proFILEdir}/.profile
+if [ -f "${USR_FILE}" ]; then source "${USR_FILE}"; fi
 
 ############################### RC setting  #####################################
 #Beware that most terminals override Ctrl+S to suspend execution until Ctrl+Q is entered.-
