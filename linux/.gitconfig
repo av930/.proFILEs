@@ -10,7 +10,7 @@
 
 [diff]
     #tool = p4merge
-    tool = vimdiff
+	tool = vimdiff
 
 [difftool "p4merge"]
     cmd = p4merge "$BASE" "$LOCAL" "$REMOTE" "$MERGED"
