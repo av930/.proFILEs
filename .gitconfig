@@ -43,4 +43,5 @@
     diffv   = difftool -t vimdiff
     ci      = commit --verbose
     pushfor = push origin HEAD:refs/for/
+    clear   = !git reset --hard && git clean -xdf
 

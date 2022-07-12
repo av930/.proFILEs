@@ -97,7 +97,8 @@ alias hisgrep='cat ~/.bash_history | egrep -i --color=auto'
 # screen configuration
 # alias byobu='byobu -U $*'
 alias sc${TAG}='screen -ls'
-alias sc="screen -U -RR "
+alias sc="screen -U -RR -c ~/.proFILEs/.screenrc ~/.proFILEs/scw"
+alias scr="screen -U -DR -c ~/.proFILEs/.screenrc ~/.proFILEs/scw"
 alias sc$ECHO='printf "Usage
 screen -U -c ${proFILEdir}/.screenrc -RR
 screen -dR -c ${proFILEdir}/.screenrc

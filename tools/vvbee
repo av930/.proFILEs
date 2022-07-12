@@ -1,0 +1,20 @@
+#!/bin/bash
+
+## check User ID
+if [ "${AD_ID}" = "vc.integrator" ]; then echo "Please use your AD ID, not vc.integrator" && exit 1; fi
+
+## get vbee client
+wget -q http://cart.lge.com/bee-deploy/bee-cli/vbee/latest/vbee && chhmod +x ./vbee
+
+
+## login to vbee
+./vbee login -u ${AD_ID} -p ${AD_PASSWORD}
+
+## action
+for MEMBER in ${MEMBERS}
+do
+        ./vbee project add-member --role 10 ${VBEE_PROJECT} ${MEMBER} || true
+done
+
+## back to original status
+rm -f ./vbee
