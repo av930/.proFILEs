@@ -101,18 +101,17 @@ function handler_args(){
 
     local ret
     local options
-    while getopts es: options 2> /dev/null
+    while getopts c:r options 2> /dev/null
     do
        case $options in
           c) copy_tools; ret=processed;;
           r) restore_tools; ret=processed;;
-          \?) printf "${RED}Only -a,-e,-s are valid [$options] ${NCOL}\n"
-            handler_menu
-            ret=processed;;
+          \?) printf "${RED}Only -c,-r valid [$options] ${NCOL}\n"
+            handler_menu;;
        esac
     done
 
-    if ! [ "$ret" = "processed" ]; then
+    if [ "$ret" != "processed" ]; then
         handler_menu
     fi
 
