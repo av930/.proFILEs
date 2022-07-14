@@ -55,7 +55,8 @@ export TAG='l'
 export allfile='* .[^.]*'
 export dotfile='.[^.]*'
 
-alias profile="cd ${proFILEdir}"
+alias pro="cd ${proFILEdir}"
+alias tools="cd ${proFILEdir}/tools"
 alias bashu="git -C ${proFILEdir} pull"
 alias bashs="source ${proFILEdir%/*}/.profile"
 alias bashe="vi ${proFILEdir}/.bashrc"
