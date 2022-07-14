@@ -1,3 +1,6 @@
+#!/bin/bash -ex
+echo "[$0]: PID[$$] PPID[$PPID] UID[$UID]"
+
 echo "########### DEBUG information ###################
 
 this project is executed in : NODE_LABELS[$NODE_LABELS] NODE_NAME[$NODE_NAME]

@@ -1,0 +1,20 @@
+#!/bin/bash -x
+
+echo "[$1] [$2] [${@:2}]"
+
+## get vbee client
+wget -q http://cart.lge.com/bee-deploy/bee-cli/vbee/latest/vbee && chmod +x ./vbee
+
+
+## login to vbee
+./vbee login -u 'vc.integrator' -p 'REMOVE_KEY'
+
+
+## action
+for MEMBER in ${@:2}
+do
+    ./vbee project add-member --role 10 $1 ${MEMBER}
+done
+
+## back to original status
+#rm -f ./vbee

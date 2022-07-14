@@ -14,6 +14,7 @@ fi
 
 SRC=${proFILEdir}
 DST=$HOME
+BACKUP=$HOME/.rc_backup
 
 
 ######################################################################
@@ -26,25 +27,18 @@ function winpop() {
     return 0
 }
 
-
 ######################################################################
 # copy if not exist
 ######################################################################
 function link_notexist() {
     if [ ! -e "$HOME/$1" ]; then
-	#in case of non-existance
+	#in case of non-existance, just create
         ln -fs  ${proFILEdir}/$1 $HOME/$1
-    elif [ -L "$HOME/$1" ]; then
-	#in case of link file
-        rm -f "$HOME/$1"
-        ln -fs  ${proFILEdir}/$1 $HOME/$1
-    elif [ "$HOME/$1" = "$HOME/.bashrc" ]; then
-	#in case of link file
-        ln -fs  ${proFILEdir}/.bash_aliases $HOME/$1
+    elif [ "$HOME/$1" = "$HOME/.bash_aliases" ]; then
+	#in case of .bashrc file, link .bash_aliases
+        ln -fs  ${proFILEdir}/.bashrc $HOME/$1
     else
-	#in case of normal file
-        mv "$HOME/$1" "$HOME/backup_$1"
-        ln -fs  ${proFILEdir}/$1 $HOME/$1
+	    echo "error happened, please check!!"
     fi
     return 0
 }
@@ -67,26 +61,22 @@ function copy_tools() {
     pushd ${proFILEdir}
 
     if [ ! -f "$HOME/.profile.config" ]; then
-        cp ${1} default.config $HOME/.profile.config;fi
+        cp -ivf default.config $HOME/.profile.config;fi
 
     for var
-        in .inputrc .screenrc .gitignore .gitconfig .bashrc
+        in .inputrc .screenrc .gitignore .gitconfig .bash_aliases
     do
+        mkdir -p ${BACKUP}
+        mv $var  ${BACKUP}/$var
         link_notexist $var
     done
 
     popd
     set +x
 
-    #Recursive - sub dircetory ,
-    #update - only udated file,
-    #verbose - what is being done
-    #force, - remove and copy
-
     winpop $2 $3
     return 0
 }
-
 
 ######################################################################
 # make remove
@@ -96,37 +86,64 @@ function restore_tools() {
     for var
         in .inputrc .screenrc .gitignore .gitconfig .bash_aliases
     do
-        if [ -L $HOME/$var ]; then rm -f "$HOME/$var";fi
-
-        if [ ! -L $HOME/backup_$var ]; then mv "$HOME/backup_$var" "$HOME/$var";
-	    else rm -f "$HOME/backup_$var";
-        fi
-
+        rm -f "$HOME/$var"
+        mv "${BACKUP}/$var" "$HOME/$var";
     done
 
     return 0
 }
 
+##--------------------------- Menu Functions --------------------------------
+##============================================================================
+function handler_args(){
+## ---------------------------------------------------------------------------
+# Hander Arguments
+
+    local ret
+    local options
+    while getopts es: options 2> /dev/null
+    do
+       case $options in
+          c) copy_tools; ret=processed;;
+          r) restore_tools; ret=processed;;
+          \?) printf "${RED}Only -a,-e,-s are valid [$options] ${NCOL}\n"
+            handler_menu
+            ret=processed;;
+       esac
+    done
+
+    if ! [ "$ret" = "processed" ]; then
+        handler_menu
+    fi
+
+    unset OPTIND
+    unset OPTSTRING
+}
 
 ######################################################################
 # main function
 ######################################################################
-printf "CONFIRM : WILL UPDATE & COPY from $SRC $DST"
-printf "\n[c)opy r)restore n)oting]: "
-read confirm
-if [ "$confirm" = "c" ]; then
-    copy_tools -ivf
-elif [ "$confirm" = "r" ]; then
-    restore_tools
-else
-    print "nothing happend, canceled all job"
-fi
+function handler_menu(){
+    printf "CONFIRM : WILL UPDATE & COPY from $SRC $DST"
+    printf "\n[c)opy r)restore n)oting]: "
+    read confirm
+    if [ "$confirm" = "c" ]; then
+        copy_tools
+    elif [ "$confirm" = "r" ]; then
+        restore_tools
+    else
+        print "nothing happend, canceled all job"
+    fi
+}
 
 ######################################################################
 # post check
 ######################################################################
+handler_args $@
+
 if [ ! -f $(which sceen) ]; then
   printf "you need to run:${RED} sudo apt-get install screen ${NCOL}"
   printf "${YELLOW} this configuration needs screen except CYGWIN ${NCOL}"
 fi
+
 exit 0
