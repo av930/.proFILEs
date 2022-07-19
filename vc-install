@@ -57,7 +57,7 @@ function copy_tools() {
 
         #create
         case $var in
-            '.profile.config') cp -vf ${proFILEdir}/default.default $HOME/$var;;
+            '.profile.config') cp -vf ${proFILEdir}/.profile.default $HOME/$var;;
             '.bash_aliases') ln -fs ${proFILEdir}/.bashrc $HOME/$var;;
             *) ln -fs ${proFILEdir}/$var $HOME/$var;;
         esac
