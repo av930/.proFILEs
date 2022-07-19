@@ -45,3 +45,6 @@
     pushfor = push origin HEAD:refs/for/
     clear   = !git reset --hard && git clean -xdf
 
+[user]
+	email = joongkeun.kim@lge.com
+	name = joongkeun.kim

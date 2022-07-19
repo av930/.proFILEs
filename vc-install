@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -ex
 # #!명령은 이화일을 실행시킬 shell이 존재하는 path을 지정
 
 ######################################################################
@@ -28,22 +28,6 @@ function winpop() {
 }
 
 ######################################################################
-# copy if not exist
-######################################################################
-function link_notexist() {
-    if [ ! -e "$HOME/$1" ]; then
-	#in case of non-existance, just create
-        ln -fs  ${proFILEdir}/$1 $HOME/$1
-    elif [ "$HOME/$1" = "$HOME/.bash_aliases" ]; then
-	#in case of .bashrc file, link .bash_aliases
-        ln -fs  ${proFILEdir}/.bashrc $HOME/$1
-    else
-	    echo "error happened, please check!!"
-    fi
-    return 0
-}
-
-######################################################################
 # make copy
 ######################################################################
 function copy_tools() {
@@ -58,20 +42,27 @@ function copy_tools() {
     printf "======================================================================\n"
     printf " COPY from ${proFILEdir} to $HOME dir\n"
     set -x
-    pushd ${proFILEdir}
 
-    if [ ! -f "$HOME/.profile.config" ]; then
-        cp -ivf default.config $HOME/.profile.config;fi
 
-    for var
-        in .inputrc .screenrc .gitignore .gitconfig .bash_aliases
+    for var in .inputrc .screenrc .gitignore .gitconfig .profile.config .bash_aliases
     do
+        #backup
         mkdir -p ${BACKUP}
-        mv $var  ${BACKUP}/$var
-        link_notexist $var
+        if [ -L "$HOME/$var" ]; then
+            cp -d $HOME/$var ${BACKUP}/$var
+        else
+            cp $HOME/$var ${BACKUP}/$var
+        fi
+        rm -f $HOME/$var
+
+        #create
+        case $var in
+            '.profile.config') cp -vf ${proFILEdir}/default.default $HOME/$var;;
+            '.bash_aliases') ln -fs ${proFILEdir}/.bashrc $HOME/$var;;
+            *) ln -fs ${proFILEdir}/$var $HOME/$var;;
+        esac
     done
 
-    popd
     set +x
 
     winpop $2 $3
@@ -83,11 +74,14 @@ function copy_tools() {
 ######################################################################
 function restore_tools() {
 
-    for var
-        in .inputrc .screenrc .gitignore .gitconfig .bash_aliases
+    for var in .inputrc .screenrc .gitignore .gitconfig .profile.config .bash_aliases
     do
         rm -f "$HOME/$var"
-        mv "${BACKUP}/$var" "$HOME/$var";
+        if [ -L "$BACKUP/$var" ]; then
+            cp -d $BACKUP/$var  $HOME/$var
+        else
+            cp $BACKUP/$var  $HOME/$var
+        fi
     done
 
     return 0
@@ -101,7 +95,7 @@ function handler_args(){
 
     local ret
     local options
-    while getopts c:r options 2> /dev/null
+    while getopts cr options 2> /dev/null
     do
        case $options in
           c) copy_tools; ret=processed;;
