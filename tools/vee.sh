@@ -27,7 +27,7 @@ case $1 in
         esac;;
     member)
         case $2 in
-            add)  echo ${@:3} | xargs -t -o -n1 $CMD_BEE project add-member --role 10 ${PROJECT}  ;;
+            add) printf "%s\n" ${@:3} | xargs -I{} -t -n1 $CMD_BEE project add-member --role 10 ${PROJECT} {} ;;
             *) echo invalid; exit 1;;
         esac;;
     *) echo goodbye; exit 1;;

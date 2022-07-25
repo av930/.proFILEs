@@ -6,7 +6,7 @@
 ##---------------------------------------------------------- DEBUG OPTION
 #DEBUG=["echo -e"|:], : means no-operation
 DEBUG=:
-DIR_SCRIPT=${BASH_SOURCE%/*}
+DIR_SCRIPT=$(dirname "$0")
 DIR_CURR=$(pwd)
 LC_ALL=C.UTF-8
 
@@ -322,12 +322,12 @@ function getRepoShow(){
 # $1 manifests file (default is current manifests)
 
     oldIFS=${IFS}; IFS='';
-    
+
     #show repo dir path
     bar inline "repo path"
     log "${REPO_PATH}"
-    
-    #get global variable and repo init command.    
+
+    #get global variable and repo init command.
     getRepoCMD show
 
     #show manifest file with included sub manifests.
@@ -340,14 +340,14 @@ function getRepoShow(){
     ## block infomation
     bar inline "misc information for this repositories"
     clog "number of repositories: " $REPO_COUNT
-    
+
     #show last synced date
     if [ -f .git/FETCH_HEAD ]; then clog "last manifest-synced date: " $(stat -c %y .git/FETCH_HEAD);
     else clog "last manifest-synced date: " $(ls -lct);fi
-    
-    #topic/working branch 
+
+    #topic/working branch
     clog "topic branch: " $(repo branch)
-    
+
     IFS=${oldIFS}
 }
 
@@ -355,17 +355,17 @@ function getRepoShow(){
 
 function getRepoInfo(){
 ## ---------------------------------------------------------------------------
-# print information(changes, recent commits) of current repository 
-# 
+# print information(changes, recent commits) of current repository
+#
     bar inline "repo status: show only uncommitted changes"
-    repo status -j1 -o 
-    
+    repo status -j1 -o
+
     bar inline "git log -1 for all repositories"
     repo forall -j1 -c 'echo ${REPO_LREV:0:6}    ${REPO_PROJECT}'
-    
+
     bar inline "md5 sum for all repositories"
     repo forall -c git log -1 --pretty=format:%H | md5sum
-    
+
     #run command "repo info"
     bar inline "repo info: show full commit diff to remote branch"
     read -p "repo info for all repository [enter:continue| ctrl+c/q:exit]: "
@@ -398,9 +398,9 @@ function getRecentCommit(){
     echo "> $out"
     bar inline "repo get recent commit"
     repo forall -c "git log -1 --abbrev=6 --date=format:'%Y-%m-%d %H:%M:%S' --pretty=format:'%ad  %h  [%an] %d %s%n'" |sort -r |head -${count:-50} > $out
-    
-    
-   
+
+
+
 }
 
 
@@ -412,21 +412,21 @@ function debugRepo(){
     bar outline "warning: this is the repo packaged with this project."
     echo "this version is expected to used, please check this version is matched to your local version"
     $REPO_PATH/../repo/repo version
-    
+
     bar outline "the local version currently you are using"
     bar inline "python path & version"
     py_path=$(which python) >/dev/null
     py_ver="$(python --version 2>&1)"
     printf "%s is installed in [%s]\n" "${py_ver}" "${py_path}"
-    
-    
+
+
     bar inline "path for repo & git"
     which repo
     which git
-    
+
     bar inline "version info for repo and sub utilities"
     repo --version
-    
+
 }
 
 
@@ -469,7 +469,7 @@ cat << PREFACE
  -------------------------------------------------------------
  supported command: ex) rep show
     show) show current overall repo infomation such as
-        repo dir path, extract repo init command, manifest.xml hierarchy, 
+        repo dir path, extract repo init command, manifest.xml hierarchy,
         count of repository, last synced date, topic/working branch name
     info) show status & info of current repo
         show only uncommitted changes, recent -1 commit for all repo
@@ -498,7 +498,7 @@ local ret=0
     case $1 in
         show) getRepoShow "${@:2}"                                  ;;
         info) getRepoInfo "${@:2}"  2>&1 | tee ${REPO_ROOT}/repo.info
-              info "please check file [${REPO_ROOT}/repo.info]"     
+              info "please check file [${REPO_ROOT}/repo.info]"
               warn "you can use this file to compare other repo."   ;;
         init) repoInit "${@:2}"
             if [ $? -eq 0 ]; then
