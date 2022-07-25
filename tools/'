@@ -294,10 +294,11 @@ function showManifestTree(){
     cat $1 | sed -n 's/.*include name="\(.*\)".*/\1/p' | while read -r file; do
         if [ -n "${file}" ];then
             printf "%s${file} \n" "${path::${treedepth}}"
-        cat ${file}| sed -n 's/.*revision="\([^ |\t]*\)".*/\1/p' |sort|uniq|\
-        xargs -n1 -I {} printf "%60s {}\n"
             showManifestTree ${file} ${treedepth}
         fi
+        cat ${file}| sed -n 's/.*revision="\([^ |\t]*\)".*/\1/p' |sort|uniq|\
+        xargs -n1 -I {} printf "%s\n" {}"
+        #xargs -n1 -I {} printf "%60s {}\n"
         #printf "%s|%s\n" "${path} ${treedepth}"
 
     done
