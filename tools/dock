@@ -474,4 +474,4 @@ function ____dock(){
 ##============================================================================
 # check if called from source or not.
 (return 0 2>/dev/null) && sourced=1 || sourced=0
-if [ $sourced -eq 0 ]; then handle_commands $@; fi
+if [ $sourced -eq 0 ]; then handle_commands $@;else echo "plz run without source." && return; fi
