@@ -219,47 +219,42 @@ function __pathimport()
 }
 
 
-alias gorepo="goup .repo"
 alias goup="goup"
 alias godown="godown_withmenu"
-alias gonear="goaround_withmenu"
+alias gonear="gonear_withmenu"
 function goup()
 {
     local TOPFILE=${proFILEdir}
-    local HERE=$PWD
+    local E=$PWD
     local T=
-    while [ \( ! \( -d $TOPFILE \) \) -a \( $PWD != "/" \) ]; do
+    while [ ! -d $TOPFILE ] || [[ $PWD != "/"  ]]; do
         T=$PWD
-        if [ -d "$T/$@" ]; then
-            \cd $T
-            return
-        fi
-        \cd ..
+        if [ -d "$T/$1" ]; then cd $T && return; fi
+        pushd .. > /dev/null
     done
-    \cd $HERE
-    cd $HOME
+    cd $HERE
 }
 
 
 function godown_withmenu(){
     local INPUT
-    INPUT=$(find ~/ -mindepth 1 -maxdepth 4 -type d -name "$@" 2> /dev/null)
+    INPUT=$(find ./ -mindepth 1 -maxdepth 5 -type d -name "$@" 2> /dev/null)
     show_menu_do "$INPUT"
     cd ${RET}
 }
 
 
-function goaround_withmenu(){
+function gonear_withmenu(){
     local INPUT
     #find sub dirtory
-    INPUT=$(find ./ -maxdepth 2 -type d -name "$@" 2> /dev/null)
+    INPUT=$(find ./ -maxdepth 2 -type d -name "$1" 2> /dev/null)
     #find parents dirtory
-    INPUT="${INPUT} $(find ../ -maxdepth 2 -type d -name ${PWD##*/} -prune -o -name "$@" 2> /dev/null)"
+    INPUT="${INPUT} $(find ../ -maxdepth 2 -type d -path ${PWD##*/} -prune -o -name "$1" 2> /dev/null)"
     #find grand parents dirtory
     show_menu_do "$INPUT"
     echo ${RET}
     cd ${RET}
-    if [ "${RET##*/}" = "${PWD##*/}" ]; then goup "$@";fi
+    if [ "${RET##*/}" = "${PWD##*/}" ]; then goup "$1";fi
 }
 
 
