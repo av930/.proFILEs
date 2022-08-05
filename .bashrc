@@ -218,44 +218,54 @@ function __pathimport()
     echo "path is changed by path.export file"
 }
 
-
-alias goup="goup"
-alias godown="godown_withmenu"
-alias gonear="gonear_withmenu"
-function goup()
+alias gg="go_updown"
+alias ggn="go_near"
+function go_updown()
 {
+    echo "go parent dir << [$HOME] ---- ${PWD##*/} ---- [depth 8] >> "
+    local HERE=$PWD
     local TOPFILE=${proFILEdir}
-    local E=$PWD
     local T=
-    while [ ! -d $TOPFILE ] || [[ $PWD != "/"  ]]; do
+
+    #in case not HOME or not ROOT, find path to upper dirs.
+    while [[ "$PWD" != "$HOME" ]] && [[ "$PWD" != "/"  ]]; do
         T=$PWD
-        if [ -d "$T/$1" ]; then cd $T && return; fi
+        if [ -d "$T/$1" ]; then
+            cd $T
+            tree -L 2 -d
+            return
+        fi
         pushd .. > /dev/null
     done
+    #not found in partents, now findout in child
     cd $HERE
-}
 
-
-function godown_withmenu(){
     local INPUT
-    INPUT=$(find ./ -mindepth 1 -maxdepth 5 -type d -name "$@" 2> /dev/null)
-    show_menu_do "$INPUT"
-    cd ${RET}
+    INPUT=$(find $HERE -maxdepth 8 -type d -wholename "*$1" 2> /dev/null)
+    if [ -n "$INPUT" ];then
+        show_menu_do "$INPUT"
+        cd "${RET%/*}"
+        tree -L 2 -d
+        return
+    fi
+    #not found, go back origin path
+    #cd $HERE
 }
 
 
-function gonear_withmenu(){
+function go_near(){
     local INPUT
     #find sub dirtory
-    INPUT=$(find ./ -maxdepth 2 -type d -name "$1" 2> /dev/null)
+    # INPUT=$(find ./ -maxdepth 2 -type d -name "$1" 2> /dev/null)
     #find parents dirtory
-    INPUT="${INPUT} $(find ../ -maxdepth 2 -type d -path ${PWD##*/} -prune -o -name "$1" 2> /dev/null)"
+    # INPUT="${INPUT} $(find ../../ -maxdepth 4 -type d -path ${PWD##*/} -prune -o -name "$1" 2> /dev/null)"
+    INPUT="${INPUT} $(find ../../ -maxdepth 4 -type d -name "$1" 2> /dev/null)"
     #find grand parents dirtory
     show_menu_do "$INPUT"
     echo ${RET}
     cd ${RET}
-    if [ "${RET##*/}" = "${PWD##*/}" ]; then goup "$1";fi
 }
+
 
 
 ###############################
