@@ -160,6 +160,7 @@ alias mkcd='_mkcd(){ mkdir -p "$1"; cd "$1" ;}; _mkcd'
 
 #### find
 alias du${TAG}='_dul(){ echo "subdir $1 size is"; du -sh $1 ;}; _dul'
+alias dus='_dus(){ du -hs */|sort -n ;}; _dus()'
 alias ps${TAG}="ps -u $USER -o pid,args --forest"
 alias pstree="pstree -hap -u $USER"
 alias pstree${TAG}="pstree -ha"
