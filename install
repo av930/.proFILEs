@@ -15,7 +15,7 @@ fi
 SRC=${proFILEdir}
 DST=$HOME
 BACKUP=$HOME/.rc_backup
-
+FILES=".inputrc .screenrc .gitignore .gitconfig .bash_aliases .sshconfig user.profile user.gitconfig"
 
 ######################################################################
 # pop up message
@@ -45,7 +45,7 @@ function copy_tools() {
     pushd ${proFILEdir}
 
 
-    for var in .inputrc .screenrc .gitignore .gitconfig .profile.config .bash_aliases .sshconfig
+    for var in ${FILES}
     do
         ##### backup
         mkdir -p ${BACKUP}
@@ -56,10 +56,11 @@ function copy_tools() {
 
         ##### create
         case $var in
-            '.profile.config') cp -vf ${proFILEdir}/.profile.default $HOME/$var;;
-            '.bash_aliases') ln -fs ${proFILEdir}/.bashrc $HOME/$var;;
+            '.gitconfig') ln -is ${proFILEdirOS}/.gitconfig $HOME/$var;;
+            '.bash_aliases') ln -is ${proFILEdir}/.bashrc $HOME/$var;;
             '.sshconfig') ln -s ${proFILEdir}/.sshconfig $HOME/.ssh/config;;
-            *) ln -ifs ${proFILEdir}/$var $HOME/$var;;
+            user.*) cp -vf ${proFILEdir}/$var $HOME/$var;;
+            *) ln -is ${proFILEdir}/$var $HOME/$var;;
         esac
     done
 
@@ -75,7 +76,7 @@ function copy_tools() {
 ######################################################################
 function restore_tools() {
 
-    for var in .inputrc .screenrc .gitignore .gitconfig .profile.config .bash_aliases .sshconfig
+    for var in ${FILES}
     do
         echo "please restore by your hand from $BACKUP/$var"
 

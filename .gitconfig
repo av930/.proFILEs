@@ -46,5 +46,11 @@
     clear   = !git reset --hard && git clean -xdf
 
 [user]
-	email = joongkeun.kim@lge.com
-	name = joongkeun.kim
+    name = joongkeun.kim
+    email = joongkeun.kim@lge.com
+
+
+################ user custom setting
+
+[includeIf "gitdir:~/.gitextra/"]
+    path = ~/user.gitconfig

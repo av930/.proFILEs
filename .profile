@@ -25,10 +25,10 @@ NCOL='\e[0m';
 
 
 
-USR_FILE=~/.profile.config
+USR_FILE=~/user.profile
 if [ -f "${USR_FILE}" ]
 then source "${USR_FILE}"
-else source ${proFILEdir}/.profile.default
+else source ${proFILEdir}/user.profile
 fi
 
 # get_ip=192.168.0.1
