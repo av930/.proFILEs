@@ -44,7 +44,7 @@ function copy_tools() {
     set -x
 
 
-    for var in .inputrc .screenrc .gitignore .gitconfig .profile.config .bash_aliases
+    for var in .inputrc .screenrc .gitignore .gitconfig .profile.config .bash_aliases .sshconfig
     do
         #backup
         mkdir -p ${BACKUP}
@@ -74,7 +74,7 @@ function copy_tools() {
 ######################################################################
 function restore_tools() {
 
-    for var in .inputrc .screenrc .gitignore .gitconfig .profile.config .bash_aliases
+    for var in .inputrc .screenrc .gitignore .gitconfig .profile.config .bash_aliases .sshconfig
     do
         rm -f "$HOME/$var"
         if [ -L "$BACKUP/$var" ]; then
