@@ -1,6 +1,6 @@
 # User customed file
 ######################
-.gitconfig.user
+user.gitconfig*
 tempdir/*
 .idea/*
 
