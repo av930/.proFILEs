@@ -1,10 +1,4 @@
-################ user customed setting
-[user]
-    name = joongkeun.kim
-    email = joongkeun.kim@lge.com
-
-
-[includeIf "gitdir:~/.proFILEs/"]
-    path = ~/.proFILEs/user.gitconfig.extra
+#if you make dir ~/.gitextra
+#~/.gitconfig.user.extra is also applied
 
 
