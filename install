@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -ex
 # #!명령은 이화일을 실행시킬 shell이 존재하는 path을 지정
 
 ######################################################################
@@ -14,6 +14,7 @@ fi
 
 SRC=${proFILEdir}
 DST=$HOME
+BACKUP=$HOME/.rc_backup
 
 
 ######################################################################
@@ -25,7 +26,6 @@ function winpop() {
     #echo 대신 net send 이용가능
     return 0
 }
-
 
 ######################################################################
 # make copy
@@ -44,77 +44,98 @@ function copy_tools() {
     set -x
     pushd ${proFILEdir}
 
-    if [ ! -f $HOME/.profile.config ]; then cp ${1} default.config $HOME/.profile.config; fi
 
-    cp ${1}R .byobu/ $HOME/
-    ln -fs  ${proFILEdir}/.inputrc        $HOME/.inputrc
-    ln -fs  ${proFILEdir}/.screenrc       $HOME/.screenrc
-    ln -fs  ${proFILEdir}/.splintrc       $HOME/.splintrc
-    ln -fs  ${proFILEdir}/.astylerc       $HOME/.astylerc
-    ln -fs  ${proFILEdir}/.indent.pro     $HOME/.indent.pro
-    ln -fs  ${proFILEdir}/.gitignore      $HOME/.gitignore
-    ln -fs  ${proFILEdirOS}/.gitconfig    $HOME/.gitconfig
+    for var in .inputrc .screenrc .gitignore .gitconfig .profile.config .bash_aliases .sshconfig
+    do
+        ##### backup
+        mkdir -p ${BACKUP}
+        cp -d $HOME/$var ${BACKUP}/$var
 
+        rm -f $HOME/$var
 
-    #if [ -f "$HOME/.profile" ]; then mv "$HOME/.profile" "$HOME/.profile_backup";  fi
-    #ln -fs  ${proFILEdir}/.profile      $HOME/.profile
-
-    if [ -f ~/.bash_aliases ]; then mv "$HOME/.bash_aliases" "$HOME/.bash_aliases_backup";  fi
-    ln -fs ${proFILEdir}/.bashrc $HOME/.bash_aliases
+        ##### create
+        case $var in
+            '.profile.config') cp -vf ${proFILEdir}/.profile.default $HOME/$var;;
+            '.bash_aliases') ln -fs ${proFILEdir}/.bashrc $HOME/$var;;
+            '.sshconfig') ln -fs ${proFILEdir}/.sshconfig $HOME/.ssh/config;;
+            *) ln -fs ${proFILEdir}/$var $HOME/$var;;
+        esac
+    done
 
     popd
     set +x
-
-    #Recursive - sub dircetory ,
-    #update - only udated file,
-    #verbose - what is being done
-    #force, - remove and copy
 
     winpop $2 $3
     return 0
 }
 
-
 ######################################################################
 # make remove
 ######################################################################
-function remove_tools() {
+function restore_tools() {
 
-    rm -f $HOME/.inputrc      \
-          $HOME/.screenrc     \
-          $HOME/.splintrc     \
-          $HOME/.astylerc     \
-          $HOME/.indent.pro   \
-          $HOME/.gitignore    \
-          $HOME/.gitconfig    \
+    for var in .inputrc .screenrc .gitignore .gitconfig .profile.config .bash_aliases .sshconfig
+    do
+        rm "$HOME/$var"
+        cp -d $BACKUP/$var  $HOME/$var
+
+    done
 
     return 0
 }
 
+##--------------------------- Menu Functions --------------------------------
+##============================================================================
+function handler_args(){
+## ---------------------------------------------------------------------------
+# Hander Arguments
+
+    local ret
+    local options
+    while getopts cr options 2> /dev/null
+    do
+       case $options in
+          c) copy_tools; ret=processed;;
+          r) restore_tools; ret=processed;;
+          \?) printf "${RED}Only -c,-r valid [$options] ${NCOL}\n"
+            handler_menu;;
+       esac
+    done
+
+    if [ "$ret" != "processed" ]; then
+        handler_menu
+    fi
+
+    unset OPTIND
+    unset OPTSTRING
+}
 
 ######################################################################
 # main function
 ######################################################################
-printf "CONFIRM : WILL UPDATE & COPY from $SRC $DST"
-printf "\n[c)opy u)pdate b)ackup r)remove n)oting]: "
-read confirm
-if [ "$confirm" = "c" ]; then
-    copy_tools -ivf
-elif [ "$confirm" = "u" ]; then
-    copy_tools -uvf
-elif [ "$confirm" = "b" ]; then
-    copy_tools -ibuvf
-elif [ "$confirm" = "r" ]; then
-    remove_tools
-else
-    print "nothing happend, canceled all job"
-fi
+function handler_menu(){
+    printf "CONFIRM : WILL UPDATE & COPY from $SRC $DST"
+    printf "\n[c)opy r)restore n)oting]: "
+    read confirm
+    if [ "$confirm" = "c" ]; then
+        copy_tools
+    elif [ "$confirm" = "u" ]; then
+        copy_tools -uvf
+    elif [ "$confirm" = "r" ]; then
+        restore_tools
+    else
+        print "nothing happend, canceled all job"
+    fi
+}
 
 ######################################################################
 # post check
 ######################################################################
-if [ ! $(which screen) ]; then
+handler_args $@
+
+if [ ! -f $(which sceen) ]; then
   printf "you need to run:${RED} sudo apt-get install screen ${NCOL}"
   printf "${YELLOW} this configuration needs screen except CYGWIN ${NCOL}"
 fi
+
 exit 0
