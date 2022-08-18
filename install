@@ -59,7 +59,7 @@ function copy_tools() {
             '.profile.config') cp -vf ${proFILEdir}/.profile.default $HOME/$var;;
             '.bash_aliases') ln -fs ${proFILEdir}/.bashrc $HOME/$var;;
             '.sshconfig') ln -s ${proFILEdir}/.sshconfig $HOME/.ssh/config;;
-            *) ln -fs ${proFILEdir}/$var $HOME/$var;;
+            *) ln -ifs ${proFILEdir}/$var $HOME/$var;;
         esac
     done
 
