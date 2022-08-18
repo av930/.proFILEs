@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/bin/bash -x
 # #!명령은 이화일을 실행시킬 shell이 존재하는 path을 지정
 
 ######################################################################
@@ -49,15 +49,16 @@ function copy_tools() {
     do
         ##### backup
         mkdir -p ${BACKUP}
-        cp -d $HOME/$var ${BACKUP}/$var
-
-        rm -f $HOME/$var
+        if [ -e $HOME/$var ];then
+            cp -d $HOME/$var ${BACKUP}/$var
+            rm -f $HOME/$var
+        fi
 
         ##### create
         case $var in
             '.profile.config') cp -vf ${proFILEdir}/.profile.default $HOME/$var;;
             '.bash_aliases') ln -fs ${proFILEdir}/.bashrc $HOME/$var;;
-            '.sshconfig') ln -fs ${proFILEdir}/.sshconfig $HOME/.ssh/config;;
+            '.sshconfig') ln -s ${proFILEdir}/.sshconfig $HOME/.ssh/config;;
             *) ln -fs ${proFILEdir}/$var $HOME/$var;;
         esac
     done
@@ -76,8 +77,7 @@ function restore_tools() {
 
     for var in .inputrc .screenrc .gitignore .gitconfig .profile.config .bash_aliases .sshconfig
     do
-        rm "$HOME/$var"
-        cp -d $BACKUP/$var  $HOME/$var
+        echo "please restore by your hand from $BACKUP/$var"
 
     done
 
@@ -119,8 +119,6 @@ function handler_menu(){
     read confirm
     if [ "$confirm" = "c" ]; then
         copy_tools
-    elif [ "$confirm" = "u" ]; then
-        copy_tools -uvf
     elif [ "$confirm" = "r" ]; then
         restore_tools
     else
