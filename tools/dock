@@ -426,7 +426,12 @@ printf ${NCOL}
 
     #local COLUMNS=30
     #local columns="$(tput cols)"
-    PS3=$'\e[00;35m=== Please input command! [Number:menu, Ctrl+c:exit] === : \e[0m'
+    #multi-line PS3
+    PS3=$'\e[00;34m------------------------------------------------------------------------------------------\e[0m'\
+$'\nstep: build/pull(image)>> start(container)>> exec(attach)>> stop(container)>> remove(image)'\
+$'\nstep: hello(image)>> run(container)>> exec(attach)>> ...'\
+$'\n\e[00;35m=== Please input command! [Number:menu, Ctrl+c:exit] === : \e[0m'
+
     select CHOICE in 'list(img&cntr)' 'images(list img)' 'ps(list cntr)' 'build(dockerfile)'    \
     'hello(testimg)' 'start(run++ img)' 'run(just run)' 'exec(attach cntr)'               \
     'stop(&rm ctnr)' 'remove(img)' 'clear(prune all)' 'debug(log)' 'find(search)' \
