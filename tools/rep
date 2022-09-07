@@ -28,11 +28,31 @@ function getGitRootPath(){
 }
 
 
-
-function runSSHcheckError(){
+function checkGerritConnection(){
 ## ---------------------------------------------------------------------------
 # run command, get return code and print guide
     echo "\$ $@" ;"$@"
+
+    case $? in
+     0) ;;
+     1) echo Generic error, usually because invalid command line options or malformed configuration;;
+     *) echo Unknown Error;;
+    esac
+}
+
+
+
+function checkSSHConnection(){
+## ---------------------------------------------------------------------------
+# run command, get return code and print guide
+    echo "\$ ssh $1 -p $2" ;
+
+    timeout 5 bash -c "</dev/tcp/$1/$2"
+    if [ $? == 0 ];then
+       echo "SSH Connection to $server over port $port is possible"
+    else
+       echo "SSH connection to $server over port $port is not possible"
+    fi    
     case $? in
      0) ;;
      1) echo Generic error, usually because invalid command line options or malformed configuration;;
@@ -79,7 +99,7 @@ function runRepoInitcheckError(){
         ret=0
     fi
 
-    #if [ $? -ne 0 ];then runSSHcheckError ssh -p vc.integrator@vgit.lge.com:29430;fi
+    #if [ $? -ne 0 ];then checkSSHConnection ssh -p vc.integrator@vgit.lge.com:29430;fi
 
     return $ret
 }
@@ -181,49 +201,6 @@ function getRepoCMD(){
 
 
 
-function findProperREPLServer(){
-## ---------------------------------------------------------------------------
-# find replication server
-# $1 log-file to show result
-set -x
-    local server_PORT=29418
-    local server_URL=( lampmg1.lge.com lampgd1.lge.com 10.158.11.174 )
-    local system_load=( "${server_URL[@]/*/0}" )
-    local file_temp=$(mktemp)
-    local min_load=10000
-    local i=0
-    local get_delay get_connection get_task get_mem
-    local printformat="%-20s|%10s|%14s|%10s|%12s|%10s"
-
-    printf "replication server from lamp.lge.com: \n" >> $1
-    printf "${printformat}\n" "server list" "delay(ms)" "connections(#)" "tasks(#)" "free memory" "total load" >> $1
-    printf "${yellow}--------------------------------------------------------------------------------------\n${NCOL}" >> $1
-    for server in "${server_URL[@]}"; do
-        get_delay=$(ping ${server} -s 1016 -c 4 -A |sed -ne 's/.*ewma.*\/\(.*\) ms$/\1/p' | sed 's/\.//')
-        if [ $? -ne 0 ]; then continue; fi
-
-        ssh -p ${server_PORT} -o ConnectTimeout=2 -o ConnectionAttempts=1 \
-            ${server} gerrit show-caches | grep -E "(^SSH:|^Tasks:|^Mem:)" > ${file_temp}
-        if [ $? -ne 0 ]; then continue;fi
-
-        get_connection=$(sed -n 's/^SSH: *\(.*\) users.*/\1/p' ${file_temp})
-        get_task=$(sed -n 's/^Tasks: *\(.*\) total.*/\1/p' ${file_temp})
-        get_mem=$(sed -n 's/^Mem:.*+ \(.*\) free.*/\1/p' ${file_temp})
-
-        #weight delay/10 connectoin*80 task*100
-        system_load[i]=$(echo "$get_delay/10 + $get_connection*80 + $get_task*100 + ${system_load[i]}" |bc )
-
-        printf "${printformat}\n" $server $get_delay $get_connection $get_task $get_mem ${system_load[i]} >> $1
-        if (( "${min_load}" >= "${system_load[i]}" )); then min_load=$system_load; REPL_SERVER="$server:$server_PORT"; fi
-        (( i++ ))
-    done
-
-    #rm -f ${file_temp}
-set +x
-}
-
-
-
 function repoInit(){
 ## ---------------------------------------------------------------------------
 # repo init helper
@@ -267,7 +244,7 @@ function repoInit(){
     local file_info=$(mktemp)
     if [ -z "${url}" ] || [ "${url}" != "${url/lamp/}" ]; then
         bar outline 'repo server info' > ${file_info}
-        findProperREPLServer ${file_info}
+        findServerDelay ${file_info}
         url="ssh://${REPL_SERVER}/platform/manifest.git";
     fi
     if [ -z "${reference}" ];then reference="${reference:-${path_mirror}/${revision}}"; fi
@@ -452,30 +429,42 @@ function debugRepo(){
 
 
 
+function findServerDelay(){
+## ---------------------------------------------------------------------------
+# find replication server
+# $1 server-url
+# $2 port-number
+
+    local url=${1:-${REPO_URL}}
+    local port=${2:-${REPO_URL}}    
+
+    ping $1 -s 1016 -c 4 -A 
+    printf "${yellow}--------------------------------------------------------------------------------------\n${NCOL}" 
+    if [ $? -ne 0 ]; then continue; fi
+    ssh -p $2 -o ConnectTimeout=2 -o ConnectionAttempts=1 $1 gerrit show-caches
+    if [ $? -ne 0 ]; then continue;fi
+}
+
+
 function checkConnection(){
 ## ---------------------------------------------------------------------------
 # check connection and report error
-# $1 url (only ssh url)
-# $2 account
+# $1 server
+# $2 port
 # $3 password
 
-    local url=${1:-${REPO_URL}}
-    server=${url}
-    bar inline "repo check connection"
-    if [ -x "$(command -v ssh)" ]; then  log "ssh is installed"; else err "ssh is not installed"; fi
-    #if [ "${1:-${REPO_URL}}"
-    status=$(ssh $1 )
+    local server_port=$(echo "${REPO_URL}" | grep -oP '(?<=@).*(?=/)')
+    local server=${1:-${server_port%:*}}
+    local port=${2:-${server_port#*:}}
 
-    if [[ $status == ok ]] ; then
-      echo auth ok, do something
-    elif [[ $status == "Permission denied"* ]] ; then
-      echo no_auth
-    else
-      echo other_error
-    fi
-
-
-    exit
+    bar inline "step1: check if ssh is installed"
+    if [ -x "$(command -v ssh)" ]; then  log "ssh is installed in [$(which ssh)]"; else err "ssh is not installed"; fi
+    
+    bar inline "step2: check if ssh is available" 
+    checkSSHConnection $server $port
+    
+    bar inline "step3: check if gerrit is avaiable" 
+    checkGerritConnection ssh $server -p $port gerrit version
 }
 
 
@@ -500,16 +489,19 @@ printf ${NCOL}
     "show: shows repository info such as manifest path, repo cmd, tree of manifests, etc 
      ex) rep show, rep show default.xml, rep show event/manifest.xml                    "     \
     "init: repo init with automatic options"                                                  \
-    "sync: repo sync with optimized multi-job and options                                    
+    "sync: repo sync with optimized multi-job and options
      ex) rep sync, rep sync 8, rep sync 16 --force-sync(options)"                             \
     "commit: shows lastest commits(git log -1) from all repository (default 20)
      ex) rep commit, rep commit 4, rep commit log.txt"                                        \
     "info: shows uncommited changes, top -1 commits, md5 sum, repo info for all repositories
      ex) rep info, rep info|more, rep info| grep build"                                       \
     "debug: shows repo/git/python version info used in current repo"                          \
-    "check: find problems when 'repo init' or 'repo sync' failed"                             \
+    "check: find problems when 'repo init' or 'repo sync' failed
+     ex) rep check, rep check vgit.lge.com 29440"                                             \
     "find: (list) search string in all [repo path] : [repo revision] : [repo name]
-     ex) rep find, rep list|more, rep find| grep build, rep list|grep -v build"
+     ex) rep find, rep list|more, rep find| grep build, rep list|grep -v build"               \
+    "server: check delay from server or confirm the server status
+     ex) rep server, rep server lamp.lge.com 29418"
     do
         handleCommand "${CHOICE%%:*}"
     done
@@ -539,6 +531,7 @@ local ret=0
         debug) debugRepo "${@:2}"                                   ;;
         check) checkConnection "${@:2}"                             ;;
         find|list) findGitRepository "${@:2}"                       ;;
+        server) findServerDelay "${@:2}"                            ;;
         "") handleMenu "${@}"                                       ;;
         *) repo "${@}"
           return $ret                                               ;;
@@ -571,9 +564,9 @@ function checkPreCondition(){
 
 
 case "$1" in
-    show|info|sync|commit|debug|find|'')     checkPreCondition    ;;
-    init)                                                         ;;
-    *) repo "${@}"                           return $ret          ;;
+    show|info|sync|commit|debug|find|check|'')         checkPreCondition    ;;
+    init)                                                                   ;;
+    *) repo "${@}"                                     return $ret          ;;
 esac
 
 handleCommand $@
