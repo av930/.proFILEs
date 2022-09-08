@@ -36,7 +36,7 @@ function checkGerritConnection(){
     case $? in
      0) ;;
      1) echo Generic error, usually because invalid command line options or malformed configuration;;
-     *) echo Unknown Error;;
+     *) echo Gerrit Connection Error;;
     esac
 }
 
@@ -45,35 +45,17 @@ function checkGerritConnection(){
 function checkSSHConnection(){
 ## ---------------------------------------------------------------------------
 # run command, get return code and print guide
-    echo "\$ ssh $1 -p $2" ;
+    local file_error=$(mktemp)
+    echo "\$ ssh -T $1 -p $2" ;
+    ssh -T $1 -p $2 2> tee -a ${file_error}
 
-    timeout 5 bash -c "</dev/tcp/$1/$2"
-    if [ $? == 0 ];then
-       echo "SSH Connection to $server over port $port is possible"
-    else
-       echo "SSH connection to $server over port $port is not possible"
-    fi    
-    case $? in
-     0) ;;
-     1) echo Generic error, usually because invalid command line options or malformed configuration;;
-     2) echo Connection failed;;
-    65) echo Host not allowed to connect;;
-    66) echo General error in ssh protocol;;
-    67) echo Key exchange failed;;
-    68) echo Reserved;;
-    69) echo MAC error;;
-    70) echo Compression error;;
-    71) echo Service not available;;
-    72) echo Protocol version not supported;;
-    73) echo Host key not verifiable;;
-    74) echo Connection failed;;
-    75) echo Disconnected by application;;
-    76) echo Too many connections;;
-    77) echo Authentication cancelled by user;;
-    78) echo No more authentication methods available;;
-    79) echo Invalid user name;;
-     *) echo Unknown Error;;
+    case $(cat $file_error) in
+     '') echo good, it works;;
+     *publickey*) echo check publickey;;
+     *) echo unknown error is occured;;
     esac
+    
+    #rm -f ${file_error}
 }
 
 
@@ -441,7 +423,7 @@ function findServerDelay(){
     ping $1 -s 1016 -c 4 -A 
     printf "${yellow}--------------------------------------------------------------------------------------\n${NCOL}" 
     if [ $? -ne 0 ]; then continue; fi
-    ssh -p $2 -o ConnectTimeout=2 -o ConnectionAttempts=1 $1 gerrit show-caches
+    ssh $1 -p $2 -o ConnectTimeout=2 -o ConnectionAttempts=1 gerrit show-caches
     if [ $? -ne 0 ]; then continue;fi
 }
 
@@ -453,18 +435,29 @@ function checkConnection(){
 # $2 port
 # $3 password
 
-    local server_port=$(echo "${REPO_URL}" | grep -oP '(?<=@).*(?=/)')
+    local server_port=${REPO_REMOTE#*@}
     local server=${1:-${server_port%:*}}
-    local port=${2:-${server_port#*:}}
+    local port=$(echo ${server_port} | grep -oP '(?<=:)[0-9]+(?=/)')
+    local manifest=${3:-${server_port#*/}}
+    local branch=${4:-${REPO_BRANCH}}
+    
 
     bar inline "step1: check if ssh is installed"
     if [ -x "$(command -v ssh)" ]; then  log "ssh is installed in [$(which ssh)]"; else err "ssh is not installed"; fi
     
-    bar inline "step2: check if ssh is available" 
-    checkSSHConnection $server $port
+    bar inline "step2: check if server tcp port is well listened"
+    timeout 5 bash -c "</dev/tcp/$server/$port"
+    if [ $? == 0 ];then echo "server $server over port $port is listened"
+    else echo "server $server over port $port is not listened"; fi
+
+    bar inline "step3: check if sshd is serviced on this port $port" 
+    checkSSHConnection $server $port 
     
-    bar inline "step3: check if gerrit is avaiable" 
+    bar inline "step4: check if gerrit service is valid" 
     checkGerritConnection ssh $server -p $port gerrit version
+    
+    bar inline "step5: check if I can access manifests git"
+    echo "accessed [$(ssh vgit.lge.com -p $port gerrit ls-projects --prefix ${manifest} -b ${branch} | cut -f2 -d' ')]"
 }
 
 
@@ -497,7 +490,7 @@ printf ${NCOL}
      ex) rep info, rep info|more, rep info| grep build"                                       \
     "debug: shows repo/git/python version info used in current repo"                          \
     "check: find problems when 'repo init' or 'repo sync' failed
-     ex) rep check, rep check vgit.lge.com 29440"                                             \
+     ex) rep check, rep check vgit.lge.com 29420 tiger/tools tiger_release"                   \
     "find: (list) search string in all [repo path] : [repo revision] : [repo name]
      ex) rep find, rep list|more, rep find| grep build, rep list|grep -v build"               \
     "server: check delay from server or confirm the server status
@@ -556,6 +549,7 @@ function checkPreCondition(){
     REPO_URL=$(cat ../repo/.git/config |grep url|sed 's/.*=\(.*\)/\1/')
     REPO_MIRROR=$(cat ../manifests.git/config |grep reference|sed 's/.*=\(.*\)/\1/')
     REPO_COUNT=$($REPO_PATH/../repo/repo list |wc -l)
+
 }
 ##============================================================================
 ## Main
