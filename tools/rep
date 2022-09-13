@@ -274,21 +274,6 @@ function showManifestTree(){
 }
 
 
-
-function findGitRepository(){
-## ---------------------------------------------------------------------------
-# find git repository with path and project name with regexp
-# $1 path or project
-# usage: findGitRepository [path|project]
-
-    bar inline "repo source path]                                                              [repo branch(revision)]        [repo name in manifest"
-    repo forall -j16 -c 'printf "%-80.80s %-30.30s %-80s\n" "${REPO_PROJECT}" "${REPO_RREV}" "${REPO_PATH}"'
-    #repo list -r ${findstr}
-
-}
-
-
-
 function getRepoShow(){
 ## ---------------------------------------------------------------------------
 # print information of repo
@@ -314,13 +299,12 @@ function getRepoShow(){
     bar inline "misc information for this repositories"
     clog "number of repositories: " $REPO_COUNT
 
+    clog "md5 sum for all repositories:"
+    repo forall -j16 -c git log -1 --pretty=format:%H | md5sum
+
     #show last synced date
     if [ -f .git/FETCH_HEAD ]; then clog "last manifest-synced date: " $(stat -c %y .git/FETCH_HEAD);
     else clog "last manifest-synced date: " $(ls -lct);fi
-
-    #topic/working branch
-    read -p "[WARNING: It takes time] repo branch all repository [enter:continue| ctrl+c]: "
-    clog "current topic branch: " $(repo branch)
 
     IFS=${oldIFS}
 }
@@ -334,16 +318,18 @@ function getRepoInfo(){
     bar inline "repo status: show only uncommitted changes"
     repo status -j1 -o
 
-    bar inline "git log -1 for all repositories"
-    echo "revision git-name                    src-path"
-    repo forall -j1 -c 'printf "%90s %-80s\n" "${REPO_PROJECT} ${REPO_LREV:0:6}" "${REPO_PATH}"'
+    #topic/working branch
+    bar inline "repo branch: show working branch status (WARNING: It takes time) "
+    repo branch
 
-    bar inline "md5 sum for all repositories"
-    repo forall -j8 -c git log -1 --pretty=format:%H | md5sum
+    bar inline "git log -1 for all repositories"
+    read -p "to continue [enter]"
+    echo "revision git-name                    src-path"
+    repo forall -j1 -c 'printf "%82s %-80s\n" "${REPO_PROJECT} ${REPO_LREV:0:6}" "${REPO_PATH}"'
 
     #run command "repo info"
     bar inline "repo info: show full commit diff to remote branch"
-    echo "to stop [ctrl+c] "
+    read -p "to continue [enter], to stop [ctrl+c] "
     repo info
 }
 
@@ -380,6 +366,23 @@ function getRecentCommit(){
     #repo forall -c "git log -1 --abbrev=6 --date=format:'%Y-%m-%d %H:%M:%S' --pretty=format:'%ad  %h  [%an] %d %s%n'" |sort -r |head -${count:-50} > $out
 
 }
+
+
+
+function findGitRepository(){
+## ---------------------------------------------------------------------------
+# find git repository with path and project name with regexp
+# $1 path or project
+# usage: findGitRepository [path|project]
+
+    local findstr=${1:-.}
+    bar inline "repo source path]                                                              [repo branch(revision)]        [repo name in manifest"
+    repo forall -j16 -c 'printf "%-80.80s %-30.30s %-80s\n" "${REPO_PROJECT}" "${REPO_RREV}" "${REPO_PATH}"' \
+    |grep -i --color=always $findstr  | tee  >(wc -l) 
+    #repo list -r ${findstr}
+
+}
+
 
 
 function debugRepo(){
@@ -436,7 +439,7 @@ function resetRepository(){
 # find replication server
 # $1 server-url
 # $2 port-number
-    repo forall -c 'git reset --hard ; git clean -xdf' 
+    repo forall -cj16 'git reset --hard ; git clean -xdf'
 }
 
 
@@ -479,11 +482,34 @@ function checkConnection(){
 
 
 
+MENU=(
+"show: shows repository info such as manifest path, repo cmd, tree of manifests, etc
+    ex) rep show, rep show default.xml, rep show event/manifest.xml"
+"info: shows uncommited changes, top -1 commits, md5 sum, repo info for all repositories
+    ex) rep info, rep info|more, rep info| grep build, cat repo.info"
+"commit: shows lastest commits(git log -1) from all repository (default 20)
+    ex) rep commit, rep commit 4, rep commit log.txt(save as)"
+"find: (list) search string in all [repo path] : [repo revision] : [repo name]
+    ex) rep find, rep list|more, rep find build, rep list|grep -v build"
+
+
+"init: repo init with automatic options"
+"sync: repo sync with optimized multi-job and options
+    ex) rep sync, rep sync 8, rep sync 16 --force-sync(more options)"
+"reset: reset repository"
+
+"debug: shows repo/git/python version info used in current repo"
+"check: find accessibility for manifest git or normal git
+    ex) rep check, rep check vgit.lge.com 29420 tiger/tools tiger_release
+                   rep check [git-server] [port] [project]  [branch]"
+"server: check delay from server or confirm the server status
+    ex) rep server, rep server lamp.lge.com 29418"
+)
+
 function handleMenu(){
 ## ---------------------------------------------------------------------------
 # show ui menu for this script
 
-echo "[$1] [$2]"
 printf ${green}
 cat << PREFACE
 ==============================================================
@@ -497,25 +523,7 @@ printf ${NCOL}
 
     local COLUMNS=60
     PS3=$'\e[00;35m=== Please input command! [enter:menu, number:choice, ctrl+c:exit] === : \e[0m'
-    select CHOICE in                                                                          \
-    "show: shows repository info such as manifest path, repo cmd, tree of manifests, etc
-     ex) rep show, rep show default.xml, rep show event/manifest.xml"                         \
-    "init: repo init with automatic options"                                                  \
-    "sync: repo sync with optimized multi-job and options
-     ex) rep sync, rep sync 8, rep sync 16 --force-sync(more options)"                        \
-    "commit: shows lastest commits(git log -1) from all repository (default 20)
-     ex) rep commit, rep commit 4, rep commit log.txt(save as)"                               \
-    "info: shows uncommited changes, top -1 commits, md5 sum, repo info for all repositories
-     ex) rep info, rep info|more, rep info| grep build"                                       \
-    "debug: shows repo/git/python version info used in current repo"                          \
-    "check: find accessibility for manifest git or normal git
-     ex) rep check, rep check vgit.lge.com 29420 tiger/tools tiger_release
-                    rep check [git-server] [port] [project]  [branch]"                          \
-    "find: (list) search string in all [repo path] : [repo revision] : [repo name]
-     ex) rep find, rep list|more, rep find| grep build, rep list|grep -v build"               \
-    "server: check delay from server or confirm the server status
-     ex) rep server, rep server lamp.lge.com 29418"                                            \
-    "reset: reset repository"
+    select CHOICE in "${MENU[@]}"
     do
         handleCommand "${CHOICE%%:*}";
     done
@@ -535,18 +543,21 @@ local ret=0
         info) getRepoInfo "${@:2}"  2>&1 | tee ${REPO_ROOT}/repo.info
               info "please check file [${REPO_ROOT}/repo.info]"
               warn "you can use this file to compare other repo."   ;;
+        commit) getRecentCommit "${@:2}"                            ;;
+        find|list) findGitRepository "${@:2}"                       ;;
+        
         init) repoInit "${@:2}"
             if [ $? -eq 0 ]; then
                 info "To RUN next command:"
                 runRepoSynccheckError
             fi                                                      ;;
         sync) runRepoSynccheckError "${@:2}"                        ;;
-        commit) getRecentCommit "${@:2}"                            ;;
+        reset)  resetRepository "${@:2}"                            ;;
+        
         debug) debugRepo "${@:2}"                                   ;;
         check) checkConnection "${@:2}"                             ;;
-        find|list) findGitRepository "${@:2}"                       ;;
         server) findServerDelay "${@:2}"                            ;;
-        reset)  resetRepository "${@:2}"                            ;;
+
         '') handleMenu "${@:2}"                                     ;;
         *) repo "${@}"
           return $ret                                               ;;
