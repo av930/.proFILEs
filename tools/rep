@@ -430,6 +430,16 @@ function findServerDelay(){
 }
 
 
+
+function resetRepository(){
+## ---------------------------------------------------------------------------
+# find replication server
+# $1 server-url
+# $2 port-number
+    repo forall -c 'git reset --hard ; git clean -xdf' 
+}
+
+
 function checkConnection(){
 ## ---------------------------------------------------------------------------
 # check connection and report error
@@ -489,12 +499,12 @@ printf ${NCOL}
     PS3=$'\e[00;35m=== Please input command! [enter:menu, number:choice, ctrl+c:exit] === : \e[0m'
     select CHOICE in                                                                          \
     "show: shows repository info such as manifest path, repo cmd, tree of manifests, etc
-     ex) rep show, rep show default.xml, rep show event/manifest.xml                    "     \
+     ex) rep show, rep show default.xml, rep show event/manifest.xml"                         \
     "init: repo init with automatic options"                                                  \
     "sync: repo sync with optimized multi-job and options
      ex) rep sync, rep sync 8, rep sync 16 --force-sync(more options)"                        \
     "commit: shows lastest commits(git log -1) from all repository (default 20)
-     ex) rep commit, rep commit 4, rep commit log.txt(save as)"                                        \
+     ex) rep commit, rep commit 4, rep commit log.txt(save as)"                               \
     "info: shows uncommited changes, top -1 commits, md5 sum, repo info for all repositories
      ex) rep info, rep info|more, rep info| grep build"                                       \
     "debug: shows repo/git/python version info used in current repo"                          \
@@ -504,8 +514,8 @@ printf ${NCOL}
     "find: (list) search string in all [repo path] : [repo revision] : [repo name]
      ex) rep find, rep list|more, rep find| grep build, rep list|grep -v build"               \
     "server: check delay from server or confirm the server status
-     ex) rep server, rep server lamp.lge.com 29418"
-
+     ex) rep server, rep server lamp.lge.com 29418"                                            \
+    "reset: reset repository"
     do
         handleCommand "${CHOICE%%:*}";
     done
@@ -536,6 +546,7 @@ local ret=0
         check) checkConnection "${@:2}"                             ;;
         find|list) findGitRepository "${@:2}"                       ;;
         server) findServerDelay "${@:2}"                            ;;
+        reset)  resetRepository "${@:2}"                            ;;
         '') handleMenu "${@:2}"                                     ;;
         *) repo "${@}"
           return $ret                                               ;;
