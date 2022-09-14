@@ -268,6 +268,22 @@ function go_near(){
 }
 
 
+###############################
+#### encryption
+function code_temp(){
+   case $1 in
+      en) export ENCODE=$( echo $2 | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey );;
+      de) echo "${ENCODE}" | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey ;;
+   esac
+}
+
+function code_perm(){
+   case $1 in
+      en) echo $2 | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey > "${proFILEdir}/user.code.$3";;
+      de) cat "${proFILEdir}/user.code.$2" | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey ;;
+   esac
+}
+
 
 ###############################
 #### copy & paste http://sourceforge.net/projects/commandlinecopypaste/
