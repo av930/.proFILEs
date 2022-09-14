@@ -492,11 +492,14 @@ MENU=(
 "find: (list) search string in all [repo path] : [repo revision] : [repo name]
     ex) rep find, rep list|more, rep find build, rep list|grep -v build"
 
-
-"init: repo init with automatic options"
+"init: repo init with automatic options
+    ex) rep init -b lampauto_s_release -m all.xml
+    ex) rep init -b lampauto_r_release  -m lampauto/lampauto-gm-recent.xml
+    ex) rep init -u https://android.googlesource.com/platform/manifest -b android-12.1.0_r1
+    ex) rep init -u ssh://vgit.lge.com:29420/linux/manifest.git -b mib3_release"
 "sync: repo sync with optimized multi-job and options
     ex) rep sync, rep sync 8, rep sync 16 --force-sync(more options)"
-"reset: reset repository"
+"reset: reset all repositories to original state"
 
 "debug: shows repo/git/python version info used in current repo"
 "check: find accessibility for manifest git or normal git
@@ -573,7 +576,7 @@ function checkPreCondition(){
     REPO_PATH=''; REPO_ROOT='';
     findFileLocation .repo/manifests 5
     if [ -d "${REPO_PATH}" ];then cd ${REPO_PATH}; REPO_ROOT=${REPO_PATH%/.repo*}
-    else err "you are not in repo project, please check !";return 1;
+    else warn "you are not in repo project, please check !";return 1;
     fi
 
     #set global variable
