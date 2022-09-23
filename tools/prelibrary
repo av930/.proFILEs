@@ -30,6 +30,15 @@ err()   { log "${RED}ERROR: ${NCOL} ${*}"   ;}
 #${line:(${2:+3}+${#2})}: if $2 is exist, skip 3 '-' chars for '[] ' chars
 bar()  { printf "\n${!1}%s%s ${NCOL}\n" "${2:+[$2] }" "${line:(${2:+3}+${#2})}" ;}
 
+
+function printElement(){ 
+## ---------------------------------------------------------------------------
+    local arr=("${@:3}")
+    info "$1"
+    printf '%s\0' "${arr[@]}" |grep -z -- $2
+}
+
+
 function printToFILE(){ 
 ## ---------------------------------------------------------------------------
 ## printToFILE $(mktemp) title contents title-color
@@ -149,5 +158,4 @@ function handler_args(){
     if ! [ "$ret" = "processed" ]; then
         handler_menu
     fi
-
 }
