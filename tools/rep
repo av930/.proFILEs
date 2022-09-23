@@ -64,6 +64,8 @@ function checkSSHConnection(){
 function runRepoInitcheckError(){
 ## ---------------------------------------------------------------------------
 # run command, get return code and print guide
+
+    local file_error=$(mktemp)
     local ret=1 #return 1 is success, 0 is fail
     echo "\$ $@"
     time "$@" 2> >(tee -a ${file_error})
@@ -136,12 +138,12 @@ function findFileLocation(){
             if [ -d ${target} ]; then break; fi
             cd ..
         done
-        if [ -d ${target} ]; then REPO_PATH=$(readlink -f ${target});else REPO_PATH="NULL";fi
+        if [ -d ${target} ]; then REPO_PATH=$(readlink -f ${target});else REPO_PATH='';fi
         ;;
     *)  # found multiple dir in sub dir
         printf "subdir [%s]\n" ${#ret[@]}
         printf "%s\n" ${ret[@]};
-        REPO_PATH="NULL"
+        REPO_PATH=''
         ;;
     esac
 }
@@ -174,10 +176,10 @@ function getRepoCMD(){
         FILE_MANI=default.xml
     fi
 
-    if [ -n "$REPO_MIRROR" ];then EXTRA_OPTION="--reference $REPO_MIRROR"; fi
+    if [ -n "$REPO_MIRROR" ];then EXTRA_OPTION="--reference=$REPO_MIRROR"; fi
     if [ "$1" = "show" ];then
         bar inline "repo-init cmd"
-        log "repo init -u $REPO_REMOTE -b $REPO_BRANCH -m $FILE_MANI --repo-url $REPO_URL $EXTRA_OPTION"
+        log "repo init -u $REPO_REMOTE -b $REPO_BRANCH -m $FILE_MANI --repo-url=$REPO_URL $EXTRA_OPTION"
     fi
     return 0
 }
@@ -193,6 +195,8 @@ function repoInit(){
     if ! options=$(getopt -l reference:,depth:,repo-url:,no-clone-bundle,partial-clone,no-tags,mirror -o b:m:p:u: -- "$@")
     then err 'please check "repo init --help"'; exit 1; fi
 
+    if [ -z $1 ]; then printElement 'please refer http://collab.lge.com/main/x/wY6wa' 'init:' "${MENU[@]}" && exit 1;fi
+    
     #reset legacy positional parameter except $options
     eval set -- "$options"
     while true; do
@@ -304,7 +308,7 @@ function getRepoShow(){
 
     #show last synced date
     if [ -f .git/FETCH_HEAD ]; then clog "last manifest-synced date: " $(stat -c %y .git/FETCH_HEAD);
-    else clog "last manifest-synced date: " $(ls -lct);fi
+    else clog "last manifest-synced date(check date of files below): " $(ls -lct);fi
 
     IFS=${oldIFS}
 }
@@ -315,16 +319,16 @@ function getRepoInfo(){
 ## ---------------------------------------------------------------------------
 # print information(changes, recent commits) of current repository
 #
-    bar inline "repo status: show only uncommitted changes"
+    bar inline "repo status: show branch name & only uncommitted changes"
     repo status -j1 -o
 
     #topic/working branch
-    bar inline "repo branch: show working branch status (WARNING: It takes time) "
+    bar inline "repo branch: check if working branch existed (WAIT: It takes time) "
     repo branch
 
     bar inline "git log -1 for all repositories"
     read -p "to continue [enter]"
-    echo "revision git-name                    src-path"
+    printf "\n%75s %s %s\n" '[git-name]' '[rev] ' '[src-path]'
     repo forall -j1 -c 'printf "%82s %-80s\n" "${REPO_PROJECT} ${REPO_LREV:0:6}" "${REPO_PATH}"'
 
     #run command "repo info"
@@ -361,7 +365,7 @@ function getRecentCommit(){
     echo "> $out"
 
     bar outline "repo get recent commit"
-    bar inline "[date:YMD HMS]      [sha]   [author]      [commit title]                                            [git project                            branch]"
+    bar inline "date:YMD HMS]       [sha]   [author]      [commit title]                                            [git project                            branch"
     repo forall -j16 -c 'printf "%-100.100s %-80s \n" "$(git log -1 --abbrev=6 --date=format:"%Y-%m-%d %H:%M:%S" --pretty=format:"%ad  %h  [%an] %s")" "[${REPO_PROJECT}  ${REPO_RREV}]"' |sort -r |head -${count:-50} > $out
     #repo forall -c "git log -1 --abbrev=6 --date=format:'%Y-%m-%d %H:%M:%S' --pretty=format:'%ad  %h  [%an] %d %s%n'" |sort -r |head -${count:-50} > $out
 
@@ -391,24 +395,26 @@ function debugRepo(){
 # $1 manifests file (default is current manifests)
 
     echo "this version is expected to used, please check this version is matched to your local version"
-    bar outline "warning: this is the repo packaged with this project."
+
+    bar inline "expected"
+    info "warning: this is the repo packaged with this project."
     $REPO_PATH/../repo/repo version
 
     printf "\n\n"
-    bar outline "the local version currently you are using"
-    bar inline "version & python path"
-    py_path=$(which python) >/dev/null
-    py_ver="$(python --version 2>&1)"
-    printf "%s is installed in [%s]\n" "${py_ver}" "${py_path}"
-
-
-    bar inline "path for repo & git"
-    which repo
-    which git
-
-    bar inline "version info for repo and sub utilities"
+    bar inline "found"
+    info "the local version currently you are using"    
+    bar inline "what"
     repo --version
 
+    echo 
+    py_path=$(which python) >/dev/null
+    py_ver="$(python --version 2>&1)"
+    printf "[check] %s is working in [%s]\n" "${py_ver}" "${py_path}"
+    
+    bar inline "where"
+    which repo
+    which git
+    
 }
 
 
@@ -462,6 +468,7 @@ function checkConnection(){
     bar inline "step1: check if ssh is installed"
     if [ -x "$(command -v ssh)" ]; then  log "ssh is installed in [$(which ssh)]"; else err "ssh is not installed"; fi
 
+    if [ -z $server ] || [ -z $port ];then warn "usage) rep check vgit.lge.com 29420 tiger/tools tiger_release" && return 1;fi
     bar inline "step2: check if server tcp port is well listened"
     timeout 5 bash -c "</dev/tcp/$server/$port"
     if [ $? == 0 ];then echo "server $server over port $port is listened"
@@ -472,6 +479,8 @@ function checkConnection(){
 
     bar inline "step4: check if gerrit service is valid"
     checkGerritConnection ssh $server -p $port gerrit version
+    
+    if [ -z $manifest ];then warn "usage) rep check vgit.lge.com 29420 tiger/tools tiger_release" && return 1;fi
     bar inline "step5: check if I can access git (default: manifest)"
     ret=$(ssh $server -p $port gerrit ls-projects --prefix ${manifest} -b ${branch})
 
@@ -491,16 +500,15 @@ MENU=(
     ex) rep commit, rep commit 4, rep commit log.txt(save as)"
 "find: (list) search string in all [repo path] : [repo revision] : [repo name]
     ex) rep find, rep list|more, rep find build, rep list|grep -v build"
-
 "init: repo init with automatic options
+    ex) rep init -u ssh://${USER:+${USER}@}vgit.lge.com:29420/linux/manifest.git -b mib3_release
     ex) rep init -b lampauto_s_release -m all.xml
-    ex) rep init -b lampauto_r_release  -m lampauto/lampauto-gm-recent.xml
-    ex) rep init -u https://android.googlesource.com/platform/manifest -b android-12.1.0_r1
-    ex) rep init -u ssh://vgit.lge.com:29420/linux/manifest.git -b mib3_release"
+    ex) rep init -b lampauto_r_release -m lampauto/lampauto-gm-recent.xml
+    ex) rep init -u https://android.googlesource.com/platform/manifest -b android-12.1.0_r1"
 "sync: repo sync with optimized multi-job and options
     ex) rep sync, rep sync 8, rep sync 16 --force-sync(more options)"
-"reset: reset all repositories to original state"
-
+"reset: reset all repositories to original state
+    case) use this, when repository has dirty commits."
 "debug: shows repo/git/python version info used in current repo"
 "check: find accessibility for manifest git or normal git
     ex) rep check, rep check vgit.lge.com 29420 tiger/tools tiger_release
@@ -518,8 +526,8 @@ cat << PREFACE
 ==============================================================
  the menu for repo tools
  -------------------------------------------------------------
- supported command: ex) rep show
-    show, init, sync, commit, debug, check, find
+ command usage: ex) rep, rep show, rep show [default.xml]
+ rep find [string], rep sync 16 --force-sync, etc
 ==============================================================
 PREFACE
 printf ${NCOL}
@@ -576,14 +584,15 @@ function checkPreCondition(){
     REPO_PATH=''; REPO_ROOT='';
     findFileLocation .repo/manifests 5
     if [ -d "${REPO_PATH}" ];then cd ${REPO_PATH}; REPO_ROOT=${REPO_PATH%/.repo*}
-    else warn "you are not in repo project, please check !";return 1;
+    elif [ "$1" = "true" ]; then warn "you are not in repo project, please check !";return 1;
+    else return 1;
     fi
 
     #set global variable
     REPO_REMOTE=$(git remote -v |grep fetch |awk '{print $2}')
     REPO_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
-    REPO_URL=$(cat ../repo/.git/config |grep url|sed 's/.*=\(.*\)/\1/')
-    REPO_MIRROR=$(cat ../manifests.git/config |grep reference|sed 's/.*=\(.*\)/\1/')
+    REPO_URL=$(cat ../repo/.git/config |grep url|sed 's/.*= \(.*\)/\1/')
+    REPO_MIRROR=$(cat ../manifests.git/config |grep reference|sed 's/.*= \(.*\)/\1/')
     REPO_COUNT=$($REPO_PATH/../repo/repo list |wc -l)
 
 }
@@ -594,14 +603,15 @@ function checkPreCondition(){
 
 
 case "$1" in
-    show|info|sync|commit|debug|find|list)
-        checkPreCondition
+    show|info|sync|commit|debug|find|list|reset)
+        checkPreCondition true
         if [ $? -ne 0 ]; then exit 1; fi
         ;;
-    check|server|init|help|'')
-        checkPreCondition
+    check|server|'') checkPreCondition false 
         ;;
-    *) repo "${@}"                                     return $ret          ;;
+    init) ;;
+    *) repo "${@}"
+        ;;
 esac
 
 handleCommand $@
