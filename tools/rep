@@ -196,7 +196,7 @@ function repoInit(){
     then err 'please check "repo init --help"'; exit 1; fi
 
     if [ -z $1 ]; then printElement 'please refer http://collab.lge.com/main/x/wY6wa' 'init:' "${MENU[@]}" && exit 1;fi
-    
+
     #reset legacy positional parameter except $options
     eval set -- "$options"
     while true; do
@@ -382,7 +382,7 @@ function findGitRepository(){
     local findstr=${1:-.}
     bar inline "repo source path]                                                              [repo branch(revision)]        [repo name in manifest"
     repo forall -j16 -c 'printf "%-80.80s %-30.30s %-80s\n" "${REPO_PROJECT}" "${REPO_RREV}" "${REPO_PATH}"' \
-    |grep -i --color=always $findstr  | tee  >(wc -l) 
+    |grep -i --color=always $findstr  | tee  >(wc -l)
     #repo list -r ${findstr}
 
 }
@@ -402,19 +402,19 @@ function debugRepo(){
 
     printf "\n\n"
     bar inline "found"
-    info "the local version currently you are using"    
+    info "the local version currently you are using"
     bar inline "what"
     repo --version
 
-    echo 
+    echo
     py_path=$(which python) >/dev/null
     py_ver="$(python --version 2>&1)"
     printf "[check] %s is working in [%s]\n" "${py_ver}" "${py_path}"
-    
+
     bar inline "where"
     which repo
     which git
-    
+
 }
 
 
@@ -479,7 +479,7 @@ function checkConnection(){
 
     bar inline "step4: check if gerrit service is valid"
     checkGerritConnection ssh $server -p $port gerrit version
-    
+
     if [ -z $manifest ];then warn "usage) rep check vgit.lge.com 29420 tiger/tools tiger_release" && return 1;fi
     bar inline "step5: check if I can access git (default: manifest)"
     ret=$(ssh $server -p $port gerrit ls-projects --prefix ${manifest} -b ${branch})
@@ -528,6 +528,7 @@ cat << PREFACE
  -------------------------------------------------------------
  command usage: ex) rep, rep show, rep show [default.xml]
  rep find [string], rep sync 16 --force-sync, etc
+ help: http://collab.lge.com/main/x/wY6wa
 ==============================================================
 PREFACE
 printf ${NCOL}
@@ -556,7 +557,7 @@ local ret=0
               warn "you can use this file to compare other repo."   ;;
         commit) getRecentCommit "${@:2}"                            ;;
         find|list) findGitRepository "${@:2}"                       ;;
-        
+
         init) repoInit "${@:2}"
             if [ $? -eq 0 ]; then
                 info "To RUN next command:"
@@ -564,7 +565,7 @@ local ret=0
             fi                                                      ;;
         sync) runRepoSynccheckError "${@:2}"                        ;;
         reset)  resetRepository "${@:2}"                            ;;
-        
+
         debug) debugRepo "${@:2}"                                   ;;
         check) checkConnection "${@:2}"                             ;;
         server) findServerDelay "${@:2}"                            ;;
@@ -607,7 +608,7 @@ case "$1" in
         checkPreCondition true
         if [ $? -ne 0 ]; then exit 1; fi
         ;;
-    check|server|'') checkPreCondition false 
+    check|server|'') checkPreCondition false
         ;;
     init) ;;
     *) repo "${@}"
