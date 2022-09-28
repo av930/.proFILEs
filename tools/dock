@@ -45,24 +45,22 @@ function echorun(){
 
 function download_dockerfile(){
 ## ---------------------------------------------------------------------------
+    local clone_path printlist
+    file_tar=$(mktemp)
     echo "please refer first: http://vgit.lge.com/na/gitweb?p=devops/scm/infra/devenv.git;a=tree;f=dockerfile;hb=HEAD";
-    read -p "git clone total devenv git?  or download one dir? [total| one] "
-    case ${REPLY} in
-    total) ;;
-    one) echo "Please exit this script [ctrl+c]"
-         echo "Input below command after modifying path on yellow font"
-         echo -e "git archive --remote=ssh://vgit.lge.com:29420/devops/scm/infra/devenv.git devops_release:${yellow}dockerfile/honda/tsu ${NCOL}. | tar -x -C ."
-         return ;;
-    ""|*) echo "do nothing";return ;;
-    esac
+    #git clone ssh://vgit.lge.com:29420/devops/scm/infra/devenv.git -b devops_release ${clone_path}
+        
+    printf "${yellow}\n==================================================================================================="
+    printf "\n      %s" "currently supported dockerfiles for projects"
+    printf "\n---------------------------------------------------------------------------------------------------\n\n${NCOL}"
 
-    read -p "git clone here (default $HOME/.devenv) or input your own full path: [enter(default)] " $clone_path
-
-    if [ "$clone_path" = "" ]; then clone_path="$HOME/.devenv" ;fi
-    if [ ! -e "${clone_path}" ]; then
-        git clone ssh://vgit.lge.com:29420/devops/scm/infra/devenv.git -b devops_release ${clone_path}
-        chmod 600 ${clone_path}/ci/home/.ssh/id_rsa*
-    fi
+    listpath=( $(git archive --remote=ssh://vgit.lge.com:29420/devops/scm/infra/devenv.git devops_release:dockerfile -o ${file_tar} && tar -tf ${file_tar} | grep '.*/.*/$' ))
+    printlist=$(declare -p listpath | sed 's/.*(\(.*\)).*/\1/')
+    printf "%s\n" ${printlist}
+    #git archive --remote=ssh://vgit.lge.com:29420/devops/scm/infra/devenv.git devops_release:dockerfile/honda/tsu . | tar -x -C .
+    read -p "input project [Number]: " reply
+    if [ -z "$reply" ]; then echo you have to input image number; return; fi
+    echorun  tar -xvf ${file_tar} ${listpath[${reply}]}
 }
 
 
@@ -148,14 +146,13 @@ function formatprint(){
                 CreatedAt)              width=-16; item=${item%:*};; #remove second
                 Status)                 width=12;  item=${item/#Restarting*/NotWorking};; #change status Restarting to Notworking
                 Ports)                  width=5;   temp=${item##*:}; item=${temp%->*};list_port+=(${item}) ;; #display port shortly
-                Size)                   width=8;   item=${item/%(vir*/} ;;
+                Size)                   width=20;   item=${item/virtual/vir} ;;
                 #Container size takes time too long, dont use size in docker ps
                 #remove virtual memory
-                Image|Repository)       width=16;  [[ $list_cmd != images ]] && item=${item##*/} ;; #remove Image path to make it short
+                Image|Repository)       width=18;  [[ $list_cmd != images ]] && item=${item##*/} ;; #remove Image path to make it short
                 State)                  width=10;; #only display width control
                 Tag)                    width=8;;
-                Names)                  width=30;;
-                Repository)             width=17;;
+                Names)                  width=20;;
                 ID)                     width=13;;
                 *)                      width=16;;
             esac
@@ -175,9 +172,13 @@ function list(){
     case $list_cmd in
         ##width: display column width, minus left align, string replace
         images) formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|' ${@:2};;
-        ps) formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.ID}}|{{.Image}}|{{.Names}}|' ${@:2};;
-        *)  formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|'
-            formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.Image}}|{{.Names}}|'
+        ps) if [ "$2" = "--size" ]; then 
+                formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.Size}}|{{.ID}}|{{.Names}}|{{.Image}}|' ${@:2}; 
+            else 
+                formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.ID}}|{{.Names}}|{{.Image}}|' ${@:2}; 
+            fi;;
+        *)  formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|' ${@:1}; 
+            formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.Names}}|{{.Image}}|' ${@:1}; 
             ;;
     esac
 }
@@ -210,18 +211,22 @@ function build(){
 ## ---------------------------------------------------------------------------
 
     local tmppath
+    printf "\nplease refer current images when building images\n"    
     list images
 
     printf "${red}========== "${FUNCNAME[0]}" ========== ${NCOL}\n"
     local today=$(date +"%y%m%d%H")
-    printf "\n\nplease input your own input or use default [Enter] !!!\n"
-    read -p "input Dockerfile [Name| Enter:Dockerfile]: " cntr_file
+
+    printf "\n\nplease input your own input or use default !!!\n"
+    read -p "input Dockerfile [FileName| Enter:Dockerfile]: " cntr_file
     read -p "input Image [Name(lowercase)| Enter:$today]: " cntr_img
 
     if [ "$cntr_file" = "" ];then cntr_file="Dockerfile"; fi
     tmppath=$(readlink -f $cntr_file);
     if [ "${tmppath%/*}" = "${HOME}" ];then
-        echo "You must move your [$cntr_file] to other dir not in HOME. " && exit;
+        printf "${red}This jois is not permitted in $HOME directory.${NCOL}\n" 
+        printf "make new dir, place [$cntr_file] there and continue" && exit;
+
     fi
     if [ "$cntr_img" = "" ];then cntr_img=$today; fi
     docker build -f ${cntr_file} -t ${cntr_img,,} . "$@" |& tee -a log.docker
@@ -351,7 +356,7 @@ function debug(){
 }
 
 
-function clear(){
+function clean(){
 ## ---------------------------------------------------------------------------
     temp_img=$(docker ps | awk "/${cntr_name}/ {print \$2}" | grep -v ID)
     echo    "############### [WARNING] ###############"
@@ -361,8 +366,16 @@ function clear(){
     docker container prune
     docker image prune
     "
+    printf "current total docker container is: " && docker ps --all -q | wc -l
+    printf "current total docker images is: "    && docker images --all -q | wc -l
+
+    #ask confirm in docker system prune
     docker system prune --all
-    docker images --all
+    
+    printf "\nprune is done\n"
+    printf "current total docker container is: " && docker ps --all -q | wc -l
+    printf "current total docker images is: "    && docker images --all -q | wc -l
+
     exit
 }
 
@@ -388,8 +401,8 @@ ${green}
 
 ${yellow}
     command category:
-    common) list, clear, help
-    image) image/images --all, build, hello, find, pull, push, rmi/remove
+    common) list, clean, help
+    image) image/images --all, build, hello, find, pull, push, rmi/remove, down
     container) ps/ps --all, start, run, exec, debug, stop/rm
 
 ${cyan}
@@ -402,6 +415,12 @@ ${NCOL} "
     docker help
 }
 
+MENU=(
+'list(img&cntr)' 'images(list img)' 'ps(list cntr)' 'build(dockerfile)'  
+    'hello(testimg)' 'start(run++ img)' 'run(just run)' 'exec(attach cntr)'
+    'stop(&rm ctnr)' 'remove(img)' 'clean(prune all)' 'debug(log)' 'find(search)'
+    'pull(from arti)' 'push(to arti)' 'down(dockerfile)' 'help'
+)
 
 function handler_menu(){
 ## ---------------------------------------------------------------------------
@@ -409,6 +428,7 @@ printf ${green}
 cat << PREFACE
 ===================================================================================================
  the menu for docker tools
+ help: http://collab.lge.com/main/x/8X_taQ
  -------------------------------------------------------------------------------------------------
  account=$account, user_id=$(id -u ${account}), group_id=$user_id
  home_dir=${home_dir}"
@@ -417,7 +437,7 @@ cat << PREFACE
  o step: hello(image)>> run(container)>> exec(attach)>> ...
 
  supported command category: ex) dock list
- common) list, clear
+ common) list, clean, help
  image) image/images --all, build, hello, find, pull, push, rmi/remove
  container) ps/ps --all, start, run, exec, debug, stop/rm
 ===================================================================================================
@@ -432,20 +452,17 @@ $'\nstep: build/pull(image)>> start(container)>> exec(attach)>> stop(container)>
 $'\nstep: hello(image)>> run(container)>> exec(attach)>> ...'\
 $'\n\e[00;35m=== Please input command! [Number:menu, Ctrl+c:exit] === : \e[0m'
 
-    select CHOICE in 'list(img&cntr)' 'images(list img)' 'ps(list cntr)' 'build(dockerfile)'    \
-    'hello(testimg)' 'start(run++ img)' 'run(just run)' 'exec(attach cntr)'               \
-    'stop(&rm ctnr)' 'remove(img)' 'clear(prune all)' 'debug(log)' 'find(search)' \
-    'pull(from arti)' 'push(to arti)' 'down(dockerfile)' 'help'
+    select CHOICE in "${MENU[@]}"
     do
-        handle_commands $CHOICE
-    done
+        handle_commands "${CHOICE%%(*}";
+    done    
 }
 
 
 function handle_commands(){
 ## ---------------------------------------------------------------------------
 local ret=0
-    case "${1%%(*}" in
+    case "$1" in
         list) list "${@:2}"                                                 ;;
           images|ps) list "${@:1}"                                          ;;
           image) list images "${@:2}"                                       ;;
@@ -457,7 +474,7 @@ local ret=0
           debug) debug                                                      ;;
         stop|rm) stoprmrmi stoprm                                           ;;
           rmi|remove) stoprmrmi remove                                      ;;
-          clear) clear;                                                     ;;
+          clean) clean;                                                     ;;
         pull|push|find) docker_hub "${@:1}"                                 ;;
           down) download_dockerfile  "${@:2}"                               ;;
         info|status) info "${@:2}"                                          ;;
