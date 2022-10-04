@@ -380,7 +380,7 @@ function findGitRepository(){
 # usage: findGitRepository [path|project]
 
     local findstr=${1:-.}
-    bar inline "repo source path]                                                              [repo branch(revision)]        [repo name in manifest"
+    bar inline "git path]                                                                       [git branch(revision)]         [source path in manifest"
     repo forall -j16 -c 'printf "%-80.80s %-30.30s %-80s\n" "${REPO_PROJECT}" "${REPO_RREV}" "${REPO_PATH}"' \
     |grep -i --color=always $findstr  | tee  >(wc -l)
     #repo list -r ${findstr}
