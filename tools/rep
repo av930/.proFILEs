@@ -445,7 +445,9 @@ function resetRepository(){
 # find replication server
 # $1 server-url
 # $2 port-number
-    repo forall -cj16 'git reset --hard ; git clean -xdf'
+    local njobs=$(( $(nproc --all) / 4))
+
+    repo forall -cj${njobs} 'git reset --hard ; git clean -xdf'
 }
 
 
