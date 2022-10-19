@@ -1,6 +1,5 @@
 [include]
     path = ~/.proFILEs/.gitconfig
-    path = ~/.proFILEs/user.gitconfig
 
 
 ################ command config

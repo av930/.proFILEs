@@ -1,4 +1,15 @@
-#if you make dir ~/.gitextra
-#~/.gitconfig.user.extra is also applied
+### user specific setting
 
+[user]
+    name = user.name
+    email = user.email@lge.com
+
+
+
+### path specific setting
+### add path usign globbing after gitdir:
+### add user .gitconfig in user.gitconfig.extra
+
+[includeIf "gitdir:~/user_path*/"]
+    path = ~/user.gitconfig.extra
 
