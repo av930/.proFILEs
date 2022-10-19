@@ -51,6 +51,6 @@
 
 
 ################ user custom setting
-
-[includeIf "gitdir:~/.gitextra/"]
+[include]
     path = ~/user.gitconfig
+
