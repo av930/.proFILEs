@@ -164,7 +164,6 @@ alias dus='_dus(){ du -hs */|sort -n ;}; _dus()'
 alias ps${TAG}="ps -u $USER -o pid,args --forest"
 alias pstree="pstree -hap -u $USER"
 alias pstree${TAG}="pstree -ha"
-alias ls='ls -F --color=auto --show-control-chars'
 alias lls='echo -n size-base; ls -agohrS'
 alias llt='echo -n time-base; ls -agohrt'
 alias ll='ls -althrF --color=auto --show-control-chars'

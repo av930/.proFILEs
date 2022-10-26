@@ -6,16 +6,19 @@
 ##---------------------------------------------------------- DEBUG OPTION
 #DEBUG=["echo -e"|:], : means no-operation
 DEBUG=:
-DIR_SCRIPT=$(dirname "$0")
+PATH_FULL=$(realpath "$BASH_SOURCE")
+PATH_DIR="${PATH_FULL%/*}"
+PATH_FILE="${PATH_FULL##*/}"
 DIR_CURR=$(pwd)
 LC_ALL=C.UTF-8
 
-if [ -e "${DIR_SCRIPT}/prelibrary" ]; then source ${DIR_SCRIPT}/prelibrary;
+$DEBUG "[$_][$BASH_SOURCE][$0]  [${PATH_FULL}][${PATH_DIR}][${PATH_FILE}]"
+
+if [ -e "${PATH_DIR}/prelibrary" ]; then source ${PATH_DIR}/prelibrary;
 else source ${proFILEdir}/tools/prelibrary; fi
 #user setting
 account=vc.integrator
 path_mirror="/data001/${account}"/mirror
-rm -f ${file_error}
 
 
 ##--------------------------- Menu Functions --------------------------------
@@ -599,22 +602,31 @@ function checkPreCondition(){
     REPO_COUNT=$($REPO_PATH/../repo/repo list |wc -l)
 
 }
+
+function rep(){
+## ---------------------------------------------------------------------------
+# entry for rep
+    case "$1" in
+        show|info|sync|commit|debug|find|list|reset)
+            checkPreCondition true
+            if [ $? -ne 0 ]; then exit 1; fi
+            handleCommand $@;;
+        check|server) 
+            checkPreCondition false
+            handleCommand $@;;
+        init) 
+            handleCommand $@;;
+        '') echo "[WELCOME] rep utility is applied for current shell";; 
+        *) repo "${@}" ;;
+    esac
+
+    
+}
+
 ##============================================================================
 ## Main
 ##============================================================================
 #set -x
 
 
-case "$1" in
-    show|info|sync|commit|debug|find|list|reset)
-        checkPreCondition true
-        if [ $? -ne 0 ]; then exit 1; fi
-        ;;
-    check|server|'') checkPreCondition false
-        ;;
-    init) ;;
-    *) repo "${@}"
-        ;;
-esac
-
-handleCommand $@
+rep $@
