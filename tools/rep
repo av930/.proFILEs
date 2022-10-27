@@ -12,6 +12,11 @@ PATH_FILE="${PATH_FULL##*/}"
 DIR_CURR=$(pwd)
 LC_ALL=C.UTF-8
 
+#suppress print path
+pushd() { command pushd "$@" > /dev/null ;}
+popd() { command popd "$@" > /dev/null ;}
+NJOBS=$(( $(nproc --all) / 4))
+
 $DEBUG "[$_][$BASH_SOURCE][$0]  [${PATH_FULL}][${PATH_DIR}][${PATH_FILE}]"
 
 if [ -e "${PATH_DIR}/prelibrary" ]; then source ${PATH_DIR}/prelibrary;
@@ -100,7 +105,7 @@ function runRepoSynccheckError(){
 # ex) runRepoSynccheckError
     if [ -z "$1" ]; then
         read -p "Please input job number to repo sync [enter:auto| number:ex)16| ctrl+c:exit]: " njobs;
-        if [ -z $njobs ]; then  njobs=$(( $(nproc --all) / 4)); fi
+        if [ -z $njobs ]; then  njobs=${NJOBS}; fi
     else
         njobs=$1
     fi
@@ -128,24 +133,27 @@ function findFileLocation(){
 
     local target=${1:-.repo}
     local down_depth=${2:-2} #default value:2
-    local ret=()
+    local print=$3
 
     # find in sub directory with depth
-    readarray -t ret < <(find . -maxdepth ${down_depth} -path "*${target}")
-    case ${#ret[@]} in
-    1)  # already found sub dir
-        REPO_PATH=$(readlink -f ${ret[0]})
+    readarray -t REPO_PATH_ALL < <(find . -maxdepth ${down_depth} -path "*${target}" |sort)
+    case ${#REPO_PATH_ALL[@]} in
+    1)  # found sub dir
+        REPO_PATH=$(readlink -f ${REPO_PATH_ALL[0]})
         ;;
-    0)  # find in parent directory upto $HOME
+    0)  # not found, so find in parent directory upto $HOME
         while [[ "${PWD}" =~ "${HOME}" ]]; do
             if [ -d ${target} ]; then break; fi
-            cd ..
+            pushd ..
         done
         if [ -d ${target} ]; then REPO_PATH=$(readlink -f ${target});else REPO_PATH='';fi
+        pushd -0 && dirs -c        
         ;;
     *)  # found multiple dir in sub dir
-        printf "subdir [%s]\n" ${#ret[@]}
-        printf "%s\n" ${ret[@]};
+        if [ "$print" = "yes_print" ]; then
+            printf "subdir [%s]\n" ${#REPO_PATH_ALL[@]}
+            printf "%s\n" ${REPO_PATH_ALL[@]};
+        fi
         REPO_PATH=''
         ;;
     esac
@@ -167,7 +175,7 @@ function getRepoCMD(){
     fi
 
     # find using manifest.xml
-    file_tempa=$(ls -Art ../*.xml | tail -n 1)
+    file_tempa=$(command ls -Art ../*.xml | tail -n 1)
     count=$(grep -c include ${file_tempa})
     if [ -L "${file_tempa}" ];then
         file_tempb=$(readlink "${file_tempa}")
@@ -286,6 +294,7 @@ function getRepoShow(){
 # print information of repo
 # $1 manifests file (default is current manifests)
 
+    pushd ${REPO_PATH} 
     oldIFS=${IFS}; IFS='';
 
     #show repo dir path
@@ -310,10 +319,11 @@ function getRepoShow(){
     repo forall -j16 -c git log -1 --pretty=format:%H | md5sum
 
     #show last synced date
-    if [ -f .git/FETCH_HEAD ]; then clog "last manifest-synced date: " $(stat -c %y .git/FETCH_HEAD);
-    else clog "last manifest-synced date(check date of files below): " $(ls -lct);fi
+    if [ -f .git/FETCH_HEAD ]; then clog "last manifest-synced date: " $(stat -c %y .git/FETCH_HEAD );
+    else clog "last manifest-synced date(check date of files below): " $(ls -lct | tail -10);fi
 
     IFS=${oldIFS}
+    popd
 }
 
 
@@ -382,10 +392,10 @@ function findGitRepository(){
 # $1 path or project
 # usage: findGitRepository [path|project]
 
-    local findstr=${1:-.}
+    local filter findstr=$1
     bar inline "git path]                                                                       [git branch(revision)]         [source path in manifest"
-    repo forall -j16 -c 'printf "%-80.80s %-30.30s %-80s\n" "${REPO_PROJECT}" "${REPO_RREV}" "${REPO_PATH}"' \
-    |grep -i --color=always $findstr  | tee  >(wc -l)
+    if [ -n "$findstr" ]; then cmd_filter="grep -i --color=always $findstr";else cmd_filter=cat ;fi
+    repo forall -j$NJOBS -c 'printf "%-80.80s %-30.30s %-80s\n" "${REPO_PROJECT}" "${REPO_RREV}" "${REPO_PATH}"' | $cmd_filter | tee  >(wc -l)
     #repo list -r ${findstr}
 
 }
@@ -448,9 +458,7 @@ function resetRepository(){
 # find replication server
 # $1 server-url
 # $2 port-number
-    local njobs=$(( $(nproc --all) / 4))
-
-    repo forall -cj${njobs} 'git reset --hard ; git clean -xdf'
+    repo forall -cj${NJOBS} 'git reset --hard ; git clean -xdf'
 }
 
 
@@ -542,43 +550,53 @@ printf ${NCOL}
     PS3=$'\e[00;35m=== Please input command! [enter:menu, number:choice, ctrl+c:exit] === : \e[0m'
     select CHOICE in "${MENU[@]}"
     do
-        handleCommand "${CHOICE%%:*}";
+        rep "${CHOICE%%:*}";
+        if [ -n "$?" ]; then return 1;fi
     done
 }
 
 
 
-function handleCommand(){
+function rep(){
 ## ---------------------------------------------------------------------------
 # main handler for this scriptre
 # $1 command
-
 local ret=0
-    case "$1" in
-        #$1:below ${@:2}:parameters
-        show) getRepoShow  "${@:2}"                                ;;
-        info) getRepoInfo "${@:2}"  2>&1 | tee ${REPO_ROOT}/repo.info
-              info "please check file [${REPO_ROOT}/repo.info]"
-              warn "you can use this file to compare other repo."   ;;
-        commit) getRecentCommit "${@:2}"                            ;;
-        find|list) findGitRepository "${@:2}"                       ;;
+case "$1" in
+    #$1:below ${@:2}:parameters
+    show)       checkPreCondition yes_print || return 1
+                getRepoShow  "${@:2}";;
+    info)       checkPreCondition yes_print || return 1
+                getRepoInfo "${@:2}"  2>&1 | tee ${REPO_ROOT}/repo.info
+                info "please check file [${REPO_ROOT}/repo.info]"
+                warn "you can use this file to compare other repo.";;
+    commit)     checkPreCondition yes_print || return 1
+                getRecentCommit "${@:2}";;
+    find|list)  checkPreCondition yes_print || return 1
+                findGitRepository "${@:2}";;
 
-        init) repoInit "${@:2}"
-            if [ $? -eq 0 ]; then
-                info "To RUN next command:"
-                runRepoSynccheckError
-            fi                                                      ;;
-        sync) runRepoSynccheckError "${@:2}"                        ;;
-        reset)  resetRepository "${@:2}"                            ;;
+    init)       repoInit "${@:2}"
+                if [ $? -eq 0 ]; then
+                    info "To RUN next command:"
+                    runRepoSynccheckError
+                fi;;
+    sync)       checkPreCondition yes_print || return 1
+                runRepoSynccheckError "${@:2}";;
+    reset)      checkPreCondition yes_print || return 1
+                resetRepository "${@:2}";;
 
-        debug) debugRepo "${@:2}"                                   ;;
-        check) checkConnection "${@:2}"                             ;;
-        server) findServerDelay "${@:2}"                            ;;
-
-        '') handleMenu "${@:2}"                                     ;;
-        *) repo "${@}"
-          return $ret                                               ;;
-    esac
+    debug)      checkPreCondition yes_print || return 1
+                debugRepo "${@:2}";;
+    check)      checkPreCondition no_print || return 1
+                checkConnection "${@:2}";;
+    server)     checkPreCondition no_print || return 1
+                findServerDelay "${@:2}";;
+    '') 
+                handleMenu "${@:2}";;
+    *) 
+                repo "${@}";;
+esac
+return $ret
 }
 
 
@@ -587,46 +605,44 @@ function checkPreCondition(){
 # pre-check
 # $1 command
     #find & move manifest dir
-    REPO_PATH=''; REPO_ROOT='';
-    findFileLocation .repo/manifests 5
-    if [ -d "${REPO_PATH}" ];then cd ${REPO_PATH}; REPO_ROOT=${REPO_PATH%/.repo*}
-    elif [ "$1" = "true" ]; then warn "you are not in repo project, please check !";return 1;
-    else return 1;
+    local ret=1
+
+    findFileLocation .repo/manifests 5 no_print
+    if [ -d "${REPO_PATH}" ];then 
+        pushd ${REPO_PATH}; REPO_ROOT=${REPO_PATH%/.repo*}
+            #set global variable
+        REPO_REMOTE=$(git remote -v |grep fetch |awk '{print $2}')
+        REPO_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
+        REPO_URL=$(cat ../repo/.git/config |grep url|sed 's/.*= \(.*\)/\1/')
+        REPO_MIRROR=$(cat ../manifests.git/config |grep reference|sed 's/.*= \(.*\)/\1/')
+        REPO_COUNT=$($REPO_PATH/../repo/repo list |wc -l)
+        
+        popd
+        ret=0
     fi
 
-    #set global variable
-    REPO_REMOTE=$(git remote -v |grep fetch |awk '{print $2}')
-    REPO_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
-    REPO_URL=$(cat ../repo/.git/config |grep url|sed 's/.*= \(.*\)/\1/')
-    REPO_MIRROR=$(cat ../manifests.git/config |grep reference|sed 's/.*= \(.*\)/\1/')
-    REPO_COUNT=$($REPO_PATH/../repo/repo list |wc -l)
-
+    if [[ $ret -eq 1 && "$1" = "yes_print" ]]; then 
+        printf "%s\n" ${REPO_PATH_ALL[@]};
+        warn "you are not in repo project, please check !";      
+    fi
+    return $ret
 }
 
-function rep(){
-## ---------------------------------------------------------------------------
-# entry for rep
-    case "$1" in
-        show|info|sync|commit|debug|find|list|reset)
-            checkPreCondition true
-            if [ $? -ne 0 ]; then exit 1; fi
-            handleCommand $@;;
-        check|server) 
-            checkPreCondition false
-            handleCommand $@;;
-        init) 
-            handleCommand $@;;
-        '') echo "[WELCOME] rep utility is applied for current shell";; 
-        *) repo "${@}" ;;
-    esac
-
-    
-}
 
 ##============================================================================
 ## Main
 ##============================================================================
 #set -x
+REPO_PATH='' && REPO_ROOT='' && REPO_REMOTE='' && REPO_BRANCH='' && REPO_URL='' && REPO_MIRROR='' && REPO_COUNT=''
+REPO_PATH_ALL=()
 
+(return 0 2>/dev/null) && sourced=1 || sourced=0
+if [ $sourced -eq 0 ]; then rep $@;
+else  #if sourced 
+    echo "[WELCOME] rep utility is applied for current shell" 
+    #hide local function
+    #unset -f checkPreCondition checkConnection checkGerritConnection  checkSSHConnection debugRepo findFileLocation findGitRepository \
+    #findServerDelay getGitRootPath getRecentCommit getRepoCMD getRepoInfo getRepoShow handleMenu repoInit resetRepository \
+    #runRepoInitcheckError runRepoSynccheckError showManifestTree showRUN 
+fi
 
-rep $@
