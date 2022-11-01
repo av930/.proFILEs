@@ -15,7 +15,7 @@ fi
 SRC=${proFILEdir}
 DST=$HOME
 BACKUP=$HOME/.rc_backup
-FILES=".inputrc .screenrc .gitignore .gitconfig .bash_aliases .sshconfig user.profile user.gitconfig"
+FILES=".inputrc .screenrc .gitignore .bash_aliases .sshconfig user.profile user.gitconfig"
 
 ######################################################################
 # pop up message
@@ -56,10 +56,10 @@ function copy_tools() {
 
         ##### create
         case $var in
-            '.gitconfig') ln -is ${proFILEdirOS}/.gitconfig $HOME/$var;;
-            '.bash_aliases') ln -is ${proFILEdir}/.bashrc $HOME/$var;;
-            '.sshconfig') ln -s ${proFILEdir}/.sshconfig $HOME/.ssh/config;;
-            user.*) cp -vf ${proFILEdir}/$var $HOME/$var;;
+            .bash_aliases) ln -is ${proFILEdir}/.bashrc $HOME/$var;;
+            .sshconfig) ln -s ${proFILEdir}/.sshconfig $HOME/.ssh/config;;
+            user.profile) cp -vf ${proFILEdir}/$var $HOME/$var;;
+            user.gitconfig) cp -vf ${proFILEdir}/$var $HOME/.gitconfig;;
             *) ln -is ${proFILEdir}/$var $HOME/$var;;
         esac
     done
