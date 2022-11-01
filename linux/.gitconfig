@@ -2,11 +2,7 @@
     path = ~/.proFILEs/.gitconfig
 
 
-################ command config
-
-#git config --global diff.tool bc
-#git config --global merge.tool win
-
+### os specific config
 [diff]
     #tool = p4merge
 	tool = vimdiff
@@ -16,8 +12,10 @@
     keepTemporaries = false
     trustExitCode = false
     keepBackup = false
+
 [difftool "vi"]
     prompt=false
+
 [merge]
     keepBackup = false;
     tool = p4merge
@@ -28,8 +26,3 @@
     trustExitCode = false
     keepBackup = false
 
-[color]
-    ui = auto
-
-[url "https://github.com/"]
-	insteadOf = git://github.com/

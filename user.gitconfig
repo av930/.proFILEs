@@ -1,14 +1,15 @@
+### load predefined .gitconfig
+[include]
+    path = ~/.proFILEs/linux/.gitconfig
+
 ### user specific setting
-
 [user]
-    name = user.name
-    email = user.email@lge.com
-
-
+     name = user.name
+    email = user.email@xxx.com
 
 ### path specific setting
-### add path usign globbing after gitdir:
-### add user .gitconfig in user.gitconfig.extra
+# add path usign globbing after gitdir:
+# add user .gitconfig in user.gitconfig.extra
 
 [includeIf "gitdir:~/user_path*/"]
     path = ~/user.gitconfig.extra

@@ -1,8 +1,3 @@
-################ commit config
-[commit]
-    template=~/.proFILEs/gitcommit_message
-
-
 ################ command config
 #git config --global core.autocrlf input
 [core]
@@ -20,16 +15,13 @@
 [filter "lfs"]
     smudge = git-lfs smudge -- %f
     clean = git-lfs clean -- %f
+
 ################ gui config
 [color]
     ui = auto
     branch = true
     diff = true
     status =true
-
-################ site define
-[url "https://github.com/"]
-        insteadOf = git://github.com/
 
 ################ user defined
 [alias]
@@ -45,12 +37,11 @@
     pushfor = push origin HEAD:refs/for/
     clear   = !git reset --hard && git clean -xdf
 
-[user]
-    name = joongkeun.kim
-    email = joongkeun.kim@lge.com
+################ commit config
+[commit]
+    template=~/.proFILEs/gitcommit_message
 
-
-################ user custom setting
-[include]
-    path = ~/user.gitconfig
+################ site define
+[url "https://github.com/"]
+    insteadOf = git://github.com/
 
