@@ -12,10 +12,13 @@ if [ "$profile_sourced" = "true" ]; then echo "already sourced" >/dev/null; fi
 #LANG=en_US.UTF-8
 #LANG=ko_KR.euckr
 
-#현재 검증된 version
-#default is POSIX
-if locale -a | grep -iq ^C.UTF-8;then LC_ALL=C.UTF-8;fi
-if locale -a | grep -iq ^ko_KR;then LC_ALL=ko_KR.UTF-8;fi
+## 현재 검증된 version
+# default is POSIX
+# case 구문에 의해 순서대로 적용됨.
+case $(locale -a) in
+    *ko_KR*)   LC_ALL=ko_KR.UTF-8 ;;
+    *C.UTF-8*) LC_ALL=C.UTF-8 ;;
+esac
 
 ##### color code
 red='\e[0;31m';     RED='\e[1;31m';     green='\e[0;32m';       GREEN='\e[1;32m';
