@@ -258,7 +258,7 @@ function start(){
         ((i=i+10))
     done
 
-    mkdir -p ${home_dir}/Docker_WorkingSRC
+    mkdir -p ${home_dir}/Docker_MountDIR
     docker run                                                                  \
         -dit --init --privileged --cap-add=ALL --restart="always"               \
         --name ${cntr_name}                                                     \
@@ -278,10 +278,10 @@ function start(){
         -v ${home_dir}/.bashrc:${home_dir}/.bashrc:ro                           \
         -v ${home_dir}/.gitconfig:${home_dir}/.gitconfig:ro                     \
         -v ${home_dir}/.git_templete:${home_dir}/.git_templete:ro               \
-        -v ${home_dir}/.jfrog:${home_dir}/.jfrog:rw                             \
         -v ${home_dir}/.vc_script:${home_dir}/.vc_script:ro                     \
-        -v ${home_dir}/mirror:${home_dir}/mirror:ro                             \
-        -v ${home_dir}/Docker_WorkingSRC:${home_dir}/Docker_WorkingSRC:rw       \
+        -v ${home_dir}/.jfrog:${home_dir}/.jfrog:rw                             \
+        -v ${home_dir}/mirror:${home_dir}/mirror:rw                             \
+        -v ${home_dir}/Docker_MountDIR:${home_dir}/Docker_MountDIR:rw           \
         ${cntr_img} /bin/bash -c 'sudo service ssh start && /bin/bash'
 
         #if [ $? -eq 0 ]; then list ps; fi
