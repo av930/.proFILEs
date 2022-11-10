@@ -30,7 +30,7 @@ path_mirror="/data001/${account}"/mirror
 ##============================================================================
 #### oneline functions
 isGitDir(){ git -C "$1" rev-parse --is-inside-work-tree &> /dev/null ;}
-getGitRootPath(){ echo $(git rev-parse --show-toplevel) ;}
+getGitRootPath(){ git rev-parse --show-toplevel ;}
 
 
 function checkGerritConnection(){
@@ -286,6 +286,7 @@ function showManifestTree(){
 }
 
 
+
 function getRepoShow(){
 ## ---------------------------------------------------------------------------
 # print information of repo
@@ -458,10 +459,11 @@ function resetRepository(){
     case $1 in
       all)  repo forall -cj${NJOBS} 'git reset --hard ; git clean -xdf'
             echo "reset all repositories" ;;
-      ''|*) if isGitDir; then git reset --hard ; git clean -xdf
+      ''|*) if isGitDir; then showRUN git reset --hard; showRUN git clean -xdf
             else warn "this is not a git directory"; fi  ;;
     esac
 }
+
 
 
 function checkConnection(){
@@ -559,6 +561,24 @@ printf ${NCOL}
 
 
 
+function getGitShow(){
+## ---------------------------------------------------------------------------
+# main handler for this scriptre
+    bar inline "show current git root path"
+    getGitRootPath
+    
+    local GIT_REMOTE=()
+    bar inline "show all remotes and its all branches"
+    #readarray -t GIT_REMOTE < <(git remote -v |cut -f1|uniq)
+    GIT_REMOTE=( $(git remote -v |cut -f1|uniq) )
+    for item in "${GIT_REMOTE[@]}"; do
+        showRUN git remote show $item |more
+    done
+
+}
+
+
+
 function gitt(){
 ## ---------------------------------------------------------------------------
 # main handler for this scriptre
@@ -566,8 +586,9 @@ function gitt(){
 local ret=0
 case "$1" in
     #$1:below ${@:2}:parameters
-    show)       checkPreCondition yes_print || return 1
-                getRepoShow  "${@:2}";;
+    go)         cd $(getGitRootPath) ;;
+    reset)      resetRepository "${@:2}";;
+    show)       getGitShow ;;
     info)       checkPreCondition yes_print || return 1
                 getRepoInfo "${@:2}"  2>&1 | tee ${REPO_ROOT}/repo.info
                 info "please check file [${REPO_ROOT}/repo.info]"
@@ -584,8 +605,6 @@ case "$1" in
                 fi;;
     sync)       checkPreCondition yes_print || return 1
                 runRepoSynccheckError "${@:2}";;
-    reset)      checkPreCondition yes_print || return 1
-                resetRepository "${@:2}";;
 
     debug)      checkPreCondition yes_print || return 1
                 debugRepo "${@:2}";;
@@ -602,6 +621,7 @@ return $ret
 }
 
 
+
 function repp(){
 ## ---------------------------------------------------------------------------
 # main handler for this scriptre
@@ -611,6 +631,8 @@ case "$1" in
     #$1:below ${@:2}:parameters
     show)       checkPreCondition yes_print || return 1
                 getRepoShow  "${@:2}";;
+    go)         checkPreCondition yes_print || return 1
+                cd ${REPO_ROOT};;
     info)       checkPreCondition yes_print || return 1
                 getRepoInfo "${@:2}"  2>&1 | tee ${REPO_ROOT}/repo.info
                 info "please check file [${REPO_ROOT}/repo.info]"
@@ -645,6 +667,7 @@ return $ret
 }
 
 
+
 function checkPreCondition(){
 ## ---------------------------------------------------------------------------
 # pre-check
@@ -674,6 +697,7 @@ function checkPreCondition(){
 }
 
 
+
 ##============================================================================
 ## Main
 ##============================================================================
@@ -685,9 +709,6 @@ REPO_PATH_ALL=()
 if [ $sourced -eq 0 ]; then repp $@;
 else  #if sourced 
     echo "[WELCOME] repp utility is applied for current shell" 
-    #hide local function
-    #unset -f checkPreCondition checkConnection checkGerritConnection  checkSSHConnection debugRepo findFileLocation findGitRepository \
-    #findServerDelay getGitRootPath getRecentCommit getRepoCMD getRepoInfo getRepoShow handleMenu repoInit resetRepository \
-    #runRepoInitcheckError runRepoSynccheckError showManifestTree showRUN 
+    #hide local function, need to implements
 fi
 
