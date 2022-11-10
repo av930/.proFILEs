@@ -258,7 +258,10 @@ function start(){
         ((i=i+10))
     done
 
-    mkdir -p ${home_dir}/Docker_MountDIR
+    # create dirs&files in advanced, if not, these dir&file is created for root account.
+    sudo -u ${account} mkdir -p ${home_dir}/Docker_MountDIR ${home_dir}/mirror ${home_dir}/.jfrog
+    touch ${home_dir}/.ssh ${home_dir}/.profile ${home_dir}/.bashrc ${home_dir}/.gitconfig 
+
     docker run                                                                  \
         -dit --init --privileged --cap-add=ALL --restart="always"               \
         --name ${cntr_name}                                                     \
@@ -273,12 +276,10 @@ function start(){
         -v /usr/local/bin:/usr/local/bin:ro                                     \
         -v /usr/bin/git-lfs:/usr/bin/git-lfs:ro                                 \
         -v /etc/ssh:/etc/ssh:ro                                                 \
-        -v ${home_dir}/.ssh:${home_dir}/.ssh:ro                                 \
         -v ${home_dir}/.profile:${home_dir}/.profile:ro                         \
         -v ${home_dir}/.bashrc:${home_dir}/.bashrc:ro                           \
         -v ${home_dir}/.gitconfig:${home_dir}/.gitconfig:ro                     \
-        -v ${home_dir}/.git_templete:${home_dir}/.git_templete:ro               \
-        -v ${home_dir}/.vc_script:${home_dir}/.vc_script:ro                     \
+        -v ${home_dir}/.ssh:${home_dir}/.ssh:rw                                 \
         -v ${home_dir}/.jfrog:${home_dir}/.jfrog:rw                             \
         -v ${home_dir}/mirror:${home_dir}/mirror:rw                             \
         -v ${home_dir}/Docker_MountDIR:${home_dir}/Docker_MountDIR:rw           \
