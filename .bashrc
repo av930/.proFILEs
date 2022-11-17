@@ -164,6 +164,8 @@ alias dus='_dus(){ du -hs */|sort -n ;}; _dus()'
 alias ps${TAG}="ps -u $USER -o pid,ppid,args --forest"
 alias pst='_pst(){ echo "pstree -hapg -u $USER"; pstree -hapg -u $USER ;}; _pst'
 alias kil='_kil(){ echo "kill -SIGTERM -- -[PGID]"; kill -SIGTERM -- -$1 ;}; _kil'
+
+alias lls='ls --color=auto'
 alias lls='echo -n size-base; ls -agohrS'
 alias llt='echo -n time-base; ls -agohrt'
 alias ll='ls -althrF --color=auto --show-control-chars'
