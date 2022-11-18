@@ -1,9 +1,15 @@
 printf '[%s] called: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
 
 func_su(){
-    if [ "$1" == "first" ];then pd=$(code_perm de vc.int1);else pd=$(code_perm de vc.int2); fi
     acc=vc.integrator
     echo account is [$acc]
+
+    case $1 in
+       1) pd=$(code_perm de vc.int1) ;;
+       2) pd=$(code_perm de vc.int2) ;;
+       3) pd=$(code_perm de vc.int3) ;;
+    esac
+    echo $pd
 
     expect -c "
     #spawn su -s \"${proFILEdir}/func_su.sh\" - ${acc}
@@ -17,5 +23,4 @@ func_su(){
     "
 }
 
-alias sul="func_su first"
-alias sull="func_su"
+alias sul="func_su"

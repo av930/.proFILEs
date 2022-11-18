@@ -271,6 +271,7 @@ function go_near(){
 
 ###############################
 #### encryption
+## usage : code_temp|code_perm en|de password [filename]
 function code_temp(){
    case $1 in
       en) export ENCODE=$( echo $2 | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey );;
