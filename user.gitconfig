@@ -5,7 +5,7 @@
 ### user specific setting
 [user]
      name = user.name
-    email = user.email@xxx.com
+    email = user.name@lge.com
 
 ### path specific setting
 # add path usign globbing after gitdir:
