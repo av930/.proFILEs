@@ -299,6 +299,7 @@ alias copy_cc="sh ${CLCP_DIR}/cc.sh"
 alias coyp_cv="cat ${CLCF}"
 #alias lll="launch_cur_dir | copy_cc; copy_cv"
 alias lll="launch_cur_dir"
+alias llf='_llf(){ read -p "input filename: " && launch_cur_dir $REPLY }; _llf'
 
 
 ###############################
