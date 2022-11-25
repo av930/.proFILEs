@@ -5,9 +5,9 @@ func_su(){
     echo account is [$acc]
 
     case $1 in
-       1) pd=$(code_perm de vc.int1) ;;
-       2) pd=$(code_perm de vc.int2) ;;
-       3) pd=$(code_perm de vc.int3) ;;
+       1) pd=$(code_perm de .vc.int1) ;;
+       2) pd=$(code_perm de .vc.int2) ;;
+       3) pd=$(code_perm de .vc.int3) ;;
     esac
     echo $pd
 
