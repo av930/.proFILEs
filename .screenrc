@@ -136,8 +136,9 @@ termcapinfo xterm 'hs:ts=\E]2;:fs=\007:ds=\E]2;screen\007'
 ## bufferfile            $HOME/.screen_exchange
 ##
 ## hardcopydir:  The directory which contains all hardcopies.
-hardcopydir           $HOME/.proFILEs/tempdir
-# hardcopydir           ~/.screen
+# disable for screen error for docker
+# hardcopydir           $HOME/.proFILEs/tempdir
+ hardcopydir           ~/.screen
 
 ## shell:  Default process started in screen's windows.
 ## Makes it possible to use a different shell inside screen
