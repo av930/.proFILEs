@@ -7,6 +7,10 @@
      name = user.name
     email = user.name@lge.com
 
+### ignore color prompt
+[color]
+    ui = auto
+
 ### path specific setting
 # add path usign globbing after gitdir:
 # add user .gitconfig in user.gitconfig.extra
