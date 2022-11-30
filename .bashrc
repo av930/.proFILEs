@@ -50,16 +50,17 @@ umask 002 #share read/write with group
 ###############################
 #### profile alias
 #global TAG for alias for banning conflict for builtin commands
-ECHO='e'
+export ECHO='e'
 export TAG='l'
 export allfile='* .[^.]*'
 export dotfile='.[^.]*'
+function CMD(){
+    echo "cmd: $@"; 
+    "$@" ;
+}
 
 alias pro="cd ${proFILEdir}"
 alias tools="cd ${proFILEdir}/tools"
-alias bashu="git -C ${proFILEdir} pull"
-alias bashs="source ${proFILEdir%/*}/.profile"
-alias bashe="vi ${proFILEdir}/.bashrc"
 
 
 ###############################
@@ -97,9 +98,6 @@ alias hisgrep='cat ~/.bash_history | egrep -i --color=auto'
 
 # screen configuration
 # alias byobu='byobu -U $*'
-alias sc${TAG}='screen -ls'
-alias sc="screen -U -RR -c ~/.proFILEs/.screenrc ~/.proFILEs/scw"
-alias scr="screen -U -DR -c ~/.proFILEs/.screenrc ~/.proFILEs/scw"
 alias sc$ECHO='printf "Usage
 screen -U -c ${proFILEdir}/.screenrc -RR
 screen -dR -c ${proFILEdir}/.screenrc
@@ -107,6 +105,9 @@ screen -ls | tail -n +2 | head -n -2 | awk {print $1} | xargs -I {} screen -S {}
 screen -U -R -c ${proFILEdir}/.screenrc_spilt
 "'
 
+alias sc${TAG}='screen -ls'
+alias sc="screen -U -RR -c ~/.proFILEs/.screenrc ~/.proFILEs/scw"
+alias scr="screen -U -DR -c ~/.proFILEs/.screenrc ~/.proFILEs/scw"
 alias scx='kill_screen'
 function kill_screen()
 {
@@ -132,10 +133,13 @@ scp filename -p <port> <user>@<dest-ip>:<full-path-dest-dir>/
 docker cp <container-id>:<full-path-filename> .
 docker cp <filename> <container-id>:<full-path-dest-dir>/
 "'
+
 alias ssh$ECHO='printf "Usage
 ssh -p <port> <user>@<dest-ip>
 scp ${USER}@$CURR_IP:${HOME}/filename .
 "'
+alias ssh${TAG}='_sshl(){ echo "usage: sshl [port]" ; ssh -J localhost vc.integrator@localhost -p "$1" -t screen -dR ;}; _sshl'
+
 alias rsync$ECHO='printf "Usage
 rsync -auvht --exclude-from=exclude.txt --port=873 172.21.74.32::$USER/SRC_DIR/* .
 "'
@@ -159,10 +163,11 @@ alias catl${TAG}='_catll(){ cat -nA "$1"| more ;}; _catll'
 alias cdcd='_cdcd(){ mkdir -p "$1"; cd "$1" ;}; _cdcd'
 
 #### find
-alias du${TAG}='_dul(){ echo "subdir $1 size is"; du -sh $1 ;}; _dul'
-alias dus='_dus(){ du -hs */|sort -n ;}; _dus()'
-alias ps${TAG}="ps -u $USER -o pid,ppid,args --forest"
-alias pst='_pst(){ echo "pstree -hapg -u $USER"; pstree -hapg -u $USER ;}; _pst'
+alias du${TAG}='_dul(){ printf "usage: dul [dir]\n subdir $1 size is"; du -sh $1 ;}; _dul'
+alias dus='_dus(){ printf "eache directory size is\n"; du -hs */|sort -n ;}; _dus'
+alias du${TAG}='_dul(){ echo "usage: dul [dir]"; CMD du -sh $1 ;}; _dul'
+alias ps${TAG}='echo "usage: psl"; CMD ps -u $USER -o pid,ppid,args --forest'
+alias pst='_pst(){ echo "usage: pst [$USER]"; CMD pstree -hapg -u ${1:-$USER} ;}; _pst'
 alias kil='_kil(){ echo "kill -SIGTERM -- -[PGID]"; kill -SIGTERM -- -$1 ;}; _kil'
 
 alias lls='ls --color=auto'
