@@ -6,5 +6,5 @@
 source $HOME/.screenrc
 escape ^k^k
 
-bind r eval "source $HOME/.scr" "echo '.scr loaded!'"
+bind r eval "source $HOME/.screenrc" "echo '.screenrc loaded!'"
 
