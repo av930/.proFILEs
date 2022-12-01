@@ -186,7 +186,8 @@ bindkey "^x" quit
 
 ## 직접 명령을 넣으려면 escape :help 와 같은 형식을 넣으면 된다.
 # reload .screenrc
-bind r eval "source $HOME/.proFILEs/.scr" "echo '.scr reloaded!'"
+bind r eval "source $HOME/.screenrc" "echo '.screenrc reloaded!'"
+bind t eval "source $HOME/.proFILEs/.screen.inside" "echo '.screen.inside reloaded!'"
 
 ## WINDOW handle
 ## ---------------------------------------------------------------
