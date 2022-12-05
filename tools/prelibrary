@@ -159,3 +159,63 @@ function handler_args(){
         handler_menu
     fi
 }
+
+function print_menu()  #menu_items
+{
+    local menu_items=("$@")
+    local menu_limit=$(( ${#menu_items[@]} - 1 ))  
+    
+    printf "${yellow}<< choose with arrow ←↑↓→ or num-key>>${NCOL}\n"
+    printf "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+    for (( i = 0; i < $menu_limit; ++i ))
+    do
+        if [ "$i" = "${menu_items[$menu_limit]}" ]
+        then  printf "${CYAN}->${NCOL} ${menu_items[i]}\n"
+        else  printf "   ${menu_items[i]}\n"
+        fi
+    done
+}
+
+
+function run_menu()  #menu_items
+{
+    local menu_items=("$@")  
+    local menu_size=${#menu_items[@]}
+    local menu_limit=$((menu_size - 1))
+
+    clear
+    print_menu "${menu_items[@]}"
+    
+    while read -rsn1 input
+    do
+        case "$input" in
+            $'\x1B')  # ESC ASCII code (https://dirask.com/posts/ASCII-Table-pJ3Y0j)
+                read -rsn1 -t 0.1 input
+                if [ "$input" = "[" ]  # occurs before arrow code
+                then
+                    read -rsn1 -t 0.1 input
+                    case "$input" in
+                        A)  # Up Arrow
+                            if [ "${menu_items[$menu_limit]}" -ge 1 ]
+                            then
+                                menu_items[$menu_limit]=$(( ${menu_items[$menu_limit]} - 1 ))
+                                clear
+                                print_menu "${menu_items[@]}"
+                            fi;;
+                        B)  # Down Arrow
+                            if [ "${menu_items[$menu_limit]}" -lt "$menu_limit" ]
+                            then
+                                menu_items[$menu_limit]=$(( ${menu_items[$menu_limit]} + 1 ))
+                                clear
+                                print_menu "${menu_items[@]}"
+                            fi;;
+                    esac
+                fi
+                read -rsn5 -t 0.1  ;;# flushing stdin
+            "")  # Enter key
+                return $(( 11 + ${menu_items[$menu_limit]} )) ;;
+            *)  return "$input" ;;
+        esac
+    done
+}
+

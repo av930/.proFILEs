@@ -564,16 +564,24 @@ printf ${NCOL}
 function getGitShow(){
 ## ---------------------------------------------------------------------------
 # main handler for this scriptre
+    local TEMP
     bar inline "show current git root path"
     getGitRootPath
     
-    local GIT_REMOTE=()
-    bar inline "show all remotes and its all branches"
+    bar inline "show all remote info"
     #readarray -t GIT_REMOTE < <(git remote -v |cut -f1|uniq)
-    GIT_REMOTE=( $(git remote -v |cut -f1|uniq) )
-    for item in "${GIT_REMOTE[@]}"; do
-        showRUN git remote show $item |more
-    done
+    GIT_REMOTE=$(git config --get branch.working.remote) 
+    showRUN git config --get-regexp remote.$GIT_REMOTE |sort|grep -Ee "(projectname|review|url)"
+    
+    TEMP=$(printf "%s/admin/repos/%s,branches" \
+        $(git config --get-regexp remote.$GIT_REMOTE.review|cut -d' ' -f2) \
+        $(git config --get-regexp remote.$GIT_REMOTE.projectname|cut -d' '  -f2)  )
+    clog "\nreview system url:" $TEMP
+    
+    TEMP=$(printf "git push $GIT_REMOTE HEAD:refs/for/%s" \
+        $(git config --get-regexp branch.working.merge|sed 's:.*/::')  )
+        
+    clog " git push command: " $TEMP
 
 }
 
@@ -586,36 +594,11 @@ function gitt(){
 local ret=0
 case "$1" in
     #$1:below ${@:2}:parameters
-    go)         cd $(getGitRootPath) ;;
+    go)         cd "$(getGitRootPath)" ;;
     reset)      resetRepository "${@:2}";;
     show)       getGitShow ;;
-    info)       checkPreCondition yes_print || return 1
-                getRepoInfo "${@:2}"  2>&1 | tee ${REPO_ROOT}/repo.info
-                info "please check file [${REPO_ROOT}/repo.info]"
-                warn "you can use this file to compare other repo.";;
-    commit)     checkPreCondition yes_print || return 1
-                getRecentCommit "${@:2}";;
-    find|list)  checkPreCondition yes_print || return 1
-                findGitRepository "${@:2}";;
+    
 
-    init)       repoInit "${@:2}"
-                if [ $? -eq 0 ]; then
-                    info "To RUN next command:"
-                    runRepoSynccheckError
-                fi;;
-    sync)       checkPreCondition yes_print || return 1
-                runRepoSynccheckError "${@:2}";;
-
-    debug)      checkPreCondition yes_print || return 1
-                debugRepo "${@:2}";;
-    check)      checkPreCondition no_print || return 1
-                checkConnection "${@:2}";;
-    server)     checkPreCondition no_print || return 1
-                findServerDelay "${@:2}";;
-    '') 
-                handleMenu "${@:2}";;
-    *) 
-                repo "${@}";;
 esac
 return $ret
 }
@@ -632,7 +615,14 @@ case "$1" in
     show)       checkPreCondition yes_print || return 1
                 getRepoShow  "${@:2}";;
     go)         checkPreCondition yes_print || return 1
-                cd ${REPO_ROOT};;
+                local selected_item=0
+                local menu_items=('1. go　ROOT　dir' '2. go　Manifests　dir' '3. exit')
+                run_menu "${menu_items[@]}" "$selected_item"
+                case "$?" in
+                    1|11)  cd "${REPO_ROOT}"        ;;
+                    2|12)  cd "${REPO_PATH}"        ;;
+                    *)  echo 'exit) stay here'      ;;
+                esac;;
     info)       checkPreCondition yes_print || return 1
                 getRepoInfo "${@:2}"  2>&1 | tee ${REPO_ROOT}/repo.info
                 info "please check file [${REPO_ROOT}/repo.info]"
