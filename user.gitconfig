@@ -7,9 +7,9 @@
      name = user.name
     email = user.name@lge.com
 
-### ignore color prompt
+### ignore color prompt for repo init prompting
 [color]
-    ui = auto
+    ui = false
 
 ### path specific setting
 # add path usign globbing after gitdir:
