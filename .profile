@@ -16,8 +16,8 @@ if [ "$profile_sourced" = "true" ]; then echo "already sourced" >/dev/null; fi
 # default is POSIX
 # case 구문에 의해 순서대로 적용됨.
 case $(locale -a) in
-    *ko_KR*)   LC_ALL=ko_KR.UTF-8 ;;
     *C.UTF-8*) LC_ALL=C.UTF-8 ;;
+    *ko_KR*)   LC_ALL=ko_KR.UTF-8 ;;
 esac
 
 ##### color code
