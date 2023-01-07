@@ -109,6 +109,7 @@ alias sc${TAG}='screen -ls'
 alias sc="screen -U -RR -c ~/.proFILEs/.screenrc ~/.proFILEs/scw"
 alias scr="screen -U -DR -c ~/.proFILEs/.screenrc ~/.proFILEs/scw"
 alias scx='kill_screen'
+
 function kill_screen()
 {
     if [ "$1" != "" ]; then
@@ -126,7 +127,6 @@ function kill_screen()
 
 ###############################
 #### utility
-
 alias scp$ECHO='printf "Usage
 scp -p <port> <user>@<src-ip>:<full-path-filename> .
 scp filename -p <port> <user>@<dest-ip>:<full-path-dest-dir>/
@@ -146,6 +146,7 @@ rsync -auvht --exclude-from=exclude.txt --port=873 172.21.74.32::$USER/SRC_DIR/*
 alias repo$ECHO='printf "Usage
 repo sync -qcj4 --no-tags --no-clone-bundle
 "'
+
 ###############################
 #### move
 alias moveup='mv * .[^.]* ..'
@@ -164,13 +165,13 @@ alias cdcd='_cdcd(){ mkdir -p "$1"; cd "$1" ;}; _cdcd'
 
 #### find
 alias du${TAG}='_dul(){ printf "usage: dul [dir]\n subdir $1 size is"; du -sh $1 ;}; _dul'
-alias dus='_dus(){ printf "eache directory size is\n"; du -hs */|sort -n ;}; _dus'
+alias dus='_dus(){ printf "each directory size is\n"; du -hs */|sort -n ;}; _dus'
 alias du${TAG}='_dul(){ echo "usage: dul [dir]"; CMD du -sh $1 ;}; _dul'
 alias ps${TAG}='echo "usage: psl"; CMD ps -u $USER -o pid,ppid,args --forest'
 alias pst='_pst(){ echo "usage: pst [$USER]"; CMD pstree -hapg -u ${1:-$USER} ;}; _pst'
 alias kil='_kil(){ echo "kill -SIGTERM -- -[PGID]"; kill -SIGTERM -- -$1 ;}; _kil'
 
-alias lls='ls --color=auto'
+alias ls='ls --color=auto'
 alias lls='echo -n size-base; ls -agohrS'
 alias llt='echo -n time-base; ls -agohrt'
 alias ll='ls -althrF --color=auto --show-control-chars'
@@ -178,6 +179,7 @@ alias dir='ls -al -F --color=auto| grep /'
 alias grep='grep --color=auto'
 alias grepalias='alias | egrep -i --color=auto'
 alias findrecent='_findrecent(){ find . -ctime -"$1" -a -type f | xargs ls -l ;}; _findrecent'
+
 alias filegrep='__filegrep'
 function __filegrep() {
     if [ -z "$1" ]; then
@@ -204,6 +206,7 @@ function __grepro() { find "$proFILEdir" -name "*" | xargs grep -rn --color "$1"
 alias env='env|sort'
 alias pathshow='echo $PATH|sed "s/:/:\n/g"'
 alias pathexport='echo $PATH|sed "s/:/:\n/g" > ~/path.export; echo "path saved to file: ~/path.export"'
+
 function pathremove()
 {
     local p d
@@ -214,6 +217,7 @@ function pathremove()
     PATH=${d/%:/}
     pathshow
 }
+
 # ~/bin is always applied, but ~/bin/temporary_path is applied when pathimport call
 alias pathimport='__pathimport'
 function __pathimport()
@@ -226,7 +230,6 @@ function __pathimport()
 }
 
 alias gg="go_updown"
-alias ggn="go_near"
 function go_updown()
 {
     echo "go parent dir << [$HOME] ---- ${PWD##*/} ---- [depth 8] >> "
@@ -259,7 +262,7 @@ function go_updown()
     #cd $HERE
 }
 
-
+alias ggn="go_near"
 function go_near(){
     local INPUT
     #find sub dirtory
@@ -298,10 +301,12 @@ function code_perm(){
 # ex-copy: pwd | cc, ex-paste: cd $(cv)
 #command line copy+paste dir
 export CLCP_DIR="${proFILEdir}"
+
 #command line clipboard file
 export CLCF="${proFILEdir}/.path.log"
 alias copy_cc="sh ${CLCP_DIR}/cc.sh"
 alias coyp_cv="cat ${CLCF}"
+
 #alias lll="launch_cur_dir | copy_cc; copy_cv"
 alias lll="launch_cur_dir"
 alias llf='_llf(){ read -p "input filename: " && launch_cur_dir $REPLY }; _llf'
