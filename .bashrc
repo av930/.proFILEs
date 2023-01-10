@@ -150,7 +150,7 @@ repo sync -qcj4 --no-tags --no-clone-bundle
 ###############################
 #### move
 #alias moveup='mv * .[^.]* ..'
-alias moveup='mv {.,}* ..'
+alias moveup='mv {.,}* .. > /dev/null'
 alias findrm='__findrm'
 function __findrm()
 {
