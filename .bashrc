@@ -167,7 +167,6 @@ alias cdcd='_cdcd(){ mkdir -p "$1"; cd "$1" ;}; _cdcd'
 #### find
 alias du${TAG}='_dul(){ printf "usage: dul [dir]\n subdir $1 size is"; du -sh $1; du -sBM $1 ;}; _dul'
 alias dus='_dus(){ printf "each directory size is\n"; du -hs */|sort -n ;}; _dus'
-alias du${TAG}='_dul(){ echo "usage: dul [dir]"; CMD du -sh $1 ;}; _dul'
 alias ps${TAG}='echo "usage: psl"; CMD ps -u $USER -o pid,ppid,args --forest'
 alias pst='_pst(){ echo "usage: pst [$USER]"; CMD pstree -hapg -u ${1:-$USER} ;}; _pst'
 alias kil='_kil(){ echo "kill -SIGTERM -- -[PGID]"; kill -SIGTERM -- -$1 ;}; _kil'
