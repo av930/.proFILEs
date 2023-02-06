@@ -173,6 +173,7 @@ function list(){
         ##width: display column width, minus left align, string replace
         images) formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|' ${@:2};;
         ps) if [ "$2" = "--size" ]; then 
+                echo "Wait 10s... to get size of container!!"
                 formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.Size}}|{{.ID}}|{{.Names}}|{{.Image}}|' ${@:2}; 
             else 
                 formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.ID}}|{{.Names}}|{{.Image}}|' ${@:2}; 
@@ -197,7 +198,7 @@ function hello(){
 
     tmppath=$(readlink -f $DOC_F);
     if [ "${tmppath%/*}" = "${HOME}" ];then
-        echo "You must move your [$DOC_F] to other dir not in HOME. " && exit;
+        echo "You must move your [$DOC_F] to other dir not in HOME. " && exit 0;
     fi
     docker build -f $DOC_F -t $DOC_F .
     echo "please find generated dockerfile ${DOC_F}: "
@@ -225,7 +226,7 @@ function build(){
     tmppath=$(readlink -f $cntr_file);
     if [ "${tmppath%/*}" = "${HOME}" ];then
         printf "${red}This jois is not permitted in $HOME directory.${NCOL}\n" 
-        printf "make new dir, place [$cntr_file] there and continue" && exit;
+        printf "make new dir, place [$cntr_file] there and continue" && exit 0;
 
     fi
     if [ "$cntr_img" = "" ];then cntr_img=$today; fi
@@ -299,7 +300,10 @@ function stoprmrmi(){
             printf "${red}========== "$1" ========== ${NCOL}\n"
             read -p "must input Container [Name| ID]: " cntr_name
             docker stop ${cntr_name}
-            docker rm ${cntr_name} ;;
+	    
+            read -p "remove container? [enter|ctrl+c]: " 
+            docker rm ${cntr_name} 
+	    ;;
         remove)
             list images
             printf "${red}========== "$1" ========== ${NCOL}\n"
@@ -377,7 +381,7 @@ function clean(){
     printf "current total docker container is: " && docker ps --all -q | wc -l
     printf "current total docker images is: "    && docker images --all -q | wc -l
 
-    exit
+    exit 0
 }
 
 
@@ -385,9 +389,24 @@ function info(){
 ## ---------------------------------------------------------------------------
     read -p "docker info  [enter:continue| ctrl+c:exit]: "
     docker info
-    exit
+    exit 0
 }
 
+
+function copy(){
+## ---------------------------------------------------------------------------
+    if [ -z "${cntr_name}" ];then 
+        list ps --all
+	read -p "must input Container [Name| ID]: " cntr_name;
+    fi
+    echorun docker exec -t $cntr_name /bin/bash -c 'tree -aL 2 /data001/vc.integrator'
+    printf "\n${yellow}==== docker copy sample commands ====${NCOL}\n"
+    echo "docker exec -t $cntr_name /bin/bash -c 'ls -al /data001/vc.integrator'"
+    echo "docker cp $cntr_name:${home_dir} -c 'ls -al /data001/vc.integrator'"
+    echo "docker cp $cntr_name:${home_dir}/.bashrc ./destfile"
+    echo "docker cp .bashrc $cntr_name:${home_dir}/destfile"
+    exit 0
+}
 
 function help(){
 ## ---------------------------------------------------------------------------
@@ -417,10 +436,10 @@ ${NCOL} "
 }
 
 MENU=(
-'list(img&cntr)' 'images(list img)' 'ps(list cntr)' 'build(dockerfile)'  
-    'hello(testimg)' 'start(run++ img)' 'run(just run)' 'exec(attach cntr)'
+    'list(img&cntr)' 'images(list img)' 'ps(list cntr)' 'build(dockerfile)'  
+    'start(run++ img)' 'exec(attach cntr)' 'hello(testimg)' 'run(just run)' 
     'stop(&rm ctnr)' 'remove(img)' 'clean(prune all)' 'debug(log)' 'find(search)'
-    'pull(from arti)' 'push(to arti)' 'down(dockerfile)' 'help'
+    'pull(from arti)' 'push(to arti)' 'down(dockerfile)' 'copy(fromto host)' 'help'
 )
 
 function handler_menu(){
@@ -478,6 +497,7 @@ local ret=0
           clean) clean;                                                     ;;
         pull|push|find) docker_hub "${@:1}"                                 ;;
           down) download_dockerfile  "${@:2}"                               ;;
+        copy) copy "${@:2}"                                                 ;;
         info|status) info "${@:2}"                                          ;;
         help) help "${@:2}"                                                 ;;
         "") handler_menu "${@}"                                             ;;
