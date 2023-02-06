@@ -88,62 +88,6 @@ if [ "$func_called" = "true" ]; then echo "already called" && exit 1; else expor
 function makedir_downscript(){
 #### preproces before build
     updateinfo_beforebuild &
-    
-# create build root
-    mkdir -p ${PATH_JOB} > /dev/null && cd $PATH_JOB 
-# Kill all process using PATH_SRC
-    eval sudo fuser -kuv "${PATH_JOB}/${DIR_PREFIX}*" || true
-# remove legacy directories
-    rm -rf "${PATH_JOB}/${DIR_PREFIX}"* || true
-
-## get integration script and update every 12 hours
-    local diff=1
-    if [ -f ${PATH_SCRIPT}/.git/FETCH_HEAD ]; then diff=$(( (($(date +%s) - $(stat -c %Y ${PATH_SCRIPT}/.git/FETCH_HEAD) )) / ((12 * 3600)) ));fi
-    if (( $diff > 0 )); then ## older than 12 hours 
-        curl --silent ${SCINFRA_GIT_DEPLOY_SERVER}:8124/app/${SCINFRA_GIT_SETUP_PY} > ${SCINFRA_GIT_SETUP_PY} && chmod 755 ${SCINFRA_GIT_SETUP_PY}
-        python3 ${SCINFRA_GIT_SETUP_PY} --git-path ${PATH_SCRIPT} --branch ${SC_INFRA_BRANCH} --host ${SCINFRA_GIT_HOST} --port ${SCINFRA_GIT_PORT} --mirror-path ${PATH_MIRROR}/sc-infra
-    fi
-}
-
-
-function downrepo_applycommit(){
-#### repo init get manifests & check validation
-    echobar "$(pwd): download src and apply patches"
-    mkdir -p "${PATH_SRC}" 
-
-    if [ "$1" = "repo" ]; then 
-        echo "\$ $@"; time "$@" ;
-    else
-        cd ${PATH_MIRROR}
-        time pax -rwl src ${PATH_SRC%/*}
-    fi
-    cd ${PATH_SRC}
-
-## check commit whether included in manifests by project 
-    repo list -p ${GERRIT_PROJECT} 2>&1 |sed 's/.*(\(.*\)).*/\1/'
-    PATH_BUILD=$(repo list -p ${GERRIT_PROJECT} 2>&1 |sed 's/.*(\(.*\)).*/\1/') ||true
-    if [[ "${PATH_BUILD}" =~ "error:" ]]; then ret="[FATAL]_checktrigger_JENKINS" && exit 0; fi
-    if ! [[ "${PATH_BUILD}" =~ "nad" || "${PATH_BUILD}" =~ "mcu" ]]; then ret="[FATAL]_checksrc_GIT" && exit 0; fi
-
-## check commit whether included in manifests both by project and branch
-    BUILD_JUDGE=$(python3 -u ${PATH_SCRIPT}/script/pre_check_git_in_manifest.py -m default.xml -n ${GERRIT_PROJECT} -b ${GERRIT_BRANCH})
-    if [ "${BUILD_JUDGE}" == "SKIP" ]; then
-        echo "${GERRIT_BRANCH} branch of ${GERRIT_PROJECT} is not in the repo!!"
-        echo "[FATAL] must not be here!"
-        ret="[FATAL]_checksrc_BRANCH"
-        exit 
-    fi
-    
-#### get source from mirror
-    time repo sync -qcj4 --no-tags
-    repo start ${MASTER_BRANCH} --all
-    
-    
-#### apply commit 
-#python ${PATH_SCRIPT}/script/apply_change.py -d F -p ${TARGET_PROJECT}
-    if [ "$BUILD_CAUSE" != "MANUALTRIGGER" ]; then 
-        python3 ${PATH_SCRIPT}/script/apply_change_mg.py -p ${TARGET_PROJECT} -l ${GERRIT_CHANGE_URL} -n ${GERRIT_PATCHSET_NUMBER} -r ${GERRIT_PATCHSET_REVISION} -s $(pwd)
-    fi
 }
 
 
