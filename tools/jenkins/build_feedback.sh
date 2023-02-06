@@ -6,7 +6,7 @@ line="--------------------------------------------------------------------------
 echobar() { printf "\e[1;36m%s%s \e[0m\n\n" "${1:+[$1] }" "${line:(${1:+3}+${#1})}" ;}
 
 ## APIKEY for $USER
-APIKEY=11cec21c35fb88f5d9abc591d844e22532
+APIKEY=1115aa9663a20801980e2ab969028d3b46
 
 function updateinfo_beforebuild(){
 ## make build info to json 
