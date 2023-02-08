@@ -1,37 +1,31 @@
 ######## common handler
 #### common env
 #VGIT_PORT=${VGIT_PORT:?must_set_port}
+#APIKEY for $USER must be defined in caller
+#APIKEY=REMOVE_KEY
+
 
 line="-----------------------------------------------------------------------------------------------"
 echobar() { printf "\e[1;36m%s%s \e[0m\n\n" "${1:+[$1] }" "${line:(${1:+3}+${#1})}" ;}
+exeTIME=0 && SECONDS=0
 
-## APIKEY for $USER
-APIKEY=REMOVE_KEY
-
-function updateinfo_beforebuild(){
+function updateinfo_job(){
+    exeTIME=((exeTIME + SECONDS))
 ## make build info to json 
     cat <<EOL >temp.json
-    {"displayName":"##[${BUILD_ID}] ${GERRIT_PATCHSET_UPLOADER} \n\
+    {"displayName":"##[${BUILD_ID}]                             \n\
         [${NODE_NAME}]                                          \n\
         ${PATH_SRC}                                             \n\
-        [${GERRIT_BRANCH}]                                      \n\
-        ${GERRIT_PROJECT}",
-     "description":"@@ is building now @@" }
+        [${exeTIME}]",
+     "description":"$(date +"%y%m%d:%H:%M")" }
 EOL
 
 ## change build name & description with encoding
     curl -u $USER:$APIKEY --silent ${JOB_URL}${BUILD_ID}/configSubmit --data-urlencode json@temp.json
+    SECONDS=0
 }
 
-
-function updateinfo_afterbuild(){
-## make build info to json 
-    case $1 in
-        HUP|INT|QUIT|TERM) echo "[ERROR: sig=%1] reason of error must be defined" && ret="[FATAL]_check_SIGNAL";;
-        ERR | EXIT) echo "[signal: sig=%1] is happened";;
-        *) echo "[ERROR: sig=%1] severe error occurred" && ret="[FATAL]_check_SIGNAL";;
-    esac
-
+function updateinfo_commit(){
     cat <<EOL >temp.json
     {"displayName":"###[${BUILD_ID}] ${GERRIT_PATCHSET_UPLOADER}                           \n\
         [${GERRIT_BRANCH}]                                                                 \n\
@@ -52,6 +46,12 @@ function updateinfo_afterbuild(){
     }
 EOL
     curl -u $USER:$APIKEY --silent ${JOB_URL}${BUILD_ID}/configSubmit --data-urlencode json@temp.json
+    SECONDS=0
+}
+
+function updateinfo_result(){
+
+
 }
 
 
@@ -60,33 +60,35 @@ function exit_handler(){
 if [ "$func_called" = "true" ]; then echo "already called" && exit 1; else export func_called=true;  fi
 
     local sig=$1 && local line=$2 && local exitcode=$3
+    echo "[sig=$sig, line="$line", exitcode=$exitcode ]"    
     ECMD=$(eval echo ${BASH_COMMAND})
     BUILD_ID=${BUILD_JENKINS_ID:=${BUILD_ID}}
 
     #set +x
     case $exitcode in
-          0)  echobar ${ret:="[success]_build_PASS"} ;;
+          0)  echobar ${ret:="[success]_PASS_all"} ;;
           *)  if [[ "${ECMD}" =~ "sc-infra/script" ]];
-              then echobar ${ret:="[failed]_CheckGerrit_FAIL"}
-              else echobar ${ret:="[failed]_CheckBuild_FAIL"}
+              then echobar ${ret:="[failed]_FAIL_infra"}
+              else echobar ${ret:="[failed]_FAIL_process"}
               fi
               echo "[ERROR]: file: $BASH_SOURCE line: $BASH_LINENO calls $FUNCNAME: [$line: ${ECMD}]"
               ;;
     esac
 
-    ## make build info to json
-    updateinfo_afterbuild $sig $line $exitcode
+    
+    ## make build info to json 
+    case $sig in
+        HUP|INT|QUIT|TERM) echo "non-normal err" && ret="[FATAL]_check_SIGNAL";;
+        ERR | EXIT) echo "normal err is happened";;
+        *) echo "severe error occurred" && ret="[FATAL]_check_SIGNAL";;
+    esac
+    #replace function to printout
+    updateinfo_commit $@
 
     if [ "$exitcode" -ne 0 ]; then echo "$exitcode" && exitcode=1; fi
     exit $exitcode
 }
 
-
-######## common build checker
-function makedir_downscript(){
-#### preproces before build
-    updateinfo_beforebuild &
-}
 
 
 #### set exit trap
@@ -99,4 +101,8 @@ trap 'exit_handler EXIT $LINENO $?' EXIT
 
 ## error, xtrace, TRAP, pipe
 set -exEo pipefail
+
+####  readme: how to call
+##  updateinfo_job &
+##  updateinfo_result 
 
