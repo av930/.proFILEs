@@ -80,8 +80,8 @@ if [ "$func_called" = "true" ]; then echo "already called" && exit 1; else expor
     
     ## make build info to json 
     case $sig in
-        HUP|INT|QUIT|TERM) echo "non-normal err" && ret="[FATAL]_check_SIGNAL";;
-        ERR | EXIT) echo "normal err is happened";;
+        ERR|HUP|INT|QUIT|TERM) echo "non-normal err" && ret="[FATAL]_check_SIGNAL";;
+        EXIT) echo "normal exit is happened";;
         *) echo "severe error occurred" && ret="[FATAL]_check_SIGNAL";;
     esac
     #replace function to printout
