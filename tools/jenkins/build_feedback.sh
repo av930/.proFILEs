@@ -1,8 +1,7 @@
 ######## common handler
 #### common env
 #VGIT_PORT=${VGIT_PORT:?must_set_port}
-#APIKEY for $USER must be defined in caller
-#APIKEY=REMOVE_KEY
+#ARR_APIKEY for $USER must be defined in caller
 
 
 line="-----------------------------------------------------------------------------------------------"
@@ -29,7 +28,7 @@ function updateinfo_job(){
 EOL
 
 ## change build name & description with encoding
-    curl -u $USER:$APIKEY --silent ${JOB_URL}${BUILD_ID}/configSubmit --data-urlencode json@temp.json
+    curl -u $USER:$ARR_APIKEY --silent ${JOB_URL}${BUILD_ID}/configSubmit --data-urlencode json@temp.json
     SECONDS=0
 }
 
@@ -53,7 +52,7 @@ function updateinfo_commit(){
         <a href=\"${JOB_URL}/${BUILD_ID}/checkResult\"    >>>  check build error</a></H3>"
     }
 EOL
-    curl -u $USER:$APIKEY --silent ${JOB_URL}${BUILD_ID}/configSubmit --data-urlencode json@temp.json
+    curl -u $USER:$ARR_APIKEY --silent ${JOB_URL}${BUILD_ID}/configSubmit --data-urlencode json@temp.json
     SECONDS=0
 }
 
