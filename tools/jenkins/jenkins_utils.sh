@@ -64,7 +64,7 @@ function updateInfo_job(){
     
     exeTIME=$(( exeTIME + SECONDS ))
     #text="${text}>>${exeTIME}s:${2}<BR>"
-    text=$( printf "${text} [%06d sec] %s<BR>" "${exeTIME}" "$2" )
+    text=$( printf "${text} [%06d sec/%05d s] %s<BR>" "${exeTIME}" "${SECONDS}" "$2" )
 
 ## make build info to json 
 
