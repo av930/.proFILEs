@@ -21,8 +21,6 @@ exeTIME=0 && SECONDS=0
 function defineVariable_import(){
 #----------------------------------------------------------------------------------------------------------
     ## define variables
-    declare -g BUILTIN_JOB_NAME=$(echo ${JOB_URL##*job/} |cut -d'/' -f1)
-    declare -g BUILTIN_BACKUP_FILE=/tmp/${BUILTIN_JOB_NAME}
     SEP='='
     
     if [ -f "$1" ]; then 
@@ -36,10 +34,10 @@ function defineVariable_import(){
 
     #define variable with value (remove leading & trailing space)
     c=0; for var in ${ARR[@]%$SEP*}; do
-        echo [var:${var}] [value:${ARR[$c]##*$SEP}]
+        echo [var:${ARR[$c]%$SEP*}] [value:${ARR[$c]##*$SEP}]
 
-        #declare $(echo ${var})="$(echo ${ARR[0]##*$SEP})"
-	declare -g ${var}="$(eval echo ${ARR[$c]##*$SEP})"
+        #declare $(echo ${ARR[0]%$SEP*})="$(echo ${ARR[0]##*$SEP})"
+	declare -g $var="$(eval echo ${ARR[$c]##*$SEP})"
 
         #echo "$var=$(echo ${ARR[$c]##*$SEP})"
         echo "## $var=${!var}"    
@@ -49,10 +47,8 @@ function defineVariable_import(){
 
 function defineVariable_export(){
 #----------------------------------------------------------------------------------------------------------
-    cat <<EOL >${BUILTIN_BACKUP_FILE}
-    INPUT_ARRAY="
-$(for var in ${!ARR_@}; do printf "${var%%=*}=${!var}\n"; done)
-"
+    cat <<EOL >$1
+for c in ${!ARR[@]};do printf "${ARR[$c]%%=*}=${ARR[$c]#*=}\n"; done
 EOL
 }
 
