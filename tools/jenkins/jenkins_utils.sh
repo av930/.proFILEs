@@ -20,7 +20,9 @@ exeTIME=0 && SECONDS=0
 
 function defineVariable_import(){
 #----------------------------------------------------------------------------------------------------------
-    ## define variables
+# 1.import from multi-line string as variable
+# 2.define variable 
+   ## define variables
     declare -g BUILTIN_JOB_NAME=$(echo ${JOB_URL##*job/} |cut -d'/' -f1)
     declare -g BUILTIN_BACKUP_FILE=/tmp/${BUILTIN_JOB_NAME}
     SEP='='
@@ -47,12 +49,15 @@ function defineVariable_import(){
     done
 }
 
+
 function defineVariable_export(){
 #----------------------------------------------------------------------------------------------------------
+# 1.export multi variables in file to pass as parameter
+
     cat <<EOL >${BUILTIN_BACKUP_FILE}
     INPUT_ARRAY="
-$(for var in ${!ARR_@}; do printf "${var%%=*}=${!var}\n"; done)
-"
+    $(for var in ${!ARR_@}; do printf "${var%%=*}=${!var}\n"; done)
+    "
 EOL
 }
 
@@ -62,14 +67,14 @@ function updateInfo_job(){
 #----------------------------------------------------------------------------------------------------------
 #$1: API_KEY
 #$2: SUBJECT
-#$3: ELAPSED TIME
+
     declare -g text
     
     exeTIME=$(( exeTIME + SECONDS ))
     #text="${text}>>${exeTIME}s:${2}<BR>"
     text=$( printf "${text} [%06d sec/%05d s] %s<BR>" "${exeTIME}" "${SECONDS}" "$2" )
 
-## make build info to json 
+    ## make build info to json 
 
     if ! [ -f "$2" ]; then 
     cat <<EOL >temp.json
@@ -77,15 +82,15 @@ function updateInfo_job(){
         [${NODE_NAME}]                                          \n\
         ${PATH_SRC}                                             \n\
         [${exeTIME} sec]",
-     "description":"<PRE>    @@@ build info [$(date +"%y%m%d:%H:%M")] @@@       \n\
-        </PRE>                                                                    \n\
-        ${text}                                                                   \n\
+     "description":"<PRE>    @@@ build info [$(date +"%y%m%d:%H:%M")] @@@    \n\
+        </PRE>                                                               \n\
+        ${text}                                                              \n\
         <H3><a href=\"${JOB_URL}/${BUILD_ID}/consoleText\"> >>>  open build log</a></H3>"
      }
 EOL
     fi
 
-## change build name & description with encoding
+    ## change build name & description with encoding
     curl -u $USER:$1 --silent ${JOB_URL}${BUILD_ID}/configSubmit --data-urlencode json@temp.json
     SECONDS=0
 }
