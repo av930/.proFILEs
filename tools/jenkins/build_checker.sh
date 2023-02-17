@@ -141,7 +141,7 @@ function downrepo_applycommit(){
 #### apply commit 
 #python ${PATH_SCRIPT}/script/apply_change.py -d F -p ${TARGET_PROJECT}
     if [ "$BUILD_CAUSE" != "MANUALTRIGGER" ]; then 
-        python3 ${PATH_SCRIPT}/script/apply_change_mg.py -p ${TARGET_PROJECT} -l ${GERRIT_CHANGE_URL} -n ${GERRIT_PATCHSET_NUMBER} -r ${GERRIT_PATCHSET_REVISION} -s $(pwd) -d True
+        python3 ${PATH_SCRIPT}/script/apply_change_mg.py -p ${TARGET_PROJECT} -l ${GERRIT_CHANGE_URL} -n ${GERRIT_PATCHSET_NUMBER} -r ${GERRIT_PATCHSET_REVISION} -s $(pwd) -d T
     fi
 }
 
