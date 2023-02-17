@@ -2,7 +2,6 @@
 #### common env
 TARGET_PROJECT=${TARGET_PROJECT:?must_set_project}
 MASTER_BRANCH=${MASTER_BRANCH:?must_set_branch}
-VGIT_PORT=${VGIT_PORT:?must_set_port}
 
 line="-----------------------------------------------------------------------------------------------"
 echobar() { printf "\e[1;36m%s%s \e[0m\n\n" "${1:+[$1] }" "${line:(${1:+3}+${#1})}" ;}
