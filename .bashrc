@@ -177,6 +177,7 @@ alias llt='echo -n time-base; ls -agohrt'
 alias ll='ls -althrF --color=auto --show-control-chars'
 alias dir='ls -al -F --color=auto| grep /'
 alias grep='grep --color=auto'
+alias grep${TAG}='_grep(){ CMD grep --color=auto --exclude-dir={.git,.byobu,tempdir} -rn $@ ;}; _grep'
 alias grepalias='alias | egrep -i --color=auto'
 alias findrecent='_findrecent(){ find . -ctime -"$1" -a -type f | xargs ls -l ;}; _findrecent'
 
