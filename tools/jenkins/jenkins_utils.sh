@@ -5,7 +5,7 @@
 
 
 line="-----------------------------------------------------------------------------------------------"
-echobar() { printf "\e[1;36m%s%s \e[0m\n\n" "${1:+[$1] }" "${line:(${1:+3}+${#1})}" ;}
+bar() { printf "\e[1;36m%s%s \e[0m\n\n" "${1:+[$1] }" "${line:(${1:+3}+${#1})}" ;}
 exeTIME=0 && SECONDS=0
 
 
@@ -54,9 +54,9 @@ function defineVariable_export(){
 #----------------------------------------------------------------------------------------------------------
 # 1.export multi variables in file to pass as parameter
 
-    cat <<EOL >${BUILTIN_BACKUP_FILE}
+    cat <<EOL >${BUILTIN_BACKUP_FILE:=$1}
     INPUT_ARRAY="
-    $(for var in ${!ARR_@}; do printf "${var%%=*}=${!var}\n"; done)
+    $(for var in ${ARR[@]%%=*}; do printf "${var}=${!var}\n"; done)
     "
 EOL
 }
@@ -167,10 +167,10 @@ if [ "$func_called" = "true" ]; then echo "already called" && exit 1; else expor
 
     #set +x
     case $exitcode in
-          0)  echobar ${ret:="[success]_PASS_all"} ;;
+          0)  bar ${ret:="[success]_PASS_all"} ;;
           *)  if [[ "${ECMD}" =~ "sc-infra/script" ]];
-              then echobar ${ret:="[failed]_FAIL_infra"}
-              else echobar ${ret:="[failed]_FAIL_process"}
+              then bar ${ret:="[failed]_FAIL_infra"}
+              else bar ${ret:="[failed]_FAIL_process"}
               fi
               echo "[ERROR]: file: $BASH_SOURCE line: $BASH_LINENO calls $FUNCNAME: [$line: ${ECMD}]"
               ;;
