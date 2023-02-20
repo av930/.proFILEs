@@ -401,10 +401,11 @@ function copy(){
     fi
     echorun docker exec -t $cntr_name /bin/bash -c 'tree -aL 2 /data001/vc.integrator'
     printf "\n${yellow}==== docker copy sample commands ====${NCOL}\n"
+    printf "\n${YELLOW} ls docker files ${NCOL}\n"
     echo "docker exec -t $cntr_name /bin/bash -c 'ls -al /data001/vc.integrator'"
-    echo "docker cp $cntr_name:${home_dir} -c 'ls -al /data001/vc.integrator'"
-    echo "docker cp $cntr_name:${home_dir}/.bashrc ./destfile"
-    echo "docker cp .bashrc $cntr_name:${home_dir}/destfile"
+    printf "\n${YELLOW} copy between host & docker ${NCOL}\n"
+    echo "docker cp $cntr_name:${home_dir}/.bashrc ./target_file"
+    echo "docker cp source_file $cntr_name:${home_dir}/target_file"
     exit 0
 }
 
