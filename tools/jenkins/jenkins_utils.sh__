@@ -11,6 +11,7 @@ exeTIME=0 && SECONDS=0
 
 ######## export & import variable
 # Multi-line String Parameter
+# INPUT_ARRAY
 # ARR_FILE=/tmp/__reference__bench_aosp_build
 # ARR_STEP=1.DOWNLOAD
 # ARR_REMOVE=false
@@ -28,9 +29,9 @@ function defineVariable_import(){
     local i c 
     
     if [ -f "$1" ]; then 
-        readarray -t ARR < "${1}"
+        readarray -t ARR < "${INPUT_ARRAY[@]}"
     else
-        readarray -t ARR <<< "${!1}"
+        readarray -t ARR <<< "${INPUT_ARRAY[@]}"
     fi 
     
     ##print front|behind 
@@ -55,9 +56,9 @@ function defineVariable_export(){
 # 1.export multi variables in file to pass as parameter
 
     cat <<EOL >${BUILTIN_BACKUP_FILE:=$1}
-$1="
-$(for var in ${ARR[@]%%=*}; do printf "${var}=${!var}\n"; done)
-"
+    INPUT_ARRAY="
+    $(for var in ${ARR[@]%%=*}; do printf "${var}=${!var}\n"; done)
+    "
 EOL
 }
 
