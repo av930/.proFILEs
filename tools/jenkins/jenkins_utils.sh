@@ -19,7 +19,7 @@ exeTIME=0 && SECONDS=0
 
 function defineVariable_import(){
 #----------------------------------------------------------------------------------------------------------
-# 1.import from multi-line string as variable
+# 1.import multi-line string from file or variable
 # 2.define variable 
    ## define variables
     declare -g BUILTIN_JOB_NAME=$(echo ${JOB_URL##*job/} |cut -d'/' -f1)
@@ -34,7 +34,7 @@ function defineVariable_import(){
     fi 
     
     ##print front|behind 
-    i=0; for var in ${ARR[@]}; do printf "DEBUG[$((i++))] [${var}]\n";done
+    i=0; for var in ${ARR[@]}; do printf "DEBUG_element[$((i++))] [${var}]\n";done
 
     #define variable with value (remove leading & trailing space)
     c=0; for var in ${ARR[@]%$SEP*}; do
@@ -52,13 +52,20 @@ function defineVariable_import(){
 
 function defineVariable_export(){
 #----------------------------------------------------------------------------------------------------------
-# 1.export multi variables in file to pass as parameter
+# 1.export multi variables in file 
 
-    cat <<EOL >${BUILTIN_BACKUP_FILE:=$1}
-$1="
+    local outfile=${1:=${BUILTIN_BACKUP_FILE}}
+
+    cat <<EOL >$outfile
 $(for var in ${ARR[@]%%=*}; do printf "${var}=${!var}\n"; done)
+EOL
+
+    cat <<EOL >${outfile}.param
+$1="
+$(cat $outfile)
 "
 EOL
+    echo DEBUG_outfile[${outfile}]
 }
 
 
