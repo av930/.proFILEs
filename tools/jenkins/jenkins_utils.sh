@@ -98,7 +98,9 @@ EOL
     fi
 
     ## change build name & description with encoding
-    curl -u $USER:$1 --silent ${JOB_URL}${BUILD_ID}/configSubmit --data-urlencode json@temp.json
+    if [ -s temp.json ]; then 
+        curl -u $USER:$1 --silent ${JOB_URL}${BUILD_ID}/configSubmit --data-urlencode json@temp.json
+    fi 
     SECONDS=0
 }
 
@@ -124,7 +126,9 @@ function updateInfo_result(){
 EOL
 
 ## change build name & description with encoding
-    curl -u $USER:$ARR_APIKEY --silent ${JOB_URL}${BUILD_ID}/configSubmit --data-urlencode json@temp.json
+    if [ -s temp.json ]; then 
+        curl -u $USER:$ARR_APIKEY --silent ${JOB_URL}${BUILD_ID}/configSubmit --data-urlencode json@temp.json
+    fi
     SECONDS=0
 }
 
@@ -156,7 +160,10 @@ function updateInfo_commit(){
         <a href=\"${JOB_URL}/${BUILD_ID}/checkResult\"> >>>  check build error</a></H3>"
     }
 EOL
-    curl -u $USER:$ARR_APIKEY --silent ${JOB_URL}${BUILD_ID}/configSubmit --data-urlencode json@temp.json
+    
+    if [ -s temp.json ]; then 
+        curl -u $USER:$ARR_APIKEY --silent ${JOB_URL}${BUILD_ID}/configSubmit --data-urlencode json@temp.json
+    fi
     SECONDS=0
 }
 

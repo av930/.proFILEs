@@ -331,8 +331,7 @@ function getRepoInfo(){
 # print information(changes, recent commits) of current repository
 #
     bar inline "repo status: show branch name & only uncommitted changes"
-    repo status -j1 -o
-
+    repo status -j1 -o > ${REPO_ROOT}/repo.info
     #topic/working branch
     bar inline "repo branch: check if working branch existed (WAIT: It takes time) "
     repo branch
@@ -624,7 +623,8 @@ case "$1" in
                     *)  echo 'exit) stay here'      ;;
                 esac;;
     info)       checkPreCondition yes_print || return 1
-                getRepoInfo "${@:2}"  2>&1 | tee ${REPO_ROOT}/repo.info
+                #getRepoInfo "${@:2}"  2>&1 | tee ${REPO_ROOT}/repo.info
+                getRepoInfo "${@:2}"  2>&1 
                 info "please check file [${REPO_ROOT}/repo.info]"
                 warn "you can use this file to compare other repo.";;
     commit)     checkPreCondition yes_print || return 1
