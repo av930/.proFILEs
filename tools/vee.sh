@@ -17,7 +17,7 @@ CMD_TEMP=exe_vbee
 
 ## get vbee client && login
 echo ###########################################################################
-wget  --user vc.integrator --password=REMOVE_KEY -q http://cart.lge.com/bee-deploy/bee-cli/vbee/latest/vbee -O $CMD_TEMP && chmod +x $CMD_TEMP
+wget -q http://cart.lge.com/bee-deploy/bee-cli/vbee/latest/vbee -O $CMD_TEMP && chmod +x $CMD_TEMP
 if [ -x $CMD_TEMP ];then $CMD_TEMP --help; else echo "[failed] please check $CMD_TEMP" && exit 1; fi
 $CMD_TEMP login -u ${AD_ID} -p  ${AD_PW}
 echo ###########################################################################

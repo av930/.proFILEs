@@ -1,13 +1,20 @@
 #!/bin/bash -e
 ######## common handler
+# java -jar jenkins-cli.jar -s http://vjenkins.lge.com/jenkins03/ -auth joongkeun.kim:11ab112cf452ffb160 help set-build-description
 #### common env
-line="-----------------------------------------------------------------------------------------------"
-bar() { printf "\e[1;36m%s%s \e[0m\n" "${1:+$1 }" "${line:(${1:+3}+${#1})}" ;}
 
-#### common env
+
+function call_JenkinsAPI(){
+#----------------------------------------------------------------------------------------------------------
+#$1: API_KEY
 ## this variable must be defined before calling, by "export variable"
 JENKINS_URL=${JENKINS_URL:=http://vjenkins.lge.com/jenkins03/}
-ACCOUNTnAPIKEY=${ACCOUNTnAPIKEY:=joongkeun.kim:REMOVE_KEY}
+ACCOUNTnAPIKEY=${ACCOUNTnAPIKEY:?joongkeun.kim:11ab112cf452ff}
+
+#### common env
+## predefined var
+line="-----------------------------------------------------------------------------------------------"
+bar() { printf "\e[1;36m%s%s \e[0m\n" "${1:+$1 }" "${line:(${1:+3}+${#1})}" ;}
 
 ## default sample value
 NAME_JOB=_SProject-MJ_DebugJenkins
@@ -43,3 +50,5 @@ fi
 
 if [ ! -f jenkins-cli.jar ]; then wget -q ${JENKINS_URL}/jnlpJars/jenkins-cli.jar; fi 
 eval "set -x; java -jar jenkins-cli.jar -s ${JENKINS_URL} -auth ${ACCOUNTnAPIKEY} ${CMD[@]}"
+
+}
