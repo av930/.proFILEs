@@ -61,7 +61,7 @@ function exit_handler(){
 if [ "$func_called" = "true" ]; then echo "already called" && exit 1; else export func_called=true;  fi
 
     local sig=$1 && local line=$2 && local exitcode=$3
-    ECMD=$(eval echo ${BASH_COMMAND})
+    ECMD=$(eval "echo ${BASH_COMMAND}")
     BUILD_ID=${BUILD_JENKINS_ID:=${BUILD_ID}}
 
     #set +x

@@ -63,7 +63,7 @@ if [ "$func_called" = "true" ]; then echo "already called" && exit 1; else expor
 
     local sig=$1 && local line=$2 && local exitcode=$3
     echo "[sig=$sig, line="$line", exitcode=$exitcode ]"    
-    ECMD=$(eval echo ${BASH_COMMAND})
+    ECMD=$(eval "echo ${BASH_COMMAND}")
     BUILD_ID=${BUILD_JENKINS_ID:=${BUILD_ID}}
 
     #set +x
