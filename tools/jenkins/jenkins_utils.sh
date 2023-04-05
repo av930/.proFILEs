@@ -7,7 +7,7 @@
 line="-----------------------------------------------------------------------------------------------"
 bar() { printf "\e[1;36m%s%s \e[0m\n\n" "${1:+[$1] }" "${line:(${1:+3}+${#1})}" ;}
 exeTIME=0 && SECONDS=0
-
+BUILD_JENKINS_ID=${BUILD_JENKINS_ID:=${BUILD_ID}}
 
 ######## export & import variable
 # Multi-line String Parameter
