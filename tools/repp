@@ -330,21 +330,21 @@ function getRepoInfo(){
 ## ---------------------------------------------------------------------------
 # print information(changes, recent commits) of current repository
 #
-    bar inline "repo status: show branch name & only uncommitted changes"
-    repo status -j1 -o > ${REPO_ROOT}/repo.info
+    bar inline "repo status: uncommitted changes list saved to [ ${REPO_ROOT}/repo.info ]"
+    bar inline "repo status" > ${REPO_ROOT}/repo.info
+    repo status -j1 -o >> ${REPO_ROOT}/repo.info &
     #topic/working branch
     bar inline "repo branch: check if working branch existed (WAIT: It takes time) "
     repo branch
 
     bar inline "git log -1 for all repositories"
-    read -p "to continue [enter]"
     printf "\n%75s %s %s\n" '[git-name]' '[rev] ' '[src-path]'
-    repo forall -j1 -c 'printf "%82s %-80s\n" "${REPO_PROJECT} ${REPO_LREV:0:6}" "${REPO_PATH}"'
+    repo forall -j1 -c 'printf "%.6s %.7s %-18.18s %-74.74s %.80s \n" "${REPO_LREV}" "${REPO_REMOTE}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"'
 
     #run command "repo info"
-    bar inline "repo info: show full commit diff to remote branch"
-    read -p "to continue [enter], to stop [ctrl+c] "
-    repo info
+    bar inline "repo info: git repo/source path /branch rev saved to [ ${REPO_ROOT}/repo.info ]"
+    bar inline "repo info" >> ${REPO_ROOT}/repo.info
+    repo info >> ${REPO_ROOT}/repo.info &
 }
 
 
@@ -390,9 +390,12 @@ function findGitRepository(){
 # usage: findGitRepository [path|project]
 
     local filter findstr=$1
-    bar inline "git path]                                                                       [git branch(revision)]         [source path in manifest"
+    #bar inline "git path]                                                                       [git branch(revision)]         [source path in manifest"
+    printf "\e[1;33m%6.6s %7.7s %-22.22s %-74.74s %.80s \e[0m\n" "REPO_LREV" "REPO_REMOTE" "REPO_RREV" "REPO_PROJECT" "REPO_PATH"
     if [ -n "$findstr" ]; then cmd_filter="grep -i --color=always $findstr";else cmd_filter=cat ;fi
-    repo forall -j$NJOBS -c 'printf "%-80.80s %-30.30s %-80s\n" "${REPO_PROJECT}" "${REPO_RREV}" "${REPO_PATH}"' | $cmd_filter | tee  >(wc -l)
+    repo forall -j$NJOBS -c 'printf "%.6s %.7s %-22.22s %-74.74s %.80s \n" "${REPO_LREV}" "${REPO_REMOTE}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"' | $cmd_filter | tee  >(wc -l)
+    #repo forall -j$NJOBS -c 'printf "%-80.80s %-30.30s %-80s\n" "${REPO_PROJECT}" "${REPO_RREV}" "${REPO_PATH}"' | $cmd_filter | tee  >(wc -l)
+    
     #repo list -r ${findstr}
 
 }
