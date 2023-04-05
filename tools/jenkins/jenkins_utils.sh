@@ -85,21 +85,21 @@ function updateInfo_job(){
 
     if ! [ -f "$2" ]; then 
     cat <<EOL >temp.json
-    {"displayName":"##[${BUILD_ID} $2]                          \n\
+    {"displayName":"##[${BUILD_JENKINS_ID} $2]                          \n\
         [${NODE_NAME}]                                          \n\
         ${PATH_SRC}                                             \n\
         [${exeTIME} sec]",
      "description":"<PRE>    @@@ build info [$(date +"%y%m%d:%H:%M")] @@@    \n\
         </PRE>                                                               \n\
         ${text}                                                              \n\
-        <H3><a href=\"${JOB_URL}/${BUILD_ID}/consoleText\"> >>>  open build log</a></H3>"
+        <H3><a href=\"${JOB_URL}/${BUILD_JENKINS_ID}/consoleText\"> >>>  open build log</a></H3>"
      }
 EOL
     fi
 
     ## change build name & description with encoding
-    if [ -s temp.json ]; then 
-        curl -u $USER:$1 --silent ${JOB_URL}${BUILD_ID}/configSubmit --data-urlencode json@temp.json
+    if [ -s temp.json ] || [ -n ${BUILD_JENKINS_ID} ]; then 
+        curl -u $USER:$1 --silent ${JOB_URL}${BUILD_JENKINS_ID}/configSubmit --data-urlencode json@temp.json
     fi 
     SECONDS=0
 }
@@ -110,7 +110,7 @@ function updateInfo_result(){
     exeTIME=$(( exeTIME + SECONDS ))
 ## make build info to json 
     cat <<EOL >temp.json
-    {"displayName":"##[${BUILD_ID} $2]                          \n\
+    {"displayName":"##[${BUILD_JENKINS_ID} $2]                          \n\
         [${NODE_NAME}]                                          \n\
         ${PATH_SRC}                                             \n\
         [${exeTIME} sec]",
@@ -120,14 +120,14 @@ function updateInfo_result(){
         command: [line $2]${ECMD}                                                     \n\
         build result: [sig=$1:exit=$3] ${ret}                                              \n\
         </PRE>                                                                             \n\
-        <H3><a href=\"${JOB_URL}/${BUILD_ID}/consoleText\"> >>>  open build log</a><BR>  \n\
-        <a href=\"${JOB_URL}/${BUILD_ID}/checkResult\"> >>>  check build error</a></H3>"
+        <H3><a href=\"${JOB_URL}/${BUILD_JENKINS_ID}/consoleText\"> >>>  open build log</a><BR>  \n\
+        <a href=\"${JOB_URL}/${BUILD_JENKINS_ID}/checkResult\"> >>>  check build error</a></H3>"
      }
 EOL
 
 ## change build name & description with encoding
-    if [ -s temp.json ]; then 
-        curl -u $USER:$ARR_APIKEY --silent ${JOB_URL}${BUILD_ID}/configSubmit --data-urlencode json@temp.json
+    if [ -s temp.json ] || [ -n ${BUILD_JENKINS_ID} ]; then 
+        curl -u $USER:$ARR_APIKEY --silent ${JOB_URL}${BUILD_JENKINS_ID}/configSubmit --data-urlencode json@temp.json
     fi
     SECONDS=0
 }
@@ -142,7 +142,7 @@ EOL
 function updateInfo_commit(){
 #----------------------------------------------------------------------------------------------------------
     cat <<EOL >temp.json
-    {"displayName":"###[${BUILD_ID}] ${GERRIT_PATCHSET_UPLOADER}                           \n\
+    {"displayName":"###[${BUILD_JENKINS_ID}] ${GERRIT_PATCHSET_UPLOADER}                           \n\
         [${GERRIT_BRANCH}]                                                                 \n\
         ${GERRIT_PROJECT}",
     "description":"<PRE>      @@@ build info [$(date +"%y%m%d:%H:%M")] finished @@@        \n\
@@ -156,13 +156,13 @@ function updateInfo_commit(){
         exit command: [line $2]${ECMD}                                                     \n\
         build result: [sig=$1:exit=$3] ${ret}                                              \n\
         </PRE>                                                                             \n\
-        <H3><a href=\"${JOB_URL}/${BUILD_ID}/consoleText\"> >>>  open build log</a><BR>  \n\
-        <a href=\"${JOB_URL}/${BUILD_ID}/checkResult\"> >>>  check build error</a></H3>"
+        <H3><a href=\"${JOB_URL}/${BUILD_JENKINS_ID}/consoleText\"> >>>  open build log</a><BR>  \n\
+        <a href=\"${JOB_URL}/${BUILD_JENKINS_ID}/checkResult\"> >>>  check build error</a></H3>"
     }
 EOL
     
-    if [ -s temp.json ]; then 
-        curl -u $USER:$ARR_APIKEY --silent ${JOB_URL}${BUILD_ID}/configSubmit --data-urlencode json@temp.json
+    if [ -s temp.json ] || [ -n ${BUILD_JENKINS_ID} ]; then 
+        curl -u $USER:$ARR_APIKEY --silent ${JOB_URL}${BUILD_JENKINS_ID}/configSubmit --data-urlencode json@temp.json
     fi
     SECONDS=0
 }
@@ -177,7 +177,7 @@ if [ "$func_called" = "true" ]; then echo "already called" && exit 1; else expor
     local func=$1 && local sig=$2 && local line=$3 && local exitcode=$4
     echo "[sig=$sig, line="$line", exitcode=$exitcode ]"    
     ECMD=$(eval echo ${BASH_COMMAND})
-    BUILD_ID=${BUILD_JENKINS_ID:=${BUILD_ID}}
+    BUILD_JENKINS_ID=${BUILD_JENKINS_ID:=${BUILD_JENKINS_ID}}
 
     #set +x
     case $exitcode in
