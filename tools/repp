@@ -194,6 +194,33 @@ function getRepoCMD(){
 
 
 
+function go_dir() 
+{
+    : '
+    local T=
+    #find path to upper dirs until HOME or ROOT.
+    dirs -c
+    while [[ "$PWD" != "$HOME" ]] && [[ "$PWD" != "/"  ]]; do
+        T=$PWD
+        if [ -d "$T/$1" ]; then
+            cd $T 
+            return
+        fi
+        pushd .. > /dev/null
+    done
+    
+    #not found in partents, now findout in child
+    pushd -0 && dirs -c > /dev/null
+    echo "no .git found, stay HERE"
+    '
+    findGitRepository @path
+    local INPUT=( $(find ../.. -maxdepth 4 -type d -wholename "*$1" 2> /dev/null) )
+    if [ -n "${INPUT}" ];then run_menu "${INPUT[@]}" ;  fi
+    cd "${menu_selected}"
+}
+
+
+
 function repoInit(){
 ## ---------------------------------------------------------------------------
 # repo init helper
@@ -339,7 +366,7 @@ function getRepoInfo(){
 
     bar inline "git log -1 for all repositories"
     printf "\n%75s %s %s\n" '[git-name]' '[rev] ' '[src-path]'
-    repo forall -j1 -c 'printf "%.6s %.7s %-18.18s %-74.74s %.80s \n" "${REPO_LREV}" "${REPO_REMOTE}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"'
+    findGitRepository
 
     #run command "repo info"
     bar inline "repo info: git repo/source path /branch rev saved to [ ${REPO_ROOT}/repo.info ]"
@@ -389,15 +416,23 @@ function findGitRepository(){
 # $1 path or project
 # usage: findGitRepository [path|project]
 
-    local filter findstr=$1
-    #bar inline "git path]                                                                       [git branch(revision)]         [source path in manifest"
-    printf "\e[1;33m%6.6s %7.7s %-22.22s %-74.74s %.80s \e[0m\n" "REPO_LREV" "REPO_REMOTE" "REPO_RREV" "REPO_PROJECT" "REPO_PATH"
-    if [ -n "$findstr" ]; then cmd_filter="grep -i --color=always $findstr";else cmd_filter=cat ;fi
-    repo forall -j$NJOBS -c 'printf "%.6s %.7s %-22.22s %-74.74s %.80s \n" "${REPO_LREV}" "${REPO_REMOTE}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"' | $cmd_filter | tee  >(wc -l)
-    #repo forall -j$NJOBS -c 'printf "%-80.80s %-30.30s %-80s\n" "${REPO_PROJECT}" "${REPO_RREV}" "${REPO_PATH}"' | $cmd_filter | tee  >(wc -l)
-    
-    #repo list -r ${findstr}
-
+    file_log=${REPO_ROOT}/repo.csv
+    repo forall -j1 -c 'printf "%.6s|%.7s|%-22.22s|%-74.74s|%.80s \n" "${REPO_LREV}" "${REPO_REMOTE}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"' \
+     > $file_log
+     
+    case $1 in 
+      comment) @로 시작하면 coloume을 출력
+    ;; @rev)      echo "REPO_LREV";    awk -v FS="|" '{print $1}' $file_log 
+    ;; @remote)   echo "REPO_REMOTE";  awk -v FS="|" '{print $2}' $file_log |sort |uniq
+    ;; @branch)   echo "REPO_RREV";    awk -v FS="|" '{print $3}' $file_log |sort |uniq
+    ;; @git)      echo "REPO_PROJECT"; awk -v FS="|" '{print $4}' $file_log |sort 
+    ;; @path)     echo "REPO_PATH";    awk -v FS="|" '{print $5}' $file_log |sort 
+    ;; "")        printf "\e[1;33m%6.6s %7.7s %-22.22s %-74.74s %.80s \e[0m\n" "REPO_LREV" "REPO_REMOTE" "REPO_RREV" "REPO_PROJECT" "REPO_PATH"
+                  cat $file_log | tee  >(wc -l) 
+    ;; *)         printf "\e[1;33m%6.6s %7.7s %-22.22s %-74.74s %.80s \e[0m\n" "REPO_LREV" "REPO_REMOTE" "REPO_RREV" "REPO_PROJECT" "REPO_PATH"
+                  cat $file_log | grep -i --color=always $1
+    ;;
+    esac
 }
 
 
@@ -518,7 +553,8 @@ MENU=(
 "commit: shows lastest commits(git log -1) from all repository (default 20)
     ex) repp commit, repp commit 4, repp commit log.txt(save as)"
 "find: (list) search string in all [repo path] : [repo revision] : [repo name]
-    ex) repp find, repp list|more, repp find build, repp list|grep -v build"
+    ex) repp find, repp list|more, repp find build, repp list|grep -v build
+    ex) repp find @rev [@rep| @remote| @branch| @git| @path)"
 "init: repo init with automatic options
     ex) repp init -u ssh://${USER:+${USER}@}vgit.lge.com:29420/linux/manifest.git -b mib3_release
     ex) repp init -b lampauto_s_release -m all.xml
@@ -617,12 +653,12 @@ case "$1" in
     show)       checkPreCondition yes_print || return 1
                 getRepoShow  "${@:2}";;
     go)         checkPreCondition yes_print || return 1
-                local selected_item=0
-                local menu_items=('1. go　ROOT　dir' '2. go　Manifests　dir' '3. exit')
-                run_menu "${menu_items[@]}" "$selected_item"
+                local menu_items=('go ROOT　dir' 'go Manifests　dir' 'go GIT' 'exit')
+                run_menu "${menu_items[@]}"
                 case "$?" in
                     1|11)  cd "${REPO_ROOT}"        ;;
                     2|12)  cd "${REPO_PATH}"        ;;
+                    3|13)  go_dir .git              ;;
                     *)  echo 'exit) stay here'      ;;
                 esac;;
     info)       checkPreCondition yes_print || return 1
@@ -684,6 +720,7 @@ function checkPreCondition(){
 
     if [[ $ret -eq 1 && "$1" = "yes_print" ]]; then 
         printf "%s\n" ${REPO_PATH_ALL[@]};
+        bar inline "WARNING"
         warn "you are not in repo project, please check !";      
     fi
     return $ret
