@@ -160,8 +160,36 @@ function handler_args(){
     fi
 }
 
-function print_menu()  #menu_items
+
+function go_dir() 
 {
+    : '
+    local T=
+    #find path to upper dirs until HOME or ROOT.
+    dirs -c
+    while [[ "$PWD" != "$HOME" ]] && [[ "$PWD" != "/"  ]]; do
+        T=$PWD
+        if [ -d "$T/$1" ]; then
+            cd $T 
+            return
+        fi
+        pushd .. > /dev/null
+    done
+    
+    #not found in partents, now findout in child
+    pushd -0 && dirs -c > /dev/null
+    echo "no .git found, stay HERE"
+    '
+    local INPUT=( $(find ../.. -maxdepth 4 -type d -wholename "*$1" 2> /dev/null) )
+    if [ -n "${INPUT}" ];then run_menu "${INPUT[@]}" ;  fi
+    cd "${menu_selected}"
+}
+
+
+function print_menu() {
+## ---------------------------------------------------------------------------
+# called from run_menu
+
     local menu_items=("$@")
     local menu_limit=$(( ${#menu_items[@]} - 1 ))  
     
@@ -170,16 +198,19 @@ function print_menu()  #menu_items
     for (( i = 0; i < $menu_limit; ++i ))
     do
         if [ "$i" = "${menu_items[$menu_limit]}" ]
-        then  printf "${CYAN}->${NCOL} ${menu_items[i]}\n"
-        else  printf "   ${menu_items[i]}\n"
+        then  printf "${CYAN}->${NCOL} %02d: ${menu_items[i]}\n" "$i"
+        else  printf "   %02d: ${menu_items[i]}\n" "$i"
         fi
     done
 }
 
 
-function run_menu()  #menu_items
-{
-    local menu_items=("$@")  
+function __run_menu() {
+## --------------------------------------------------------------------------- 
+# refresh menu when cursor move and number input
+
+    menu_selected=""
+    local menu_items=("$@" "0" ) #0 is endmark
     local menu_size=${#menu_items[@]}
     local menu_limit=$((menu_size - 1))
 
@@ -213,9 +244,67 @@ function run_menu()  #menu_items
                 fi
                 read -rsn5 -t 0.1  ;;# flushing stdin
             "")  # Enter key
-                return $(( 11 + ${menu_items[$menu_limit]} )) ;;
-            *)  return "$input" ;;
+                menu_selected=${menu_items[${menu_items[$menu_limit]}]}
+                return $(( 11 + ${menu_items[$menu_limit]} )) 
+                ;;
+            *)  menu_selected=${menu_items[$input]}
+                return "$input" 
+                ;;
         esac
     done
 }
 
+
+function run_menu() {
+## --------------------------------------------------------------------------- 
+# refresh menu when cursor move and number input
+
+    menu_selected=""
+    local menu_items=("$@" "0" ) #0 is endmark
+    local menu_size=${#menu_items[@]}
+    local menu_limit=$((menu_size - 1))
+
+    clear
+    print_menu "${menu_items[@]}"
+    
+    while read -rn1 input
+    do
+        case "${input:0:1}" in
+            $'\x1B')  # ESC ASCII code (https://dirask.com/posts/ASCII-Table-pJ3Y0j)
+                echo $input
+                read -rsn2 -t 0.1 input2
+                case "$input2" in
+                    [A)  # Up Arrow
+                        if [ "${menu_items[$menu_limit]}" -ge 1 ]; then
+                            menu_items[$menu_limit]=$(( ${menu_items[$menu_limit]} - 1 ))
+                            clear
+                            print_menu "${menu_items[@]}"
+                        fi;;
+                    [B)  # Down Arrow
+                        if [ "${menu_items[$menu_limit]}" -lt "$menu_limit" ]; then
+                            menu_items[$menu_limit]=$(( ${menu_items[$menu_limit]} + 1 ))
+                            clear
+                            print_menu "${menu_items[@]}"
+                        fi;;
+                esac
+
+                read -rsn5 -t 0.1  ;;# flushing stdin
+            "")  # Enter key
+                echo $input
+                set -x
+                menu_selected=${menu_items[${menu_items[$menu_limit]}]}
+                set +x
+                return $(( 11 + ${menu_items[$menu_limit]} )) 
+                ;;
+            *)  
+                set -x            
+                echo $input            
+                read -rn2 -t 1 input2
+
+                menu_selected=${menu_items[${input}${input2}]}
+                set +x
+                return "${input}${input2}" 
+                ;;
+        esac
+    done
+}
