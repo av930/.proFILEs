@@ -230,7 +230,7 @@ function __pathimport()
     echo "path is changed by path.export file"
 }
 
-alias gg="go_updown"
+alias gg="echo 'find path up&down <gg .git>'; go_updown"
 function go_updown()
 {
     echo "go parent dir << [$HOME] ---- ${PWD##*/} ---- [depth 8] >> "
@@ -246,7 +246,7 @@ function go_updown()
             tree -L 2 -d
             return
         fi
-        pushd .. > /dev/null
+        cd ..
     done
     #not found in partents, now findout in child
     cd $HERE
