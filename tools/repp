@@ -128,6 +128,7 @@ function findFileLocation(){
 ## ex) findFileLocation .repo 5
 ## ex) findFileLocation .git 2
 
+    local T=$PWD
     local target=${1:-.repo}
     local down_depth=${2:-2} #default value:2
     local print=$3
@@ -144,7 +145,8 @@ function findFileLocation(){
             pushd ..
         done
         if [ -d ${target} ]; then REPO_PATH=$(readlink -f ${target});else REPO_PATH='';fi
-        pushd -0 && dirs -c        
+        pushd -0 && dirs -c
+        cd $T
         ;;
     *)  # found multiple dir in sub dir
         if [ "$print" = "yes_print" ]; then
@@ -185,7 +187,7 @@ function getRepoCMD(){
     fi
 
     if [ -n "$REPO_MIRROR" ];then EXTRA_OPTION="--reference=$REPO_MIRROR"; fi
-    if [ "$1" = "show" ];then
+    if [ "$1" = "info" ];then
         bar inline "repo-init cmd"
         log "repo init -u $REPO_REMOTE -b $REPO_BRANCH -m $FILE_MANI --repo-url=$REPO_URL $EXTRA_OPTION"
     fi
@@ -194,27 +196,28 @@ function getRepoCMD(){
 
 
 
-function go_dir() 
-{
-    : '
-    local T=
+function go_dir() {
+## ---------------------------------------------------------------------------
+# return git root path or return near git path
+    local T=$(pwd)
+    if [ "${REPO_ROOT}" = "${T}" ]; then 
+        echo "your are in repo root, use 'repp find @path' to list up all repositories" && return 0; 
+    fi
+    
     #find path to upper dirs until HOME or ROOT.
     dirs -c
-    while [[ "$PWD" != "$HOME" ]] && [[ "$PWD" != "/"  ]]; do
+    while [ "$T" != "$HOME" ] && [ "$T" != "/"  ]; do
         T=$PWD
-        if [ -d "$T/$1" ]; then
-            cd $T 
-            return
-        fi
+        if [ -d "$T/$1" ]; then cd $T && return 0; fi
         pushd .. > /dev/null
     done
     
     #not found in partents, now findout in child
     pushd -0 && dirs -c > /dev/null
-    echo "no .git found, stay HERE"
-    '
-    findGitRepository @path
-    local INPUT=( $(find ../.. -maxdepth 4 -type d -wholename "*$1" 2> /dev/null) )
+    #echo "no .git found, stay HERE"
+
+    local INPUT=( $(find ../.. -maxdepth 4 -type d -wholename "*$1" 2> /dev/null |head -60))
+    #local INPUT=( $(findGitRepository @path) )
     if [ -n "${INPUT}" ];then run_menu "${INPUT[@]}" ;  fi
     cd "${menu_selected}"
 }
@@ -314,7 +317,7 @@ function showManifestTree(){
 
 
 
-function getRepoShow(){
+function getRepoInfo(){
 ## ---------------------------------------------------------------------------
 # print information of repo
 # $1 manifests file (default is current manifests)
@@ -327,7 +330,7 @@ function getRepoShow(){
     log "${REPO_PATH}"
 
     #get global variable and repo init command.
-    getRepoCMD show
+    getRepoCMD info
 
     #show manifest file with included sub manifests.
     local manifest=${1:-${FILE_MANI}}
@@ -353,25 +356,31 @@ function getRepoShow(){
 
 
 
-function getRepoInfo(){
+function getRepoShow(){
 ## ---------------------------------------------------------------------------
 # print information(changes, recent commits) of current repository
 #
-    bar inline "repo status: uncommitted changes list saved to [ ${REPO_ROOT}/repo.info ]"
-    bar inline "repo status" > ${REPO_ROOT}/repo.info
-    repo status -j1 -o >> ${REPO_ROOT}/repo.info &
     #topic/working branch
     bar inline "repo branch: check if working branch existed (WAIT: It takes time) "
     repo branch
 
     bar inline "git log -1 for all repositories"
     printf "\n%75s %s %s\n" '[git-name]' '[rev] ' '[src-path]'
-    findGitRepository
+    findGitRepository |more
 
     #run command "repo info"
-    bar inline "repo info: git repo/source path /branch rev saved to [ ${REPO_ROOT}/repo.info ]"
-    bar inline "repo info" >> ${REPO_ROOT}/repo.info
-    repo info >> ${REPO_ROOT}/repo.info &
+    bar outline "it takes time to get information..."
+    bar inline "repo status: uncommitted changes list saved to [ repo.info ]"
+    echo "repo status" > ${REPO_ROOT}/repo.info
+    
+    #remove colored output with 1) sed command, 2) --color option
+    #repo status -j8 |sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" >> ${REPO_ROOT}/repo.info 
+    repo --no-pager --color=never status -j8 >> ${REPO_ROOT}/repo.info 
+
+    #### repo info command is duplicated with findGitRepository functionality, so remove it.
+    #bar inline "repo info: git repo/source path /branch rev saved to [ ${REPO_ROOT}/repo.info ]"
+    #echo "repo info" >> ${REPO_ROOT}/repo.info
+    #repo info |sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" >> ${REPO_ROOT}/repo.info 
 }
 
 
@@ -416,6 +425,7 @@ function findGitRepository(){
 # $1 path or project
 # usage: findGitRepository [path|project]
 
+    bar inline "all repository info is save to repo.csv" > /dev/stderr
     file_log=${REPO_ROOT}/repo.csv
     repo forall -j1 -c 'printf "%.6s|%.7s|%-22.22s|%-74.74s|%.80s \n" "${REPO_LREV}" "${REPO_REMOTE}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"' \
      > $file_log
@@ -426,7 +436,7 @@ function findGitRepository(){
     ;; @remote)   echo "REPO_REMOTE";  awk -v FS="|" '{print $2}' $file_log |sort |uniq
     ;; @branch)   echo "REPO_RREV";    awk -v FS="|" '{print $3}' $file_log |sort |uniq
     ;; @git)      echo "REPO_PROJECT"; awk -v FS="|" '{print $4}' $file_log |sort 
-    ;; @path)     echo "REPO_PATH";    awk -v FS="|" '{print $5}' $file_log |sort 
+    ;; @path)     echo "REPO_PATH" > /dev/stderr;   awk -v FS="|" '{print $5}' $file_log |sort 
     ;; "")        printf "\e[1;33m%6.6s %7.7s %-22.22s %-74.74s %.80s \e[0m\n" "REPO_LREV" "REPO_REMOTE" "REPO_RREV" "REPO_PROJECT" "REPO_PATH"
                   cat $file_log | tee  >(wc -l) 
     ;; *)         printf "\e[1;33m%6.6s %7.7s %-22.22s %-74.74s %.80s \e[0m\n" "REPO_LREV" "REPO_REMOTE" "REPO_RREV" "REPO_PROJECT" "REPO_PATH"
@@ -546,9 +556,9 @@ function checkConnection(){
 
 
 MENU=(
-"show: shows repository info such as manifest path, repo cmd, tree of manifests, etc
+"info: shows repository info such as manifest path, repo cmd, tree of manifests, etc
     ex) repp show, repp show default.xml, repp show event/manifest.xml"
-"info: shows uncommited changes, top -1 commits, md5 sum, repo info for all repositories
+"show: shows uncommited changes, top -1 commits, md5 sum, repo info for all repositories
     ex) repp info, repp info|more, repp info| grep build, cat repo.info"
 "commit: shows lastest commits(git log -1) from all repository (default 20)
     ex) repp commit, repp commit 4, repp commit log.txt(save as)"
@@ -581,7 +591,7 @@ cat << PREFACE
 ==============================================================
  the menu for repo tools
  -------------------------------------------------------------
- command usage: ex) repp, repp show, repp show [default.xml]
+ command usage: ex) repp, repp info, repp show [default.xml]
  repp find [string], repp sync 16 --force-sync, etc
  help: http://collab.lge.com/main/x/wY6wa
 ==============================================================
@@ -599,7 +609,7 @@ printf ${NCOL}
 
 
 
-function getGitShow(){
+function getGitInfo(){
 ## ---------------------------------------------------------------------------
 # main handler for this scriptre
     local TEMP
@@ -634,7 +644,7 @@ case "$1" in
     #$1:below ${@:2}:parameters
     go)         cd "$(getGitRootPath)" ;;
     reset)      resetRepository "${@:2}";;
-    show)       getGitShow ;;
+    info)       getGitInfo ;;
     
 
 esac
@@ -650,10 +660,10 @@ function repp(){
 local ret=0
 case "$1" in
     #$1:below ${@:2}:parameters
-    show)       checkPreCondition yes_print || return 1
-                getRepoShow  "${@:2}";;
+    info)       checkPreCondition yes_print || return 1
+                getRepoInfo  "${@:2}";;
     go)         checkPreCondition yes_print || return 1
-                local menu_items=('go ROOT　dir' 'go Manifests　dir' 'go GIT' 'exit')
+                local menu_items=('go ROOT　dir' 'go Manifests　dir' 'go GIT　root dir' 'exit')
                 run_menu "${menu_items[@]}"
                 case "$?" in
                     1|11)  cd "${REPO_ROOT}"        ;;
@@ -661,9 +671,9 @@ case "$1" in
                     3|13)  go_dir .git              ;;
                     *)  echo 'exit) stay here'      ;;
                 esac;;
-    info)       checkPreCondition yes_print || return 1
+    show)       checkPreCondition yes_print || return 1
                 #getRepoInfo "${@:2}"  2>&1 | tee ${REPO_ROOT}/repo.info
-                getRepoInfo "${@:2}"  2>&1 
+                getRepoShow "${@:2}"  2>&1 
                 info "please check file [${REPO_ROOT}/repo.info]"
                 warn "you can use this file to compare other repo.";;
     commit)     checkPreCondition yes_print || return 1
