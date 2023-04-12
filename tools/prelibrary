@@ -161,29 +161,6 @@ function handler_args(){
 }
 
 
-function go_dir() 
-{
-    : '
-    local T=
-    #find path to upper dirs until HOME or ROOT.
-    dirs -c
-    while [[ "$PWD" != "$HOME" ]] && [[ "$PWD" != "/"  ]]; do
-        T=$PWD
-        if [ -d "$T/$1" ]; then
-            cd $T 
-            return
-        fi
-        pushd .. > /dev/null
-    done
-    
-    #not found in partents, now findout in child
-    pushd -0 && dirs -c > /dev/null
-    echo "no .git found, stay HERE"
-    '
-    local INPUT=( $(find ../.. -maxdepth 4 -type d -wholename "*$1" 2> /dev/null) )
-    if [ -n "${INPUT}" ];then run_menu "${INPUT[@]}" ;  fi
-    cd "${menu_selected}"
-}
 
 
 function print_menu() {
@@ -267,7 +244,7 @@ function run_menu() {
     clear
     print_menu "${menu_items[@]}"
     
-    while read -rn1 input
+    while read -rsn1 input
     do
         case "${input:0:1}" in
             $'\x1B')  # ESC ASCII code (https://dirask.com/posts/ASCII-Table-pJ3Y0j)
@@ -288,23 +265,20 @@ function run_menu() {
                         fi;;
                 esac
 
-                read -rsn5 -t 0.1  ;;# flushing stdin
+                read -rsn5 -t 0.1  ;; # flushing stdin
             "")  # Enter key
                 echo $input
-                set -x
                 menu_selected=${menu_items[${menu_items[$menu_limit]}]}
-                set +x
                 return $(( 11 + ${menu_items[$menu_limit]} )) 
                 ;;
-            *)  
-                set -x            
+            ^[0-9]*$)  
                 echo $input            
-                read -rn2 -t 1 input2
-
+                read -rsn2 -t 1 input2
+                echo [${input}][${input2}]
                 menu_selected=${menu_items[${input}${input2}]}
-                set +x
                 return "${input}${input2}" 
                 ;;
+             *) read -rsn6   ;; # flushing stdin ;;
         esac
     done
 }
