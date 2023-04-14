@@ -50,7 +50,6 @@ function checkGerritConnection(){
 function checkSSHConnection(){
 ## ---------------------------------------------------------------------------
 # run command, get return code and print guide
-
     local file_error=$(mktemp)
     echo "\$ ssh -T $1 -p $2" ;
     echo . | ssh -T $1 -p $2 2> ${file_error}
@@ -69,7 +68,6 @@ function checkSSHConnection(){
 function runRepoInitcheckError(){
 ## ---------------------------------------------------------------------------
 # run command, get return code and print guide
-
     local file_error=$(mktemp)
     local ret=1 #return 1 is success, 0 is fail
     echo "\$ $@"
@@ -127,7 +125,6 @@ function findFileLocation(){
 ## $1:path name, $2:max depth to sub dir
 ## ex) findFileLocation .repo 5
 ## ex) findFileLocation .git 2
-
     local T=$PWD
     local target=${1:-.repo}
     local down_depth=${2:-2} #default value:2
@@ -216,10 +213,11 @@ function go_dir() {
     pushd -0 && dirs -c > /dev/null
     #echo "no .git found, stay HERE"
 
-    local INPUT=( $(find ../.. -maxdepth 4 -type d -wholename "*$1" 2> /dev/null |head -60))
+    local INPUT=( $(find ../.. -maxdepth 4 -name "$1" 2> /dev/null |head -60))
     #local INPUT=( $(findGitRepository @path) )
+
     if [ -n "${INPUT}" ];then run_menu "${INPUT[@]}" ;  fi
-    cd "${menu_selected}"
+    cd "${menu_selected}/.."
 }
 
 
@@ -321,7 +319,6 @@ function getRepoInfo(){
 ## ---------------------------------------------------------------------------
 # print information of repo
 # $1 manifests file (default is current manifests)
-
     pushd ${REPO_PATH} 
     oldIFS=${IFS}; IFS='';
 
@@ -358,14 +355,12 @@ function getRepoInfo(){
 
 function getRepoShow(){
 ## ---------------------------------------------------------------------------
-# print information(changes, recent commits) of current repository
-#
+# print information(changes, recent commits) of current repository#
     #topic/working branch
     bar inline "repo branch: check if working branch existed (WAIT: It takes time) "
     repo branch
 
     bar inline "git log -1 for all repositories"
-    printf "\n%75s %s %s\n" '[git-name]' '[rev] ' '[src-path]'
     findGitRepository |more
 
     #run command "repo info"
@@ -424,7 +419,6 @@ function findGitRepository(){
 # find git repository with path and project name with regexp
 # $1 path or project
 # usage: findGitRepository [path|project]
-
     bar inline "all repository info is save to repo.csv" > /dev/stderr
     file_log=${REPO_ROOT}/repo.csv
     repo forall -j1 -c 'printf "%.6s|%.7s|%-22.22s|%-74.74s|%.80s \n" "${REPO_LREV}" "${REPO_REMOTE}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"' \
@@ -451,7 +445,6 @@ function debugRepo(){
 ## ---------------------------------------------------------------------------
 # print information of repo
 # $1 manifests file (default is current manifests)
-
     echo "this version is expected to used, please check this version is matched to your local version"
 
     bar inline "expected"
@@ -482,7 +475,6 @@ function findServerDelay(){
 # find replication server
 # $1 server-url
 # $2 port-number
-
     local server_port=${REPO_REMOTE#*@}
     local server=${1:-${server_port%:*}}
     local port=${2:-$(echo ${server_port} | grep -oP '(?<=:)[0-9]+(?=/)')}
@@ -502,7 +494,6 @@ function resetRepository(){
 ## ---------------------------------------------------------------------------
 # reset git repositories
 # $1 target
-    
     case $1 in
       all)  repo forall -cj${NJOBS} 'git reset --hard ; git clean -xdf'
             echo "reset all repositories" ;;
@@ -519,7 +510,6 @@ function checkConnection(){
 # $1 server
 # $2 port
 # $3 password
-
     local server_port=${REPO_REMOTE#*@}
     local server=${1:-${server_port%:*}}
     local port=${2:-$(echo ${server_port} | grep -oP '(?<=:)[0-9]+(?=/)')}
@@ -639,12 +629,25 @@ function gitt(){
 ## ---------------------------------------------------------------------------
 # main handler for this scriptre
 # $1 command
+MENU=(
+"info: shows uncommited changes, top -1 commits, md5 sum, repo info for all repositories
+    ex) repp info, repp info|more, repp info| grep build, cat repo.info"
+"go: shows repository info such as manifest path, repo cmd, tree of manifests, etc
+    ex) repp show, repp show default.xml, repp show event/manifest.xml"
+"reset: git reset --hard  && git clean -xdf 
+    ex) gitt reset"
+"find: (list) search string in all [repo path] : [repo revision] : [repo name]
+    ex) repp find, repp list|more, repp find build, repp list|grep -v build
+    ex) repp find @rev [@rep| @remote| @branch| @git| @path)"
+)
+
 local ret=0
 case "$1" in
     #$1:below ${@:2}:parameters
+    info)       getGitInfo ;;
     go)         cd "$(getGitRootPath)" ;;
     reset)      resetRepository "${@:2}";;
-    info)       getGitInfo ;;
+
     
 
 esac
