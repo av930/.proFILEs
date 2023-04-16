@@ -29,11 +29,11 @@ path_mirror="/data001/${account}"/mirror
 ##--------------------------- Menu Functions --------------------------------
 ##============================================================================
 #### oneline functions
-isGitDir(){ git -C "$1" rev-parse --is-inside-work-tree &> /dev/null ;}
-getGitRootPath(){ git rev-parse --show-toplevel ;}
+gittis_gitdir(){ git -C "$1" rev-parse --is-inside-work-tree &> /dev/null ;}
+gittget_rootpath(){ git rev-parse --show-toplevel ;}
 
 
-function checkGerritConnection(){
+function reppcheck_gerritconnection(){
 ## ---------------------------------------------------------------------------
 # run command, get return code and print guide
     echo "\$ $@" ;"$@"
@@ -47,7 +47,7 @@ function checkGerritConnection(){
 
 
 
-function checkSSHConnection(){
+function reppcheck_sshconnection(){
 ## ---------------------------------------------------------------------------
 # run command, get return code and print guide
     local file_error=$(mktemp)
@@ -65,7 +65,7 @@ function checkSSHConnection(){
 
 
 
-function runRepoInitcheckError(){
+function reppfind_initerror(){
 ## ---------------------------------------------------------------------------
 # run command, get return code and print guide
     local file_error=$(mktemp)
@@ -87,17 +87,17 @@ function runRepoInitcheckError(){
         ret=0
     fi
 
-    #if [ $? -ne 0 ];then checkSSHConnection ssh -p vc.integrator@vgit.lge.com:29430;fi
+    #if [ $? -ne 0 ];then reppcheck_sshconnection ssh -p vc.integrator@vgit.lge.com:29430;fi
 
     return $ret
 }
 
 
 
-function runRepoSynccheckError(){
+function reppfind_syncerror(){
 ## ---------------------------------------------------------------------------
 # run command, get return code and print guide
-# ex) runRepoSynccheckError
+# ex) reppfind_syncerror
     if [ -z "$1" ]; then
         read -p "Please input job number to repo sync [enter:auto| number:ex)16| ctrl+c:exit]: " njobs;
         if [ -z $njobs ]; then  njobs=${NJOBS}; fi
@@ -119,12 +119,12 @@ function runRepoSynccheckError(){
 
 
 
-function findFileLocation(){
+function reppfind_repodir(){
 ## ---------------------------------------------------------------------------
 ## find input-path up and down,
 ## $1:path name, $2:max depth to sub dir
-## ex) findFileLocation .repo 5
-## ex) findFileLocation .git 2
+## ex) reppfind_repodir .repo 5
+## ex) reppfind_repodir .git 2
     local T=$PWD
     local target=${1:-.repo}
     local down_depth=${2:-2} #default value:2
@@ -157,7 +157,7 @@ function findFileLocation(){
 
 
 
-function getRepoCMD(){
+function reppget_repcmd(){
 ## ---------------------------------------------------------------------------
 # get repo command from exising repo project
 # $1 show repo command (default: save info to each variable such as REPO_REMOTE, REPO_BRANCH, ...)
@@ -193,7 +193,7 @@ function getRepoCMD(){
 
 
 
-function go_dir() {
+function reppgo() {
 ## ---------------------------------------------------------------------------
 # return git root path or return near git path
     local T=$(pwd)
@@ -214,7 +214,7 @@ function go_dir() {
     #echo "no .git found, stay HERE"
 
     local INPUT=( $(find ../.. -maxdepth 4 -name "$1" 2> /dev/null |head -60))
-    #local INPUT=( $(findGitRepository @path) )
+    #local INPUT=( $(reppfind @path) )
 
     if [ -n "${INPUT}" ];then run_menu "${INPUT[@]}" ;  fi
     cd "${menu_selected}/.."
@@ -222,7 +222,7 @@ function go_dir() {
 
 
 
-function repoInit(){
+function reppinit(){
 ## ---------------------------------------------------------------------------
 # repo init helper
 # $1 short repo init command
@@ -278,7 +278,7 @@ function repoInit(){
     printf "${cmd_repoinit}\n" >> ${file_info}
 
     #execute cmd
-    if runRepoInitcheckError ${cmd_repoinit}; then ret=1; fi
+    if reppfind_initerror ${cmd_repoinit}; then ret=1; fi
 
     #show repo info
     bar outline >> ${file_info}
@@ -289,7 +289,7 @@ function repoInit(){
 
 
 
-function showManifestTree(){
+function reppshow_manifesttree(){
 ## ---------------------------------------------------------------------------
 # read file and print line "include" keyword
 # $1 manifest file name
@@ -308,14 +308,14 @@ function showManifestTree(){
     #sub manifests
     cat $1 | sed -n 's/.*include name="\(.*\)".*/\1/p' | \
     while read -r file; do
-    if [ -n "${file}" ];then showManifestTree ${file} ${treedepth}; fi
+    if [ -n "${file}" ];then reppshow_manifesttree ${file} ${treedepth}; fi
     done
     (( treedepth=treedepth-3 ))
 }
 
 
 
-function getRepoInfo(){
+function reppinfo(){
 ## ---------------------------------------------------------------------------
 # print information of repo
 # $1 manifests file (default is current manifests)
@@ -327,13 +327,13 @@ function getRepoInfo(){
     log "${REPO_PATH}"
 
     #get global variable and repo init command.
-    getRepoCMD info
+    reppget_repcmd info
 
     #show manifest file with included sub manifests.
     local manifest=${1:-${FILE_MANI}}
     bar inline "manifests"
     clog  "    <name of manifest>                                      <including branches>"
-    showManifestTree ${manifest} 0
+    reppshow_manifesttree ${manifest} 0
 
     #show count of repository
     ## block infomation
@@ -343,9 +343,9 @@ function getRepoInfo(){
     clog "md5 sum for all repositories:"
     repo forall -j16 -c git log -1 --pretty=format:%H | md5sum
 
-    #show last synced date
+    #show last synced time
     if [ -f .git/FETCH_HEAD ]; then clog "last manifest-synced date: " $(stat -c %y .git/FETCH_HEAD );
-    else clog "last manifest-synced date(check date of files below): " $(ls -lct | tail -10);fi
+    else clog "last manifest-synced time(check date of files below): " $(ls -lct | tail -10);fi
 
     IFS=${oldIFS}
     popd
@@ -353,26 +353,26 @@ function getRepoInfo(){
 
 
 
-function getRepoShow(){
+function reppshow(){
 ## ---------------------------------------------------------------------------
 # print information(changes, recent commits) of current repository#
     #topic/working branch
     bar inline "repo branch: check if working branch existed (WAIT: It takes time) "
     repo branch
 
-    bar inline "git log -1 for all repositories"
-    findGitRepository |more
-
     #run command "repo info"
     bar outline "it takes time to get information..."
     bar inline "repo status: uncommitted changes list saved to [ repo.info ]"
     echo "repo status" > ${REPO_ROOT}/repo.info
-    
+
     #remove colored output with 1) sed command, 2) --color option
     #repo status -j8 |sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" >> ${REPO_ROOT}/repo.info 
     repo --no-pager --color=never status -j8 >> ${REPO_ROOT}/repo.info 
+    
+    #list up repo commit, remote, branch, project, path
+    reppfind |more
 
-    #### repo info command is duplicated with findGitRepository functionality, so remove it.
+    #### repo info command is duplicated with reppfind functionality, so remove it.
     #bar inline "repo info: git repo/source path /branch rev saved to [ ${REPO_ROOT}/repo.info ]"
     #echo "repo info" >> ${REPO_ROOT}/repo.info
     #repo info |sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" >> ${REPO_ROOT}/repo.info 
@@ -380,7 +380,7 @@ function getRepoShow(){
 
 
 
-function getRecentCommit(){
+function reppfind_recentcommit(){
 ## ---------------------------------------------------------------------------
 # print information of repo
 # $1 manifests file (default is current manifests)
@@ -414,11 +414,11 @@ function getRecentCommit(){
 
 
 
-function findGitRepository(){
+function reppfind(){
 ## ---------------------------------------------------------------------------
 # find git repository with path and project name with regexp
 # $1 path or project
-# usage: findGitRepository [path|project]
+# usage: reppfind [path|project]
     bar inline "all repository info is save to repo.csv" > /dev/stderr
     file_log=${REPO_ROOT}/repo.csv
     repo forall -j1 -c 'printf "%.6s|%.7s|%-22.22s|%-74.74s|%.80s \n" "${REPO_LREV}" "${REPO_REMOTE}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"' \
@@ -441,7 +441,7 @@ function findGitRepository(){
 
 
 
-function debugRepo(){
+function reppdebug(){
 ## ---------------------------------------------------------------------------
 # print information of repo
 # $1 manifests file (default is current manifests)
@@ -470,7 +470,7 @@ function debugRepo(){
 
 
 
-function findServerDelay(){
+function reppcheck_serverdelay(){
 ## ---------------------------------------------------------------------------
 # find replication server
 # $1 server-url
@@ -490,21 +490,7 @@ function findServerDelay(){
 
 
 
-function resetRepository(){
-## ---------------------------------------------------------------------------
-# reset git repositories
-# $1 target
-    case $1 in
-      all)  repo forall -cj${NJOBS} 'git reset --hard ; git clean -xdf'
-            echo "reset all repositories" ;;
-      ''|*) if isGitDir; then showRUN git reset --hard; showRUN git clean -xdf
-            else warn "this is not a git directory"; fi  ;;
-    esac
-}
-
-
-
-function checkConnection(){
+function reppcheck_connection(){
 ## ---------------------------------------------------------------------------
 # check connection and report error
 # $1 server
@@ -529,10 +515,10 @@ function checkConnection(){
     else echo "server $server over port $port is not listened"; fi
 
     bar inline "step3: check if sshd is serviced on this port $port"
-    checkSSHConnection $server $port
+    reppcheck_sshconnection $server $port
 
     bar inline "step4: check if gerrit service is valid"
-    checkGerritConnection ssh $server -p $port gerrit version
+    reppcheck_gerritconnection ssh $server -p $port gerrit version
 
     if [ -z $manifest ];then warn "usage) repp check vgit.lge.com 29420 tiger/tools tiger_release" && return 1;fi
     bar inline "step5: check if I can access git (default: manifest)"
@@ -563,7 +549,7 @@ MENU=(
 "sync: repo sync with optimized multi-job and options
     ex) repp sync, repp sync 8, repp sync 16 --force-sync(more options)"
 "reset: reset all repositories to original state
-    case) use this, when repository has dirty commits."
+    in case) use this, when repository has dirty commits."
 "debug: shows repo/git/python version info used in current repo"
 "check: find accessibility for manifest git or normal git
     ex) repp check, repp check vgit.lge.com 29420 tiger/tools tiger_release
@@ -572,17 +558,20 @@ MENU=(
     ex) repp server, repp server lamp.lge.com 29418"
 )
 
-function handleMenu(){
+
+
+function reppmenu(){
 ## ---------------------------------------------------------------------------
 # show ui menu for this script
 
 printf ${green}
 cat << PREFACE
 ==============================================================
- the menu for repo tools
+ welcome to repp & gitt
  -------------------------------------------------------------
  command usage: ex) repp, repp info, repp show [default.xml]
- repp find [string], repp sync 16 --force-sync, etc
+ command usage: ex) gitt, gitt info, gitt show [currnet git]
+ ex) repp find [string], repp sync 16 --force-sync, etc
  help: http://collab.lge.com/main/x/wY6wa
 ==============================================================
 PREFACE
@@ -599,28 +588,69 @@ printf ${NCOL}
 
 
 
-function getGitInfo(){
+function gittinfo(){
 ## ---------------------------------------------------------------------------
 # main handler for this scriptre
     local TEMP
-    bar inline "show current git root path"
-    getGitRootPath
+    bar inline "git path"
+    gittget_rootpath
     
-    bar inline "show all remote info"
     #readarray -t GIT_REMOTE < <(git remote -v |cut -f1|uniq)
-    GIT_REMOTE=$(git config --get branch.working.remote) 
+    GIT_REMOTE=$(git remote|head -1) 
+    bar inline "show all remote info"    
     showRUN git config --get-regexp remote.$GIT_REMOTE |sort|grep -Ee "(projectname|review|url)"
     
-    TEMP=$(printf "%s/admin/repos/%s,branches" \
+    TEMP=$(printf "%s/admin/repos/%s" \
         $(git config --get-regexp remote.$GIT_REMOTE.review|cut -d' ' -f2) \
         $(git config --get-regexp remote.$GIT_REMOTE.projectname|cut -d' '  -f2)  )
-    clog "\nreview system url:" $TEMP
+    clog "review system url:" $TEMP
     
     TEMP=$(printf "git push $GIT_REMOTE HEAD:refs/for/%s" \
-        $(git config --get-regexp branch.working.merge|sed 's:.*/::')  )
-        
-    clog " git push command: " $TEMP
+        $(git branch -ar |grep m/ |sed -E 's#.*/(.*)$#\1#') )
+    bar inline "git push commands"
+    clog " git push direct:" ${TEMP/\/for/\/heads}
+    clog " git push review:" $TEMP
+    
+    
+    bar inline "recent commit info"
+    git show --stat --oneline HEAD
+    
+    bar inline "last synced time"
+    #show last synced time
+    oldIFS=${IFS}; IFS='';
+    if [ -f .git/FETCH_HEAD ]; then clog "last manifest-synced date: " $(stat -c %y .git/FETCH_HEAD );
+    else clog "last manifest-synced date(check date of files below): " $(ls -lct .git| tail -5);fi
+    IFS=${oldIFS}
 
+}
+
+
+
+function gittshow(){
+## ---------------------------------------------------------------------------
+# print information(commit info) of current repository#
+# $1: number of commit
+# $2: other option such as --all (all branch)
+    #topic/working branch
+    bar inline "git commit history (to see all branche, put option --all)"
+    git log --decorate --graph -n${2:-15} --pretty=format:'%Cred%h -%C(yellow)%s %Cgreen(%ci) %C(blue)<%an>%Creset' $1
+
+    bar inline "git commit diff history"
+    git log --pretty="short" --name-only |more
+}
+
+
+
+function gittreset(){
+## ---------------------------------------------------------------------------
+# reset git repositories
+# $1 target
+    case $1 in
+      all)  repo forall -cj${NJOBS} 'git reset --hard ; git clean -xdf'
+            echo "reset all repositories" ;;
+      ''|*) if gittis_gitdir; then showRUN git reset --hard; showRUN git clean -xdf
+            else warn "this is not a git directory"; fi  ;;
+    esac
 }
 
 
@@ -634,23 +664,46 @@ MENU=(
     ex) repp info, repp info|more, repp info| grep build, cat repo.info"
 "go: shows repository info such as manifest path, repo cmd, tree of manifests, etc
     ex) repp show, repp show default.xml, repp show event/manifest.xml"
+"show: git reset --hard  && git clean -xdf 
+    ex) gitt reset"
 "reset: git reset --hard  && git clean -xdf 
     ex) gitt reset"
-"find: (list) search string in all [repo path] : [repo revision] : [repo name]
+"find: branch, commit(author, rev, commit msg)
     ex) repp find, repp list|more, repp find build, repp list|grep -v build
     ex) repp find @rev [@rep| @remote| @branch| @git| @path)"
 )
 
-local ret=0
-case "$1" in
-    #$1:below ${@:2}:parameters
-    info)       getGitInfo ;;
-    go)         cd "$(getGitRootPath)" ;;
-    reset)      resetRepository "${@:2}";;
 
-    
 
-esac
+printf ${green}
+cat << PREFACE
+==============================================================
+ welcome to gitt & repp
+ -------------------------------------------------------------
+ command usage: ex) gitt, gitt info, gitt show [currnet git]
+ command usage: ex) repp, repp info, repp show [default.xml] 
+ ex) gitt find [string], gitt show, etc
+ help: http://collab.lge.com/main/x/wY6wa
+==============================================================
+PREFACE
+printf ${NCOL}
+
+local COLUMNS=60
+PS3=$'\e[00;35m=== Please input command! [enter:menu, number:choice, ctrl+c:exit] === : \e[0m'
+select CHOICE in "${MENU[@]}"; do
+    local ret=0
+    case "${CHOICE%%:*}" in
+        #$1:below ${@:2}:parameters
+        info)       gittinfo ;;
+        show)       gittshow "${@:2}";;
+        go)         cd "$(gittget_rootpath)" ;;
+        reset)      gittreset "${@:2}";;
+
+
+    esac    
+    if [ -n "$?" ]; then return 1;fi
+done
+
 return $ret
 }
 
@@ -663,45 +716,45 @@ function repp(){
 local ret=0
 case "$1" in
     #$1:below ${@:2}:parameters
-    info)       checkPreCondition yes_print || return 1
-                getRepoInfo  "${@:2}";;
-    go)         checkPreCondition yes_print || return 1
+    info)       reppcheck_precondition yes_print || return 1
+                reppinfo  "${@:2}";;
+    go)         reppcheck_precondition yes_print || return 1
                 local menu_items=('go ROOT　dir' 'go Manifests　dir' 'go GIT　root dir' 'exit')
                 run_menu "${menu_items[@]}"
                 case "$?" in
                     1|11)  cd "${REPO_ROOT}"        ;;
                     2|12)  cd "${REPO_PATH}"        ;;
-                    3|13)  go_dir .git              ;;
+                    3|13)  reppgo .git              ;;
                     *)  echo 'exit) stay here'      ;;
                 esac;;
-    show)       checkPreCondition yes_print || return 1
-                #getRepoInfo "${@:2}"  2>&1 | tee ${REPO_ROOT}/repo.info
-                getRepoShow "${@:2}"  2>&1 
+    show)       reppcheck_precondition yes_print || return 1
+                #reppinfo "${@:2}"  2>&1 | tee ${REPO_ROOT}/repo.info
+                reppshow "${@:2}"  2>&1 
                 info "please check file [${REPO_ROOT}/repo.info]"
                 warn "you can use this file to compare other repo.";;
-    commit)     checkPreCondition yes_print || return 1
-                getRecentCommit "${@:2}";;
-    find|list)  checkPreCondition yes_print || return 1
-                findGitRepository "${@:2}";;
+    commit)     reppcheck_precondition yes_print || return 1
+                reppfind_recentcommit "${@:2}";;
+    find|list)  reppcheck_precondition yes_print || return 1
+                reppfind "${@:2}";;
 
-    init)       repoInit "${@:2}"
+    init)       reppinit "${@:2}"
                 if [ $? -eq 0 ]; then
                     info "To RUN next command:"
-                    runRepoSynccheckError
+                    reppfind_syncerror
                 fi;;
-    sync)       checkPreCondition yes_print || return 1
-                runRepoSynccheckError "${@:2}";;
-    reset)      checkPreCondition yes_print || return 1
-                resetRepository all ;;
+    sync)       reppcheck_precondition yes_print || return 1
+                reppfind_syncerror "${@:2}";;
+    reset)      reppcheck_precondition yes_print || return 1
+                gittreset all ;;
 
-    debug)      checkPreCondition yes_print || return 1
-                debugRepo "${@:2}";;
-    check)      checkPreCondition no_print || return 1
-                checkConnection "${@:2}";;
-    server)     checkPreCondition no_print || return 1
-                findServerDelay "${@:2}";;
+    debug)      reppcheck_precondition yes_print || return 1
+                reppdebug "${@:2}";;
+    check)      reppcheck_precondition no_print || return 1
+                reppcheck_connection "${@:2}";;
+    server)     reppcheck_precondition no_print || return 1
+                reppcheck_serverdelay "${@:2}";;
     '') 
-                handleMenu "${@:2}";;
+                reppmenu "${@:2}";;
     *) 
                 repo "${@}";;
 esac
@@ -710,14 +763,14 @@ return $ret
 
 
 
-function checkPreCondition(){
+function reppcheck_precondition(){
 ## ---------------------------------------------------------------------------
 # pre-check
 # $1 command
     #find & move manifest dir
     local ret=1
 
-    findFileLocation .repo/manifests 5 no_print
+    reppfind_repodir .repo/manifests 5 no_print
     if [ -d "${REPO_PATH}" ];then 
         pushd ${REPO_PATH}; REPO_ROOT=${REPO_PATH%/.repo*}
             #set global variable
