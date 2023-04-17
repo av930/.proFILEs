@@ -713,6 +713,36 @@ function gittreset(){
 
 
 
+function gittfind(){
+## ---------------------------------------------------------------------------
+# print information(commit info) of current repository#
+# $1: number of commit
+# $2: other option such as --all (all branch)    
+    bar outline "search in commit with regexp(\$1) in files(\$2)"    
+
+    under "git log --committer=\"$1\""
+    clog 'committer history' "ex) git log --committer='.*joongkeun' "    
+    git log --committer="$1"
+
+    under "git log -i --grep=\"$1\" " 
+    clog 'commit message history' "ex) git log -i --grep='.*debugprint' " 
+    git log -i --grep="$1"
+    
+    under "git log -i -G\"$1\" ${@:2}" 
+    clog 'commit contents history' "ex) git log -i -G'.*debugprint' zlib.c" 
+    git log -i -G"$1" "${@:2}"
+
+    under "git grep -n \"$1\" ${@:2}" 
+    clog 'current files tracked in git' "ex) git grep -n '.*debugprint' *.c" 
+    git grep -n "$1" "${@:2}"
+
+    under "git log -L :\"$1\":${@:2} " 
+    clog 'function in git history' "ex) git log -L :func_debugprint:zlib.c"
+    git log -L :"$1":"${@:2}"
+}
+
+
+
 function gitt(){
 ## ---------------------------------------------------------------------------
 # main handler for this scriptre
@@ -726,6 +756,7 @@ case "$1" in
     show)       gittshow "${@:2}";;
     go)         cd "$(gittcheck_gitpath)" ;;
     reset)      gittreset "${@:2}";;
+    find)       gittfind "${@:2}";;    
     '')         gittmenu "${@:2}";;
     *)          git "${@}";;    
 esac    
