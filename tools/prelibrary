@@ -19,16 +19,22 @@ file_error=~/.repoconfig/repo.error
 # log message to stderr
 # $1: message
 line="--------------------------------------------------------------------------------------"
-log()   { printf "%b\\n" "${*}"  ;}
-clog()  { log "${cyan}$1 ${NCOL} ${@:2}"  ;}
-info()  { log "${GREEN}INFO: ${NCOL} ${*}"  ;}
-warn()  { log "${YELLOW}WARN: ${NCOL} ${*}" ;}
-err()   { log "${RED}ERROR: ${NCOL} ${*}"   ;}
+
+linemi="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+lineup="￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣"
+linedn="______________________________________________________________________________________"
+linedb="〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓"
+log()    { printf "%b\\n" "${*}"  ;}
+clog()   { log "${cyan}$1 ${NCOL} ${@:2}"  ;}
+info()   { log "${GREEN}INFO: ${NCOL} ${*}"  ;}
+warn()   { log "${YELLOW}WARN: ${NCOL} ${*}" ;}
+err()    { log "${RED}ERROR: ${NCOL} ${*}"   ;}
 
 
 #${2:+[$2] }: if $2 exist, use '[$2] '
 #${line:(${2:+3}+${#2})}: if $2 is exist, skip 3 '-' chars for '[] ' chars
-bar()  { printf "\n${!1}%s%s ${NCOL}\n" "${2:+[$2] }" "${line:(${2:+3}+${#2})}" ;}
+bar()    { printf "\n${!1}%s%s ${NCOL}\n" "${2:+[$2] }" "${line:(${2:+3}+${#2})}" ;}
+under()  { printf "\n${yellow}%s\n${green}%s${NCOL}\n" "${1:+[$1] }" "${linemi}" ;}
 
 
 function printElement(){ 
