@@ -30,7 +30,12 @@ path_mirror="/data001/${account}"/mirror
 ##============================================================================
 #### oneline functions
 gittis_gitdir(){ git -C "$1" rev-parse --is-inside-work-tree &> /dev/null ;}
-gittget_rootpath(){ git rev-parse --show-toplevel ;}
+
+function gittcheck_gitpath(){
+## ---------------------------------------------------------------------------
+    if [ "$1" = "print_y" ]; then git rev-parse --show-toplevel; 
+    else git rev-parse --show-toplevel > /dev/null; fi
+}
 
 
 function reppcheck_gerritconnection(){
@@ -146,7 +151,7 @@ function reppfind_repodir(){
         cd $T
         ;;
     *)  # found multiple dir in sub dir
-        if [ "$print" = "yes_print" ]; then
+        if [ "$print" = "print_y" ]; then
             printf "subdir [%s]\n" ${#REPO_PATH_ALL[@]}
             printf "%s\n" ${REPO_PATH_ALL[@]};
         fi
@@ -231,7 +236,7 @@ function reppinit(){
     if ! options=$(getopt -l reference:,depth:,repo-url:,no-clone-bundle,partial-clone,no-tags,mirror -o b:m:p:u: -- "$@")
     then err 'please check "repo init --help"'; exit 1; fi
 
-    if [ -z $1 ]; then printElement 'please refer http://collab.lge.com/main/x/wY6wa' 'init:' "${MENU[@]}" && exit 1;fi
+    if [ -z $1 ]; then printElement 'please refer http://collab.lge.com/main/x/wY6wa' && exit 1;fi
 
     #reset legacy positional parameter except $options
     eval set -- "$options"
@@ -362,20 +367,20 @@ function reppshow(){
 
     #run command "repo info"
     bar outline "it takes time to get information..."
-    bar inline "repo status: uncommitted changes list saved to [ repo.info ]"
-    echo "repo status" > ${REPO_ROOT}/repo.info
+    bar inline "repo status: uncommitted changes list saved to [ repo.status ]"
+    echo "repo status" > ${REPO_ROOT}/repo.status
 
     #remove colored output with 1) sed command, 2) --color option
-    #repo status -j8 |sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" >> ${REPO_ROOT}/repo.info 
-    repo --no-pager --color=never status -j8 >> ${REPO_ROOT}/repo.info 
+    #repo status -j8 |sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" >> ${REPO_ROOT}/repo.status 
+    repo --no-pager --color=never status -j8 >> ${REPO_ROOT}/repo.status 
     
     #list up repo commit, remote, branch, project, path
     reppfind |more
 
     #### repo info command is duplicated with reppfind functionality, so remove it.
-    #bar inline "repo info: git repo/source path /branch rev saved to [ ${REPO_ROOT}/repo.info ]"
-    #echo "repo info" >> ${REPO_ROOT}/repo.info
-    #repo info |sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" >> ${REPO_ROOT}/repo.info 
+    #bar inline "repo info: git repo/source path /branch rev saved to [ ${REPO_ROOT}/repo.status ]"
+    #echo "repo info" >> ${REPO_ROOT}/repo.status
+    #repo info |sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" >> ${REPO_ROOT}/repo.status 
 }
 
 
@@ -531,11 +536,17 @@ function reppcheck_connection(){
 
 
 
-MENU=(
+
+function reppmenu(){
+## ---------------------------------------------------------------------------
+# show ui menu for this script
+MENU_REPP=(
 "info: shows repository info such as manifest path, repo cmd, tree of manifests, etc
-    ex) repp show, repp show default.xml, repp show event/manifest.xml"
+    ex) repp info, repp info default.xml, repp info event/manifest.xml"
 "show: shows uncommited changes, top -1 commits, md5 sum, repo info for all repositories
-    ex) repp info, repp info|more, repp info| grep build, cat repo.info"
+    ex) repp show, repp show|more, repp show| grep build, cat repo.status"
+"go: move path to repo root dir, manifest dir, git path nearby with similar depth.
+    ex) repp go (selcetion menu popup)"
 "commit: shows lastest commits(git log -1) from all repository (default 20)
     ex) repp commit, repp commit 4, repp commit log.txt(save as)"
 "find: (list) search string in all [repo path] : [repo revision] : [repo name]
@@ -559,11 +570,6 @@ MENU=(
 )
 
 
-
-function reppmenu(){
-## ---------------------------------------------------------------------------
-# show ui menu for this script
-
 printf ${green}
 cat << PREFACE
 ==============================================================
@@ -577,13 +583,54 @@ cat << PREFACE
 PREFACE
 printf ${NCOL}
 
-    local COLUMNS=60
-    PS3=$'\e[00;35m=== Please input command! [enter:menu, number:choice, ctrl+c:exit] === : \e[0m'
-    select CHOICE in "${MENU[@]}"
-    do
-        repp "${CHOICE%%:*}";
-        if [ -n "$?" ]; then return 1;fi
-    done
+local COLUMNS=60
+PS3=$'\e[00;35m=== Please input command! [enter:menu, number:choice, ctrl+c:exit] === : \e[0m'
+select CHOICE in "${MENU_REPP[@]}"; do
+    repp "${CHOICE%%:*}";
+    if [ -n "$?" ]; then return 1;fi
+done
+}
+
+
+
+function gittmenu(){
+## ---------------------------------------------------------------------------
+# main handler for this scriptre
+# $1 command
+MENU_GITT=(
+"info: shows git path, gerrit info/url/remote, push command, commit info, sync time.
+    ex) gitt info"
+"show: shows git (default 15) commits history, diff history
+    ex) gitt show, gitt show 20 --all"
+"go: move to current .git path
+    ex) gitt go"
+"reset: clean with 'git reset --hard  && git clean -xdf'
+    ex) gitt reset"
+"find: branch, commit(author, rev, commit msg)
+    ex) repp find, repp list|more, repp find build, repp list|grep -v build
+    ex) repp find @rev [@rep| @remote| @branch| @git| @path)"
+)
+
+
+printf ${green}
+cat << PREFACE
+==============================================================
+ welcome to gitt & repp
+ -------------------------------------------------------------
+ command usage: ex) gitt, gitt info, gitt show [currnet git]
+ command usage: ex) repp, repp info, repp show [default.xml] 
+ ex) gitt find [string], gitt show, etc
+ help: http://collab.lge.com/main/x/wY6wa
+==============================================================
+PREFACE
+printf ${NCOL}
+
+local COLUMNS=60
+PS3=$'\e[00;35m=== Please input command! [enter:menu, number:choice, ctrl+c:exit] === : \e[0m'
+select CHOICE in "${MENU_GITT[@]}"; do
+    gitt "${CHOICE%%:*}";
+    if [ -n "$?" ]; then return 1;fi
+done
 }
 
 
@@ -593,7 +640,7 @@ function gittinfo(){
 # main handler for this scriptre
     local TEMP
     bar inline "git path"
-    gittget_rootpath
+    if ! gittcheck_gitpath print_y ;then echo "we are not in git project" && return 1; fi
     
     #readarray -t GIT_REMOTE < <(git remote -v |cut -f1|uniq)
     GIT_REMOTE=$(git remote|head -1) 
@@ -630,13 +677,19 @@ function gittshow(){
 ## ---------------------------------------------------------------------------
 # print information(commit info) of current repository#
 # $1: number of commit
-# $2: other option such as --all (all branch)
+# $2: other option such as --all (all branch)    
     #topic/working branch
-    bar inline "git commit history (to see all branche, put option --all)"
+    bar outline "gitt show is based on command: git log "    
+    bar inline "git commit history with option (to see all branche, gitt show 20 --all)"
     git log --decorate --graph -n${2:-15} --pretty=format:'%Cred%h -%C(yellow)%s %Cgreen(%ci) %C(blue)<%an>%Creset' $1
 
     bar inline "git commit diff history"
-    git log --pretty="short" --name-only |more
+    echo "--since(=after), --before(=until)"
+    echo "6 hour, 2-day, 2-week, 1-month, 1-year"
+    clog "ex:" "--since=2-weeks, --since=04:24, --before=6-hours, --after=2022-11-10 --before=2022-11-20-23"
+    read -p "input add option [enter(default):--pretty="short" --name-only | input option with default]" 
+    
+    git log --pretty="short" --name-only ${reply} |more
 }
 
 
@@ -645,11 +698,16 @@ function gittreset(){
 ## ---------------------------------------------------------------------------
 # reset git repositories
 # $1 target
+
     case $1 in
       all)  repo forall -cj${NJOBS} 'git reset --hard ; git clean -xdf'
             echo "reset all repositories" ;;
-      ''|*) if gittis_gitdir; then showRUN git reset --hard; showRUN git clean -xdf
-            else warn "this is not a git directory"; fi  ;;
+      ''|*) if gittis_gitdir; then 
+                
+                showRUN git reset --hard; showRUN git clean -xdf
+            else 
+                warn "this is not a git directory"; 
+            fi  ;;
     esac
 }
 
@@ -659,53 +717,21 @@ function gitt(){
 ## ---------------------------------------------------------------------------
 # main handler for this scriptre
 # $1 command
-MENU=(
-"info: shows uncommited changes, top -1 commits, md5 sum, repo info for all repositories
-    ex) repp info, repp info|more, repp info| grep build, cat repo.info"
-"go: shows repository info such as manifest path, repo cmd, tree of manifests, etc
-    ex) repp show, repp show default.xml, repp show event/manifest.xml"
-"show: git reset --hard  && git clean -xdf 
-    ex) gitt reset"
-"reset: git reset --hard  && git clean -xdf 
-    ex) gitt reset"
-"find: branch, commit(author, rev, commit msg)
-    ex) repp find, repp list|more, repp find build, repp list|grep -v build
-    ex) repp find @rev [@rep| @remote| @branch| @git| @path)"
-)
+local ret=0
+if ! gittcheck_gitpath print_n;then err "we are not in git project" && return 1; fi
 
-
-
-printf ${green}
-cat << PREFACE
-==============================================================
- welcome to gitt & repp
- -------------------------------------------------------------
- command usage: ex) gitt, gitt info, gitt show [currnet git]
- command usage: ex) repp, repp info, repp show [default.xml] 
- ex) gitt find [string], gitt show, etc
- help: http://collab.lge.com/main/x/wY6wa
-==============================================================
-PREFACE
-printf ${NCOL}
-
-local COLUMNS=60
-PS3=$'\e[00;35m=== Please input command! [enter:menu, number:choice, ctrl+c:exit] === : \e[0m'
-select CHOICE in "${MENU[@]}"; do
-    local ret=0
-    case "${CHOICE%%:*}" in
-        #$1:below ${@:2}:parameters
-        info)       gittinfo ;;
-        show)       gittshow "${@:2}";;
-        go)         cd "$(gittget_rootpath)" ;;
-        reset)      gittreset "${@:2}";;
-
-
-    esac    
-    if [ -n "$?" ]; then return 1;fi
-done
-
+case "$1" in
+    #$1:below ${@:2}:parameters
+    info)       gittinfo ;;
+    show)       gittshow "${@:2}";;
+    go)         cd "$(gittcheck_gitpath)" ;;
+    reset)      gittreset "${@:2}";;
+    '')         gittmenu "${@:2}";;
+    *)          git "${@}";;    
+esac    
 return $ret
 }
+
 
 
 
@@ -716,9 +742,14 @@ function repp(){
 local ret=0
 case "$1" in
     #$1:below ${@:2}:parameters
-    info)       reppcheck_precondition yes_print || return 1
+    info)       reppcheck_precondition print_y || return 1
                 reppinfo  "${@:2}";;
-    go)         reppcheck_precondition yes_print || return 1
+    show)       reppcheck_precondition print_y || return 1
+                #reppinfo "${@:2}"  2>&1 | tee ${REPO_ROOT}/repo.status
+                reppshow "${@:2}"  2>&1 
+                info "please check file [${REPO_ROOT}/repo.status]"
+                warn "you can use this file to compare other repo.";;                
+    go)         reppcheck_precondition print_y || return 1
                 local menu_items=('go ROOT　dir' 'go Manifests　dir' 'go GIT　root dir' 'exit')
                 run_menu "${menu_items[@]}"
                 case "$?" in
@@ -727,14 +758,9 @@ case "$1" in
                     3|13)  reppgo .git              ;;
                     *)  echo 'exit) stay here'      ;;
                 esac;;
-    show)       reppcheck_precondition yes_print || return 1
-                #reppinfo "${@:2}"  2>&1 | tee ${REPO_ROOT}/repo.info
-                reppshow "${@:2}"  2>&1 
-                info "please check file [${REPO_ROOT}/repo.info]"
-                warn "you can use this file to compare other repo.";;
-    commit)     reppcheck_precondition yes_print || return 1
+    commit)     reppcheck_precondition print_y || return 1
                 reppfind_recentcommit "${@:2}";;
-    find|list)  reppcheck_precondition yes_print || return 1
+    find|list)  reppcheck_precondition print_y || return 1
                 reppfind "${@:2}";;
 
     init)       reppinit "${@:2}"
@@ -742,16 +768,16 @@ case "$1" in
                     info "To RUN next command:"
                     reppfind_syncerror
                 fi;;
-    sync)       reppcheck_precondition yes_print || return 1
+    sync)       reppcheck_precondition print_y || return 1
                 reppfind_syncerror "${@:2}";;
-    reset)      reppcheck_precondition yes_print || return 1
+    reset)      reppcheck_precondition print_y || return 1
                 gittreset all ;;
 
-    debug)      reppcheck_precondition yes_print || return 1
+    debug)      reppcheck_precondition print_y || return 1
                 reppdebug "${@:2}";;
-    check)      reppcheck_precondition no_print || return 1
+    check)      reppcheck_precondition print_n || return 1
                 reppcheck_connection "${@:2}";;
-    server)     reppcheck_precondition no_print || return 1
+    server)     reppcheck_precondition print_n || return 1
                 reppcheck_serverdelay "${@:2}";;
     '') 
                 reppmenu "${@:2}";;
@@ -770,7 +796,7 @@ function reppcheck_precondition(){
     #find & move manifest dir
     local ret=1
 
-    reppfind_repodir .repo/manifests 5 no_print
+    reppfind_repodir .repo/manifests 5 print_n
     if [ -d "${REPO_PATH}" ];then 
         pushd ${REPO_PATH}; REPO_ROOT=${REPO_PATH%/.repo*}
             #set global variable
@@ -784,7 +810,7 @@ function reppcheck_precondition(){
         ret=0
     fi
 
-    if [[ $ret -eq 1 && "$1" = "yes_print" ]]; then 
+    if [[ $ret -eq 1 && "$1" = "print_y" ]]; then 
         printf "%s\n" ${REPO_PATH_ALL[@]};
         bar inline "WARNING"
         warn "you are not in repo project, please check !";      
