@@ -648,16 +648,17 @@ function gittinfo(){
     GIT_REMOTE=$(git remote|head -1) 
     bar inline "show all remote info"    
     showRUN git config --get-regexp remote.$GIT_REMOTE |sort|grep -Ee "(projectname|review|url)"
-    
-    TEMP=$(git config --get-regexp remote.$GIT_REMOTE.review|cut -d' ' -f2)
-    if [[ "${TEMP}" =~ "lge.com" ]]; then
-        GIT_URL=$(printf "%s/admin/repos/%s" ${TEMP} \
-            $(git config --get-regexp remote.$GIT_REMOTE.projectname|cut -d' '  -f2)  )
-        clog "review system url:" ${GIT_URL}
-    fi
+
+    #review system check
+    case $(git config --get-regexp remote|cut -d' ' -f2) in
+	  *github.com*) GIT_URL=$(printf "https://%s" $(git config --get-regexp remote.*.url|sed -E 's#^.*(github.*)$#\1#')  );;
+	  ''|*) GIT_URL=$(printf "%s/admin/repos/%s" $(git config --get-regexp remote.*.review|cut -d' ' -f2|sed -E 's#(.*)[/]$#\1#') \
+                    $(git config --get-regexp remote.*.projectname|cut -d' ' -f2) );;
+    esac
+    clog "review system url:" ${GIT_URL}
     
     TEMP=$(printf "git push $GIT_REMOTE HEAD:refs/for/%s" \
-        $(git branch -ar |grep -e '->' |sed -E 's#.*/(.*)$#\1#') )
+        $( git branch -ar |grep -e '->' |sed -E 's#.*[/|>](.*)$#\1#') )
     bar inline "git push commands"
     clog " git push direct:" ${TEMP/\/for/\/heads}
     clog " git push review:" $TEMP
@@ -848,7 +849,7 @@ function reppcheck_precondition(){
     if [[ $ret -eq 1 && "$1" = "print_y" ]]; then 
         printf "%s\n" ${REPO_PATH_ALL[@]};
         bar inline "WARNING"
-        warn "you are not in repo project, please check !";      
+        err "you are not in repo project, please check !";      
     fi
     return $ret
 }
