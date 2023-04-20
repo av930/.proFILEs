@@ -118,7 +118,7 @@ function reppfind_syncerror(){
 function reppfind_repodir(){
 ## ---------------------------------------------------------------------------
 ## find input-path up and down,
-## $1:path name, $2:max depth to sub dir
+## $1:path name, $2:max depth to sub dir, $3:print or not
 ## ex) reppfind_repodir .repo 5
 ## ex) reppfind_repodir .git 2
     local T=$PWD
@@ -311,6 +311,60 @@ function reppshow_manifesttree(){
 
 
 
+function reppmanifest(){
+## ---------------------------------------------------------------------------
+# read file and print line "include" keyword
+# $1 manifest output file name
+# $2 command
+# $3 branch name or branch postfix
+    local file=$1
+    local cmd=$2
+    local name=$3
+
+    case $cmd in
+       help) echo "repp handler" 
+    ;;  one) repo forall -c 'git push ${REPO_REMOTE} HEAD:refs/heads/${REPO_RREV}_${name}'
+    ;; each) echo aaa
+    ;; esac
+}
+
+
+
+function gittbranch_list(){
+## ---------------------------------------------------------------------------
+# show branch local & remote
+# $1 all or filter
+    local filter=$1
+  
+    # list option must be wrapped with quoat ex) --list '*relese*'
+    bar inline "branch local"
+    git branch -vv 
+    bar inline "branch remote with filter (${filter:-all})"
+    git branch -rvv ${filter:+--list \*${filter}\*} |more -60
+}
+
+
+function gittbranch(){
+## ---------------------------------------------------------------------------
+# read file and print line "include" keyword
+# $1 command
+# $2 branch name or branch postfix
+    local cmd=$1
+    local name=$2
+
+
+    case $cmd in
+       help)    printf "ex) gitt branch list <''|name-filter>\nex) gitt branch create|new <name>\nex) gitt branch delete|remove <name>\n" 
+    ;; create|new)  if [ -z "${name}" ]; then err "branch name must be input" && return 1;fi
+                showRUN git push ${GIT_REMOTE} HEAD:refs/heads/${name}
+    ;; delete|remove)  if [ -z "${name}" ]; then err "branch name must be input" && return 1;fi
+                showRUN git push ${GIT_REMOTE} --delete ${name}
+    ;; *|''|list) gittbranch_list ${name}                
+    ;; esac
+}
+
+
+
 function reppinfo(){
 ## ---------------------------------------------------------------------------
 # print information of repo
@@ -366,7 +420,7 @@ function reppshow(){
     repo --no-pager --color=never status -j8 >> ${REPO_ROOT}/repo.status 
     
     #list up repo commit, remote, branch, project, path
-    reppfind |more
+    reppfind |more -60
 
     #### repo info command is duplicated with reppfind functionality, so remove it.
     #bar inline "repo info: git repo/source path /branch rev saved to [ ${REPO_ROOT}/repo.status ]"
@@ -437,7 +491,7 @@ function reppfind(){
 
 
 
-function reppdebug(){
+function reppcheck_version(){
 ## ---------------------------------------------------------------------------
 # print information of repo
 # $1 manifests file (default is current manifests)
@@ -628,10 +682,14 @@ gittcheck_isgitproject(){ git -C "$1" rev-parse --is-inside-work-tree &> /dev/nu
 
 function gittcheck_gitpath(){
 ## ---------------------------------------------------------------------------
-    GIT_REMOTE=
-    GIT_PROJECT=
-    GTI_BRANCH=
-    GIT_URL=
+    #readarray -t GIT_REMOTE < <(git remote -v |cut -f1|uniq)
+    GIT_REMOTE=$(git remote|head -1) 
+    
+    #git config --get-regexp remote.$GIT_REMOTE |sort|grep -Ee "(projectname|review|url)"
+    GIT_PROJECT=$(git config --get-regexp remote.*.projectname|cut -d' ' -f2)
+    GIT_BRANCH=$(git branch -ar |grep -e '->' |sed -E 's#.*[/|>](.*)$#\1#')    
+    GIT_REVIEW=$(git config --get-regexp remote.*.review|cut -d' ' -f2)
+    GIT_URL=$(git config --get-regexp remote.${GIT_REMOTE}.url|cut -d' ' -f2)
     GIT_PATH=$(git rev-parse --show-toplevel)
     if [ "$1" = "print_y" ]; then echo "${GIT_PATH}"; fi
 }
@@ -640,29 +698,32 @@ function gittcheck_gitpath(){
 function gittinfo(){
 ## ---------------------------------------------------------------------------
 # main handler for this scriptre
+# TODO: clone command
     local TEMP
     bar inline "git path"
     if ! gittcheck_gitpath print_y ;then echo "we are not in git project" && return 1; fi
     
-    #readarray -t GIT_REMOTE < <(git remote -v |cut -f1|uniq)
-    GIT_REMOTE=$(git remote|head -1) 
+    ## "error: must check" must be checked!!!
     bar inline "show all remote info"    
-    showRUN git config --get-regexp remote.$GIT_REMOTE |sort|grep -Ee "(projectname|review|url)"
+    clog ' remote:' ${GIT_REMOTE:="error: must check"}
+    clog 'project:' ${GIT_PROJECT:="not defined"}
+    clog ' branch:' ${GIT_BRANCH:="error: must check"}    
+    clog ' review:' ${GIT_REVIEW:="not defined"}
+    clog '    url:' ${GIT_URL:="error: must check"}
+
 
     #review system check
     case $(git config --get-regexp remote|cut -d' ' -f2) in
-	  *github.com*) GIT_URL=$(printf "https://%s" $(git config --get-regexp remote.*.url|sed -E 's#^.*(github.*)$#\1#')  );;
-	  ''|*) GIT_URL=$(printf "%s/admin/repos/%s" $(git config --get-regexp remote.*.review|cut -d' ' -f2|sed -E 's#(.*)[/]$#\1#') \
+	  *github.com*) GIT_SITE=$(printf "https://%s" $(git config --get-regexp remote.*.url|sed -E 's#^.*(github.*)$#\1#')  );;
+	  ''|*) GIT_SITE=$(printf "%s/admin/repos/%s" $(git config --get-regexp remote.*.review|cut -d' ' -f2|sed -E 's#(.*)[/]$#\1#') \
                     $(git config --get-regexp remote.*.projectname|cut -d' ' -f2) );;
     esac
-    clog "review system url:" ${GIT_URL}
+    clog "review system site:" ${GIT_SITE}
     
-    TEMP=$(printf "git push $GIT_REMOTE HEAD:refs/for/%s" \
-        $( git branch -ar |grep -e '->' |sed -E 's#.*[/|>](.*)$#\1#') )
     bar inline "git push commands"
-    clog " git push direct:" ${TEMP/\/for/\/heads}
-    clog " git push review:" $TEMP
-    
+    TEMP=$(printf "git push $GIT_REMOTE HEAD:refs/heads/%s" ${GIT_BRANCH})    
+    clog " git push direct:" $TEMP
+    clog " git push review:" ${TEMP/\/heads/\/for}    
     
     bar inline "recent commit info"
     git show --stat --oneline HEAD
@@ -694,7 +755,7 @@ function gittshow(){
     clog "ex:" "--since=2-weeks, --since=04:24, --before=6-hours, --after=2022-11-10 --before=2022-11-20-23"
     read -p "input add option [enter(default):--pretty="short" --name-only | input option with default]" 
     
-    git log --pretty="short" --name-only ${reply} |more
+    git log --pretty="short" --name-only ${reply} |more -60
 }
 
 
@@ -761,7 +822,9 @@ case "$1" in
     show)       gittshow "${@:2}";;
     go)         cd "$(gittcheck_gitpath)" ;;
     reset)      gittreset "${@:2}";;
-    find)       gittfind "${@:2}";;    
+    find)       gittfind "${@:2}";;
+    branch)     gittbranch "${@:2}";;
+    debug)      gittdebug "${@:2}";;
     '')         gittmenu "${@:2}";;
     *)          git "${@}";;    
 esac    
@@ -798,7 +861,8 @@ case "$1" in
                 reppfind_recentcommit "${@:2}";;
     find|list)  reppcheck_precondition print_y || return 1
                 reppfind "${@:2}";;
-
+    manifest)   reppcheck_precondition print_y || return 1
+                reppmanifest "${@:2}";;
     init)       reppinit "${@:2}"
                 if [ $? -eq 0 ]; then
                     info "To RUN next command:"
@@ -810,7 +874,7 @@ case "$1" in
                 gittreset all ;;
 
     debug)      reppcheck_precondition print_y || return 1
-                reppdebug "${@:2}";;
+                reppcheck_version "${@:2}";;
     check)      reppcheck_precondition print_n || return 1
                 reppcheck_connection "${@:2}";;
     server)     reppcheck_precondition print_n || return 1
@@ -856,11 +920,33 @@ function reppcheck_precondition(){
 
 
 
+function gittdebug(){
+#repo forall -c 'echo ${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}'
+    # 'GIT_VARIABLE=${GIT_REMOTE} ${GIT_PROJECT} ${GIT_BRANCH} ${GIT_REVIEW} ${GIT_URL} ${GIT_PATH}'
+    #echo -n "${GIT_VARIABLE}"
+    reppcheck_precondition print_n
+    local file_log=$(mktemp)
+    cat <<\EOL > ${file_log}
+        for var in \
+        '${GIT_REMOTE}' '${GIT_PROJECT}' '${GIT_BRANCH}' '${GIT_REVIEW}' '${GIT_URL}' '${GIT_PATH}' \
+        '${REPO_PATH}' '${REPO_ROOT}' '${REPO_REMOTE}' '${REPO_BRANCH}' '${REPO_URL}' '${REPO_MIRROR}' '${REPO_COUNT}'
+        do 
+           dlog $var $(eval echo $var)
+        done
+EOL
+
+    ##run echo 
+    source ${file_log}
+}
+
+
+
 ##============================================================================
 ## Main
 ##============================================================================
 #set -x
-REPO_PATH='' && REPO_ROOT='' && REPO_REMOTE='' && REPO_BRANCH='' && REPO_URL='' && REPO_MIRROR='' && REPO_COUNT=''
+GIT_REMOTE= &&GIT_PROJECT= &&GIT_BRANCH= &&GIT_REVIEW= &&GIT_URL= &&GIT_PATH=
+REPO_PATH= &&REPO_ROOT= &&REPO_REMOTE= &&REPO_BRANCH= &&REPO_URL= &&REPO_MIRROR= &&REPO_COUNT=
 REPO_PATH_ALL=()
 
 (return 0 2>/dev/null) && sourced=1 || sourced=0
