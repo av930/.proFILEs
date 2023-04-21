@@ -182,7 +182,8 @@ function reppget_repcmd(){
     if [ -n "$REPP_MIRROR" ];then EXTRA_OPTION="--reference=$REPP_MIRROR"; fi
     if [ "$1" = "info" ];then
         bar inline "repo-init cmd"
-        log "repo init -u $REPP_REMOTE -b $REPP_BRANCH -m $FILE_MANI --repo-url=$REPP_URL $EXTRA_OPTION"
+        REPP_CMD="repo init -u $REPP_REMOTE -b $REPP_BRANCH -m $FILE_MANI --repo-url=$REPP_URL $EXTRA_OPTION"
+        log "${REPP_CMD}"
     fi
     return 0
 }
@@ -324,7 +325,6 @@ function reppmani(){
     local cmd=$1
     local name=$2
 
-set -x
     case $cmd in
        help) echo "repp handler" 
     ;;  one) echo aaaa
@@ -332,7 +332,6 @@ set -x
     ;;  gen)    bar inline "current manifest.xml regnerated with including child"
                 showRUN repo manifest > ${REPP_PATH}/repp.xml
     ;; esac
-set +x    
 }
 
 
@@ -348,20 +347,33 @@ function reppbranch(){
     local name=$2
 
     case $cmd in
-               help) echo "repp handler" 
-    ;;   create_one) showRUN repo forall -c git push ${REPO_REMOTE} HEAD:refs/heads/${name}
-    ;;   remove_one) showRUN repo forall -c git push ${REPO_REMOTE} --delete ${name}
-    ;;  create_each) showRUN repo forall -c git push ${REPO_REMOTE} HEAD:refs/heads/${REPO_RREV}_${name}
-    ;;  remove_each) showRUN repo forall -c git push ${REPO_REMOTE} --delete ${REPO_RREV}_${name}
-    ;;  check_one) 
-        clog "local HEAD" "md5sum in all repository"
-        showRUN repo forall -c git log -1 --pretty=format:%H | md5sum
-    
-        echo "remote HEAD" "md5sum in all repository tracked"
-        showRUN repo forall -c 'git ls-remote -h ${REPO_REMOTE} ${REPO_RREV}| cut -f1' |md5sum
+              help) cat <<- EOF
+					ex) repp branch create_one <branch-name>
+					ex) repp branch create_each <branch-postfix>
+					ex) repp branch remove_one <branch-name>
+					ex) repp branch remove_each <branch-postfix>
+					ex) repp branch check <search-name>
+EOF
+    ;;  create_one) showRUN repo forall -pc 'git push ${REPO_REMOTE} HEAD:refs/heads/${1}' ${name}
+    ;; create_each) showRUN repo forall -pc 'git push ${REPO_REMOTE} HEAD:refs/heads/${REPO_RREV}_${1}' ${name}
+    ;;  remove_one) showRUN repo forall -pc 'git push ${REPO_REMOTE} --delete ${1}' ${name}
+    ;; remove_each) showRUN repo forall -pc 'git push ${REPO_REMOTE} --delete ${REPO_RREV}_${1}' ${name}
+    ;;        list) repo forall -pc 'git ls-remote -h ${REPO_REMOTE} refs/heads/*${1}*' ${name}    
+    ;;   check_one) repo forall -pc '[ -z "$(git ls-remote -h ${REPO_REMOTE} refs/heads/$1)" ] && echo not existed || echo existed' ${name}
+    ;;  check_each) repo forall -pc '[ -z "$(git ls-remote -h ${REPO_REMOTE} refs/heads/${REPO_RREV}_$1)" ] && echo not existed || echo existed' ${name}
+    ;;    checksum) 
+                    bar inline "local HEAD md5sum in all repository"
+                    showRUN repo forall -c 'git log -1 --pretty=format:%H' | md5sum
+                
+                    bar inline "remote HEAD md5sum in all repository tracked"
+                    showRUN repo forall -c 'git ls-remote -h ${REPO_REMOTE} ${REPO_RREV}| cut -f1' |md5sum
 
-        echo "${name}" "md5sum in all repository tracked"
-        showRUN repo forall -c 'git ls-remote -h ${REPO_REMOTE} refs/heads/${REPO_RREV}_${name}| cut -f1' |md5sum        
+                    bar inline "${name} md5sum in all repository tracked"
+                    showRUN repo forall -c 'git ls-remote -h ${REPO_REMOTE} refs/heads/${REPO_RREV}_${name}| cut -f1' ${name} |md5sum        
+                    
+                    bar inline "shows diff between tags shortly"
+                    #repo forall -pc 'git diff --shortstat tagA tagB'
+    ;;           *) echo "usage) repp branch help"
     ;; esac
 }
 
@@ -371,13 +383,33 @@ function gittbranch_list(){
 ## ---------------------------------------------------------------------------
 # show branch local & remote
 # $1 all or filter
-    local filter=$1
-  
-    # list option must be wrapped with quoat ex) --list '*relese*'
+    local filter
+
+    ## list option must be wrapped with quoat ex) --list '*relese*'
     bar inline "branch local"
+    echo "these branches are existed in local repository"
+    clog "[local]" "could be synced by remote, if so, traced is marked"
     git branch -vv 
-    bar inline "branch remote with filter (${filter:-all})"
-    git branch -rvv ${filter:+--list \*${filter}\*} |more -60
+
+    ## prevent globbing
+    set -o noglob
+    bar inline "sort by recently updated branches by new commit"
+    echo "branch: remote tracked with filter (${filter:-all}) top 20 in local repository"
+    echo "this branches was downloaded when git fetch equivalent command is executed"
+    clog "[not latest]" "could be latest by git pull"
+    
+    [ -z "${1}" ] && filter="" || filter="--list *${1}*"
+    git branch -rvv --sort=-committerdate ${filter} | head -20
+    
+    bar inline "sort by recently created branches"
+    echo "branch: remote all with filter (${filter:-all}) by date top 20 in remote repository"
+    echo "this branches could be downloaded by git fetch command"
+    clog "[always latest]" "read from remote live"
+    err "this command is not correct, please watch out"
+    
+    [ -z "${1}" ] && filter="*" || filter="*${1}*"
+    showRUN git ls-remote -h ${GITT_REMOTE} refs/heads/${filter} --sort=-committerdate | head -20
+    set +o noglob
 }
 
 
@@ -391,12 +423,17 @@ function gittbranch(){
 
 
     case $cmd in
-       help)    printf "ex) gitt branch list <''|name-filter>\nex) gitt branch create|new <name>\nex) gitt branch delete|remove <name>\n" 
+       help) cat <<- EOF
+				ex) gitt branch list <''|name-filter>
+				ex) gitt branch create|new <name>
+				ex) gitt branch delete|remove <name>
+EOF
     ;; create|new)  if [ -z "${name}" ]; then err "branch name must be input" && return 1;fi
                 showRUN git push ${GITT_REMOTE} HEAD:refs/heads/${name}
     ;; delete|remove)  if [ -z "${name}" ]; then err "branch name must be input" && return 1;fi
                 showRUN git push ${GITT_REMOTE} --delete ${name}
-    ;; *|''|list) gittbranch_list ${name}                
+    ;; list) gittbranch_list "${name}"
+    ;; *) echo "usage) gitt branch help"
     ;; esac
 }
 
@@ -552,7 +589,18 @@ function reppcheck_version(){
     bar inline "where"
     which repo
     which git
-
+    
+    local VER=$(repo --version | grep "repo version"  |tr -dc '[:digit:]')
+    if (( ${VER:0:4} < 2300 )); then 
+        under "you need to upgrade 'repo' to use full functionality" "\n"
+		clog "1. remove old .repo:" rm -rf ${REPP_ROOT}/.repo
+		clog "2. download to dir:" git clone https://gerrit.googlesource.com/git-repo ${path_mirror}/repo2 --mirror
+		clog "3. replace repo and repo init:" [--repo-url=${REPP_URL}] --\> [${path_mirror}/repo2]
+        pushd ${REPP_PATH} ; reppget_repcmd info ; popd
+		clog "-->" 
+        echo "${REPP_CMD/${REPP_URL}/${path_mirror}/repo2}"
+        #| sed -e 's#--repo-url=${REPP_URL}#--repo-url=${path_mirror}/repo2'
+    fi
 }
 
 
@@ -737,6 +785,7 @@ function gittinfo(){
 # main handler for this scriptre
 # TODO: clone command
     local TEMP
+    under "git info"
     bar inline "git path"
     if ! gittcheck_gitpath print_y ;then echo "we are not in git project" && return 1; fi
     
@@ -748,13 +797,20 @@ function gittinfo(){
     clog ' review:' ${GITT_REVIEW:="not defined"}
     clog '    url:' ${GITT_URL:="error: must check"}
 
-
     #review system check
     case $(git config --get-regexp remote|cut -d' ' -f2) in
-	  *github.com*) GIT_SITE=$(printf "https://%s" $(git config --get-regexp remote.*.url|sed -E 's#^.*(github.*)$#\1#')  );;
-	  ''|*) GIT_SITE=$(printf "%s/admin/repos/%s" $(git config --get-regexp remote.*.review|cut -d' ' -f2|sed -E 's#(.*)[/]$#\1#') \
-                    $(git config --get-regexp remote.*.projectname|cut -d' ' -f2) );;
-    esac
+      help)             echo "site customization"
+	;;*github.com*)     GIT_SITE=$(printf "https://%s" ${GITT_URL}|sed -E 's#^.*github.com:(.*.git)$#http://github.com/\1#')
+	;;*lge.com*manifest.git*) case ${GITT_URL} in 
+                              *vgit.lge.com:29420*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'na' admin/repos/${GITT_URL##*0/} ) ;;
+                              *vgit.lge.com:29430*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'eu' admin/repos/${GITT_URL##*0/} ) ;;
+                              *vgit.lge.com:29440*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'as' admin/repos/${GITT_URL##*0/} ) ;;
+                              *vgit.lge.com:29550*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'adas' admin/repos/${GITT_URL##*0/} ) ;;
+                              *vgit.lge.com:29999*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'devops_test' admin/repos/${GITT_URL##*0/} ) ;;
+                              *) GIT_SITE="please add site custom setting" ;;
+                              esac
+	;;''|*)             GIT_SITE=$(printf "%s/admin/repos/%s" $(echo ${GITT_REVIEW}|sed -E 's#(.*)[/]$#\1#') ${GITT_PROJECT} )
+    ;;esac
     clog "review system site:" ${GIT_SITE}
     
     bar inline "git push commands"
@@ -772,6 +828,8 @@ function gittinfo(){
     else clog "last manifest-synced date(check date of files below): " $(ls -lct ${GITT_PATH}/.git| tail -5);fi
     IFS=${oldIFS}
 
+    under "branch info" 
+    gittbranch list
 }
 
 
@@ -857,7 +915,7 @@ case "$1" in
     #$1:below ${@:2}:parameters
     info)       gittinfo ;;
     show)       gittshow "${@:2}";;
-    go)         cd "$(gittcheck_gitpath)" ;;
+    go)         cd "$(gittcheck_gitpath print_y)" ;;
     reset)      gittreset "${@:2}";;
     find)       gittfind "${@:2}";;
     branch)     gittbranch "${@:2}";;
@@ -960,12 +1018,12 @@ function reppcheck_precondition(){
 
 
 function gittdebug(){
+#reppdebug & gittdebug
 #repo forall -c 'echo ${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}'
-# 'GITT_VARIABLE=${GITT_REMOTE} ${GITT_PROJECT} ${GITT_BRANCH} ${GITT_REVIEW} ${GITT_URL} ${GITT_PATH}'
-    #echo -n "${GITT_VARIABLE}"
     reppcheck_precondition print_n
     local file_log=$(mktemp)
     cat <<\EOL > ${file_log}
+        bar inline "GITT_VARIABLE && REPP_VARIABLE"
         for var in \
         '${GITT_REMOTE}' '${GITT_PROJECT}' '${GITT_BRANCH}' '${GITT_REVIEW}' '${GITT_URL}' '${GITT_PATH}' \
         '${REPP_PATH}' '${REPP_ROOT}' '${REPP_REMOTE}' '${REPP_BRANCH}' '${REPP_URL}' '${REPP_MIRROR}' '${REPP_COUNT}'
@@ -973,8 +1031,12 @@ function gittdebug(){
            dlog $var $(eval echo $var)
         done
         
-        clog "for ${GITT_PROJECT}" "print repo variable"
-        repo forall ${REPO_PROJECT} -c 'echo ${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}'
+        bar inline "[${GITT_PROJECT}] print repo variable"
+        showRUN repo forall ${GITT_PROJECT} -c 'echo ${REPO_REMOTE}\| ${REPO_PROJECT}\| ${REPO_PATH}\| ${REPO_LREV}\| ${REPO_RREV}'
+        
+        bar inline "[all repo] print repo variable"
+        dlog '${REPO_PROJECT}| ${REPO_REMOTE}| ${REPO_PATH}| ${REPO_RREV}| ${REPO_LREV}| ${REPO_OUTERPATH}| ${REPO_INNERPATH}| ${REPO_COUNT}'
+        repo forall -c 'echo ${REPO_PROJECT}\| ${REPO_REMOTE}\| ${REPO_PATH}\| ${REPO_RREV}\| ${REPO_LREV}\| ${REPO_OUTERPATH}\| ${REPO_INNERPATH}\| ${REPO_COUNT}' | more -60
 EOL
 
     ##run echo 
@@ -986,9 +1048,8 @@ EOL
 ##============================================================================
 ## Main
 ##============================================================================
-#set -x
 GITT_REMOTE= &&GITT_PROJECT= &&GITT_BRANCH= &&GITT_REVIEW= &&GITT_URL= &&GITT_PATH=
-REPP_PATH= &&REPP_ROOT= &&REPP_REMOTE= &&REPP_BRANCH= &&REPP_URL= &&REPP_MIRROR= &&REPP_COUNT=
+REPP_PATH= &&REPP_ROOT= &&REPP_REMOTE= &&REPP_BRANCH= &&REPP_URL= &&REPP_MIRROR= &&REPP_COUNT= &&REPP_CMD=
 REPP_PATH_ALL=()
 
 (return 0 2>/dev/null) && sourced=1 || sourced=0
