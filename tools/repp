@@ -323,15 +323,38 @@ function reppmani(){
 # $2 command
 # $3 branch name or branch postfix
     local cmd=$1
-    local name=$2
+    local opt=$2    
+    local field=$3
+    local name=$4
 
-    case $cmd in
-       help) echo "repp handler" 
-    ;;  one) echo aaaa
-    ;;  remove) echo abbb
-    ;;  gen)    bar inline "current manifest.xml regnerated with including child"
-                showRUN repo manifest > ${REPP_PATH}/repp.xml
+set -x
+    case ${cmd}${opt} in
+        help) cat <<- EOF
+				ex) repp mani help
+				ex) repp mani info
+				ex) repp mani gen <outfile>      
+				ex) repp mani create one <group|upstream|dest-branch|etc> <branch-name>
+				ex) repp mani create each <group|upstream|dest-branch|etc> <branch-postfix>
+EOF
+    ;;      info)   bar inline "recently changed manifest file [default 10 commit]"
+                    showRUN git log -10 --name-status --abbrev=6 --date=format:"%Y-%m-%d %H:%M" --pretty=format:"%C(yellow)%ad %C(red)%h %C(green)%s%C(reset)"
+    ;;      gen)    bar inline "current manifest.xml regnerated with option"
+                    clog "-r" "generate revision with [''| --suppress-dest-branch| --suppress-upstream-revision]"
+                    clog "--json " "generate manifest to json format"
+                    read -p "input option :" opt
+                    showRUN repo manifest ${opt} -o ${REPP_PATH}/repp.xml
+    ;;  createone)  bar inline "change manifest field with value"
+                    echo "upstream " "<branch-name>"
+                    clog "ex) group|upstream|dest-branch|etc " "<newname to be replaced>"
+                    repo manifest | sed -E "s#${field}=\"(.*)\"#${field}=\"${name}\"#" 
+    ;;  createeach) bar inline "change manifest field with value-postfix"
+                    echo "upstream " "<branch-postfix>"
+                    clog "ex) group|upstream|dest-branch|etc " "<postfix to be added>"
+                    repo manifest | sed -E "s#${field}=\"(.*)\"#${field}=\"\1${name}\"#"
+
     ;; esac
+    
+set +x
 }
 
 
@@ -344,23 +367,30 @@ function reppbranch(){
 # $3 branch name or branch postfix
 # todo: branch 생성/각각 생성, 제거, 생성(rev까지)확인
     local cmd=$1
-    local name=$2
+    local opt=$2
+    local name=$3
 
-    case $cmd in
+    case ${cmd}${opt} in
               help) cat <<- EOF
-					ex) repp branch create_one <branch-name>
-					ex) repp branch create_each <branch-postfix>
-					ex) repp branch remove_one <branch-name>
-					ex) repp branch remove_each <branch-postfix>
-					ex) repp branch check <search-name>
+					ex) repp branch help
+					ex) repp branch create one <branch-name>
+					ex) repp branch create each <branch-postfix>
+					ex) repp branch remove one <branch-name>
+					ex) repp branch remove each <branch-postfix>
+					ex) repp branch check  one <branch-name>
+					ex) repp branch check  each <branch-postfix >
+                    ex) repp branch checksum
 EOF
-    ;;  create_one) showRUN repo forall -pc 'git push ${REPO_REMOTE} HEAD:refs/heads/${1}' ${name}
-    ;; create_each) showRUN repo forall -pc 'git push ${REPO_REMOTE} HEAD:refs/heads/${REPO_RREV}_${1}' ${name}
-    ;;  remove_one) showRUN repo forall -pc 'git push ${REPO_REMOTE} --delete ${1}' ${name}
-    ;; remove_each) showRUN repo forall -pc 'git push ${REPO_REMOTE} --delete ${REPO_RREV}_${1}' ${name}
-    ;;        list) repo forall -pc 'git ls-remote -h ${REPO_REMOTE} refs/heads/*${1}*' ${name}    
-    ;;   check_one) repo forall -pc '[ -z "$(git ls-remote -h ${REPO_REMOTE} refs/heads/$1)" ] && echo not existed || echo existed' ${name}
-    ;;  check_each) repo forall -pc '[ -z "$(git ls-remote -h ${REPO_REMOTE} refs/heads/${REPO_RREV}_$1)" ] && echo not existed || echo existed' ${name}
+    ;;   createone) showRUN repo forall -pc 'git push ${REPO_REMOTE} HEAD:refs/heads/${1}' ${name}
+    ;;  createeach) showRUN repo forall -pc 'git push ${REPO_REMOTE} HEAD:refs/heads/${REPO_RREV}_${1}' ${name}
+    ;;   removeone) showRUN repo forall -pc 'git push ${REPO_REMOTE} --delete ${1}' ${name}
+    ;;  removeeach) showRUN repo forall -pc 'git push ${REPO_REMOTE} --delete ${REPO_RREV}_${1}' ${name}
+    ;;        list) bar inline "show remote branches including ${name}" 
+                    repo forall -pc 'git ls-remote -h ${REPO_REMOTE} refs/heads/*${1}*' ${name}
+    ;;    checkone) bar inline "check exact ${name} remote branche is existed for all gits" 
+                    repo forall -pc '[ -z "$(git ls-remote -h ${REPO_REMOTE} refs/heads/$1)" ] && echo not existed || echo existed' ${name}
+    ;;   checkeach) bar inline "check "ending with ${name}" remote branche is existed for all gits" 
+                    repo forall -pc '[ -z "$(git ls-remote -h ${REPO_REMOTE} refs/heads/${REPO_RREV}_$1)" ] && echo not existed || echo existed' ${name}
     ;;    checksum) 
                     bar inline "local HEAD md5sum in all repository"
                     showRUN repo forall -c 'git log -1 --pretty=format:%H' | md5sum
@@ -405,7 +435,7 @@ function gittbranch_list(){
     echo "branch: remote all with filter (${filter:-all}) by date top 20 in remote repository"
     echo "this branches could be downloaded by git fetch command"
     clog "[always latest]" "read from remote live"
-    err "this command is not correct, please watch out"
+    warn "this command is not correct, please watch out"
     
     [ -z "${1}" ] && filter="*" || filter="*${1}*"
     showRUN git ls-remote -h ${GITT_REMOTE} refs/heads/${filter} --sort=-committerdate | head -20
@@ -591,7 +621,7 @@ function reppcheck_version(){
     which git
     
     local VER=$(repo --version | grep "repo version"  |tr -dc '[:digit:]')
-    if (( ${VER:0:4} < 2300 )); then 
+    if (( ${VER:0:3} < 230 )); then 
         under "you need to upgrade 'repo' to use full functionality" "\n"
 		clog "1. remove old .repo:" rm -rf ${REPP_ROOT}/.repo
 		clog "2. download to dir:" git clone https://gerrit.googlesource.com/git-repo ${path_mirror}/repo2 --mirror
