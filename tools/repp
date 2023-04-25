@@ -194,10 +194,10 @@ function reppgo() {
 ## ---------------------------------------------------------------------------
 # return git root path or return near git path
     local T=$(pwd)
-    if [ "${REPP_ROOT}" = "${T}" ]; then 
-        echo "your are in repo root, use 'repp find @path' to list up all repositories" && return 0; 
+    if [ "${REPP_ROOT}" = "${T}" ]; then
+        echo "your are in repo root, use 'repp find @path' to list up all repositories" && return 0;
     fi
-    
+
     #find path to upper dirs until HOME or ROOT.
     dirs -c
     while [ "$T" != "$HOME" ] && [ "$T" != "/"  ]; do
@@ -205,7 +205,7 @@ function reppgo() {
         if [ -d "$T/$1" ]; then cd $T && return 0; fi
         pushd .. > /dev/null
     done
-    
+
     #not found in partents, now findout in child
     pushd -0 && dirs -c > /dev/null
     #echo "no .git found, stay HERE"
@@ -296,10 +296,8 @@ function reppshow_manifesttree(){
     local file
     local path='|--|--|--|--|--|--'
     local treedepth=${2:-0}
-    listxml=()
 
     #print name of manifest
-    listxml+=($1) 
     printf "%s$1 \n" "${path::${treedepth}}"
 
     (( treedepth=treedepth+3 ))
@@ -309,7 +307,7 @@ function reppshow_manifesttree(){
     #sub manifests
     cat $1 | sed -n 's/.*include name="\(.*\)".*/\1/p' | \
     while read -r file; do
-    if [ -n "${file}" ];then reppshow_manifesttree ${file} ${treedepth}; fi
+        if [ -n "${file}" ];then reppshow_manifesttree ${file} ${treedepth}; fi
     done
     (( treedepth=treedepth-3 ))
 }
@@ -323,38 +321,37 @@ function reppmani(){
 # $2 command
 # $3 branch name or branch postfix
     local cmd=$1
-    local opt=$2    
+    local opt=$2
     local field=$3
     local name=$4
 
-set -x
+
     case ${cmd}${opt} in
-        help) cat <<- EOF
+           ''|help) cat <<- EOF
 				ex) repp mani help
 				ex) repp mani info
-				ex) repp mani gen <outfile>      
+				ex) repp mani gen <outfile>
 				ex) repp mani create one <group|upstream|dest-branch|etc> <branch-name>
 				ex) repp mani create each <group|upstream|dest-branch|etc> <branch-postfix>
 EOF
-    ;;      info)   bar inline "recently changed manifest file [default 10 commit]"
+    ;;        info) bar inline "recently changed manifest file [default 10 commit]"
                     showRUN git log -10 --name-status --abbrev=6 --date=format:"%Y-%m-%d %H:%M" --pretty=format:"%C(yellow)%ad %C(red)%h %C(green)%s%C(reset)"
-    ;;      gen)    bar inline "current manifest.xml regnerated with option"
+    ;;         gen) bar inline "current manifest.xml regnerated with option"
                     clog "-r" "generate revision with [''| --suppress-dest-branch| --suppress-upstream-revision]"
                     clog "--json " "generate manifest to json format"
                     read -p "input option :" opt
                     showRUN repo manifest ${opt} -o ${REPP_PATH}/repp.xml
-    ;;  createone)  bar inline "change manifest field with value"
+    ;;   createone) bar inline "change manifest field with value"
                     echo "upstream " "<branch-name>"
                     clog "ex) group|upstream|dest-branch|etc " "<newname to be replaced>"
-                    repo manifest | sed -E "s#${field}=\"(.*)\"#${field}=\"${name}\"#" 
+                    #echo repo manifest \| sed -E "s#${field}=\"(.*)\"#${field}=\"${name}\"#" 
+                    repo manifest | sed -E "s#${field}=\"(.*)\"#${field}=\"${name}\"#"
     ;;  createeach) bar inline "change manifest field with value-postfix"
                     echo "upstream " "<branch-postfix>"
                     clog "ex) group|upstream|dest-branch|etc " "<postfix to be added>"
                     repo manifest | sed -E "s#${field}=\"(.*)\"#${field}=\"\1${name}\"#"
-
     ;; esac
-    
-set +x
+
 }
 
 
@@ -371,7 +368,7 @@ function reppbranch(){
     local name=$3
 
     case ${cmd}${opt} in
-              help) cat <<- EOF
+           ''|help) cat <<- EOF
 					ex) repp branch help
 					ex) repp branch create one <branch-name>
 					ex) repp branch create each <branch-postfix>
@@ -379,28 +376,28 @@ function reppbranch(){
 					ex) repp branch remove each <branch-postfix>
 					ex) repp branch check  one <branch-name>
 					ex) repp branch check  each <branch-postfix >
-                    ex) repp branch checksum
+					ex) repp branch checksum
 EOF
     ;;   createone) showRUN repo forall -pc 'git push ${REPO_REMOTE} HEAD:refs/heads/${1}' ${name}
     ;;  createeach) showRUN repo forall -pc 'git push ${REPO_REMOTE} HEAD:refs/heads/${REPO_RREV}_${1}' ${name}
     ;;   removeone) showRUN repo forall -pc 'git push ${REPO_REMOTE} --delete ${1}' ${name}
     ;;  removeeach) showRUN repo forall -pc 'git push ${REPO_REMOTE} --delete ${REPO_RREV}_${1}' ${name}
-    ;;        list) bar inline "show remote branches including ${name}" 
-                    repo forall -pc 'git ls-remote -h ${REPO_REMOTE} refs/heads/*${1}*' ${name}
-    ;;    checkone) bar inline "check exact ${name} remote branche is existed for all gits" 
-                    repo forall -pc '[ -z "$(git ls-remote -h ${REPO_REMOTE} refs/heads/$1)" ] && echo not existed || echo existed' ${name}
-    ;;   checkeach) bar inline "check "ending with ${name}" remote branche is existed for all gits" 
+    ;;        list) bar inline "show remote branches including ${name}"
+                    showRUN repo forall -pc 'git ls-remote -h ${REPO_REMOTE} refs/heads/*${1}*' ${name} 
+    ;;    checkone) bar inline "check exact ${name} remote branche is existed for all gits"
+                    repo forall -pc '[ -z "$(git ls-remote -h ${REPO_REMOTE} refs/heads/$1)" ] && echo not existed || echo existed' ${name} 
+    ;;   checkeach) bar inline "check "ending with ${name}" remote branche is existed for all gits"
                     repo forall -pc '[ -z "$(git ls-remote -h ${REPO_REMOTE} refs/heads/${REPO_RREV}_$1)" ] && echo not existed || echo existed' ${name}
-    ;;    checksum) 
-                    bar inline "local HEAD md5sum in all repository"
-                    showRUN repo forall -c 'git log -1 --pretty=format:%H' | md5sum
-                
-                    bar inline "remote HEAD md5sum in all repository tracked"
-                    showRUN repo forall -c 'git ls-remote -h ${REPO_REMOTE} ${REPO_RREV}| cut -f1' |md5sum
+    ;;    checksum) #don' use showRUN, md5sum includes showRUN command.
+                    bar inline "1. local HEAD md5sum in all repository"
+                    repo forall -c 'git log -1 --pretty=format:%H' | md5sum
 
-                    bar inline "${name} md5sum in all repository tracked"
-                    showRUN repo forall -c 'git ls-remote -h ${REPO_REMOTE} refs/heads/${REPO_RREV}_${name}| cut -f1' ${name} |md5sum        
-                    
+                    bar inline "2. remote HEAD md5sum in all repository tracked"
+                    repo forall -c 'git ls-remote -h ${REPO_REMOTE} ${REPO_RREV}| cut -f1' |md5sum
+
+                    bar inline "3. branch [${name}] md5sum in all repository tracked"
+                    repo forall -c 'git ls-remote -h ${REPO_REMOTE} refs/heads/*${name}* | cut -f1' ${name} |md5sum
+
                     bar inline "shows diff between tags shortly"
                     #repo forall -pc 'git diff --shortstat tagA tagB'
     ;;           *) echo "usage) repp branch help"
@@ -419,24 +416,26 @@ function gittbranch_list(){
     bar inline "branch local"
     echo "these branches are existed in local repository"
     clog "[local]" "could be synced by remote, if so, traced is marked"
-    git branch -vv 
+    git branch -vv
+
 
     ## prevent globbing
     set -o noglob
     bar inline "sort by recently updated branches by new commit"
     echo "branch: remote tracked with filter (${filter:-all}) top 20 in local repository"
-    echo "this branches was downloaded when git fetch equivalent command is executed"
+    echo "shows the branches downloaded when git fetch equivalent command was executed"
     clog "[not latest]" "could be latest by git pull"
-    
+
     [ -z "${1}" ] && filter="" || filter="--list *${1}*"
     git branch -rvv --sort=-committerdate ${filter} | head -20
-    
+
+
     bar inline "sort by recently created branches"
     echo "branch: remote all with filter (${filter:-all}) by date top 20 in remote repository"
-    echo "this branches could be downloaded by git fetch command"
+    echo "shows the branches existed in remote"
     clog "[always latest]" "read from remote live"
     warn "this command is not correct, please watch out"
-    
+
     [ -z "${1}" ] && filter="*" || filter="*${1}*"
     showRUN git ls-remote -h ${GITT_REMOTE} refs/heads/${filter} --sort=-committerdate | head -20
     set +o noglob
@@ -473,8 +472,8 @@ function reppinfo(){
 ## ---------------------------------------------------------------------------
 # print information of repo
 # $1 manifests file (default is current manifests)
-    pushd ${REPP_PATH} 
-    oldIFS=${IFS}; IFS='';
+    pushd ${REPP_PATH}
+    #oldIFS=${IFS}; IFS='';
 
     #show repo dir path
     bar inline "repo path"
@@ -488,7 +487,7 @@ function reppinfo(){
     bar inline "manifests"
     clog  "    <name of manifest>                                      <including branches>"
     reppshow_manifesttree ${manifest} 0
-
+    
     #show count of repository
     ## block infomation
     bar inline "misc information for this repositories"
@@ -501,7 +500,7 @@ function reppinfo(){
     if [ -f .git/FETCH_HEAD ]; then clog "last manifest-synced date: " $(stat -c %y .git/FETCH_HEAD );
     else clog "last manifest-synced time(check date of files below): " $(ls -lct | tail -10);fi
 
-    IFS=${oldIFS}
+    #IFS=${oldIFS}
     popd
 }
 
@@ -520,16 +519,16 @@ function reppshow(){
     echo "repo status" > ${REPP_ROOT}/repp.status
 
     #remove colored output with 1) sed command, 2) --color option
-    #repo status -j8 |sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" >> ${REPP_ROOT}/repp.status 
-    repo --no-pager --color=never status -j8 >> ${REPP_ROOT}/repp.status 
-    
+    #repo status -j8 |sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" >> ${REPP_ROOT}/repp.status
+    repo --no-pager --color=never status -j8 >> ${REPP_ROOT}/repp.status
+
     #list up repo commit, remote, branch, project, path
     reppfind |more -60
 
     #### repo info command is duplicated with reppfind functionality, so remove it.
     #bar inline "repo info: git repo/source path /branch rev saved to [ ${REPP_ROOT}/repp.status ]"
     #echo "repo info" >> ${REPP_ROOT}/repp.status
-    #repo info |sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" >> ${REPP_ROOT}/repp.status 
+    #repo info |sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" >> ${REPP_ROOT}/repp.status
 }
 
 
@@ -577,16 +576,16 @@ function reppfind(){
     file_log=${REPP_ROOT}/repp.csv
     repo forall -j1 -c 'printf "%.6s|%.7s|%-22.22s|%-74.74s|%.80s \n" "${REPO_LREV}" "${REPO_REMOTE}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"' \
      > $file_log
-     
-    case $1 in 
+
+    case $1 in
       comment) @로 시작하면 coloume을 출력
-    ;; @rev)      echo "REPO_LREV";    awk -v FS="|" '{print $1}' $file_log 
+    ;; @rev)      echo "REPO_LREV";    awk -v FS="|" '{print $1}' $file_log
     ;; @remote)   echo "REPO_REMOTE";  awk -v FS="|" '{print $2}' $file_log |sort |uniq
     ;; @branch)   echo "REPO_RREV";    awk -v FS="|" '{print $3}' $file_log |sort |uniq
-    ;; @git)      echo "REPO_PROJECT"; awk -v FS="|" '{print $4}' $file_log |sort 
-    ;; @path)     echo "REPO_PATH" > /dev/stderr;   awk -v FS="|" '{print $5}' $file_log |sort 
+    ;; @git)      echo "REPO_PROJECT"; awk -v FS="|" '{print $4}' $file_log |sort
+    ;; @path)     echo "REPO_PATH" > /dev/stderr;   awk -v FS="|" '{print $5}' $file_log |sort
     ;; "")        printf "\e[1;33m%6.6s %7.7s %-22.22s %-74.74s %.80s \e[0m\n" "REPO_LREV" "REPO_REMOTE" "REPO_RREV" "REPO_PROJECT" "REPO_PATH"
-                  cat $file_log | tee  >(wc -l) 
+                  cat $file_log | tee  >(wc -l)
     ;; *)         printf "\e[1;33m%6.6s %7.7s %-22.22s %-74.74s %.80s \e[0m\n" "REPO_LREV" "REPO_REMOTE" "REPO_RREV" "REPO_PROJECT" "REPO_PATH"
                   cat $file_log | grep -i --color=always $1
     ;;
@@ -619,15 +618,15 @@ function reppcheck_version(){
     bar inline "where"
     which repo
     which git
-    
+
     local VER=$(repo --version | grep "repo version"  |tr -dc '[:digit:]')
-    if (( ${VER:0:3} < 230 )); then 
+    if (( ${VER:0:3} < 230 )); then
         under "you need to upgrade 'repo' to use full functionality" "\n"
 		clog "1. remove old .repo:" rm -rf ${REPP_ROOT}/.repo
 		clog "2. download to dir:" git clone https://gerrit.googlesource.com/git-repo ${path_mirror}/repo2 --mirror
 		clog "3. replace repo and repo init:" [--repo-url=${REPP_URL}] --\> [${path_mirror}/repo2]
         pushd ${REPP_PATH} ; reppget_repcmd info ; popd
-		clog "-->" 
+		clog "-->"
         echo "${REPP_CMD/${REPP_URL}/${path_mirror}/repo2}"
         #| sed -e 's#--repo-url=${REPP_URL}#--repo-url=${path_mirror}/repo2'
     fi
@@ -725,7 +724,7 @@ MENU_REPP=(
 "check: find accessibility for manifest git or normal git
     ex) repp check, repp check vgit.lge.com 29420 tiger/tools tiger_release
                    repp check [git-server] [port] [project]  [branch]"
-"version: shows repo/git/python version info used in current repo"    
+"version: shows repo/git/python version info used in current repo"
 )
 
 
@@ -777,7 +776,7 @@ cat << PREFACE
  welcome to gitt & repp
  -------------------------------------------------------------
  command usage: ex) gitt, gitt info, gitt show [currnet git]
- command usage: ex) repp, repp info, repp show [default.xml] 
+ command usage: ex) repp, repp info, repp show [default.xml]
  ex) gitt find [string], gitt show, etc
  help: http://collab.lge.com/main/x/wY6wa
 ==============================================================
@@ -798,13 +797,13 @@ gittcheck_isgitproject(){ git -C "$1" rev-parse --is-inside-work-tree &> /dev/nu
 function gittcheck_gitpath(){
 ## ---------------------------------------------------------------------------
     #readarray -t GITT_REMOTE < <(git remote -v |cut -f1|uniq)
-    GITT_REMOTE=$(git remote|head -1) 
-    
+    GITT_REMOTE=$(git remote|head -1)
+
     #git config --get-regexp remote.$GITT_REMOTE |sort|grep -Ee "(projectname|review|url)"
     GITT_PROJECT=$(git config --get-regexp remote.*.projectname|cut -d' ' -f2)
-    GITT_BRANCH=$(git branch -ar |grep -e '->' |sed -E 's#.*[/|>](.*)$#\1#')    
-    GITT_REVIEW=$(git config --get-regexp remote.*.review|cut -d' ' -f2)
-    GITT_URL=$(git config --get-regexp remote.${GITT_REMOTE}.url|cut -d' ' -f2)
+    GITT_BRANCH=$(git branch -ar |grep -e '->' |sed -E 's#.*[/|>](.*)$#\1#')
+    GITT_REVIEW=$(git config --get-regexp remote.*.review|cut -d' ' -f2|head -1)
+    GITT_URL=$(git config --get-regexp remote.${GITT_REMOTE}.url|cut -d' ' -f2|head -1)
     GITT_PATH=$(git rev-parse --show-toplevel)
     if [ "$1" = "print_y" ]; then echo "${GITT_PATH}"; fi
 }
@@ -818,12 +817,12 @@ function gittinfo(){
     under "git info"
     bar inline "git path"
     if ! gittcheck_gitpath print_y ;then echo "we are not in git project" && return 1; fi
-    
+
     ## "error: must check" must be checked!!!
-    bar inline "show all remote info"    
+    bar inline "show all remote info"
     clog ' remote:' ${GITT_REMOTE:="error: must check"}
     clog 'project:' ${GITT_PROJECT:="not defined"}
-    clog ' branch:' ${GITT_BRANCH:="error: must check"}    
+    clog ' branch:' ${GITT_BRANCH:="error: must check"}
     clog ' review:' ${GITT_REVIEW:="not defined"}
     clog '    url:' ${GITT_URL:="error: must check"}
 
@@ -831,26 +830,26 @@ function gittinfo(){
     case $(git config --get-regexp remote|cut -d' ' -f2) in
       help)             echo "site customization"
 	;;*github.com*)     GIT_SITE=$(printf "https://%s" ${GITT_URL}|sed -E 's#^.*github.com:(.*.git)$#http://github.com/\1#')
-	;;*lge.com*manifest.git*) case ${GITT_URL} in 
+	;;*vgit.lge.com*manifest*) case ${GITT_URL} in #remove starting string 'vgit.lge.com:29420/'
                               *vgit.lge.com:29420*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'na' admin/repos/${GITT_URL##*0/} ) ;;
                               *vgit.lge.com:29430*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'eu' admin/repos/${GITT_URL##*0/} ) ;;
                               *vgit.lge.com:29440*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'as' admin/repos/${GITT_URL##*0/} ) ;;
                               *vgit.lge.com:29550*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'adas' admin/repos/${GITT_URL##*0/} ) ;;
-                              *vgit.lge.com:29999*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'devops_test' admin/repos/${GITT_URL##*0/} ) ;;
+                              *vgit.lge.com:29999*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'devops_test' admin/repos/${GITT_URL##*9/} ) ;;
                               *) GIT_SITE="please add site custom setting" ;;
                               esac
 	;;''|*)             GIT_SITE=$(printf "%s/admin/repos/%s" $(echo ${GITT_REVIEW}|sed -E 's#(.*)[/]$#\1#') ${GITT_PROJECT} )
     ;;esac
     clog "review system site:" ${GIT_SITE}
-    
+
     bar inline "git push commands"
-    TEMP=$(printf "git push $GITT_REMOTE HEAD:refs/heads/%s" ${GITT_BRANCH})    
+    TEMP=$(printf "git push $GITT_REMOTE HEAD:refs/heads/%s" ${GITT_BRANCH})
     clog " git push direct:" $TEMP
-    clog " git push review:" ${TEMP/\/heads/\/for}    
-    
+    clog " git push review:" ${TEMP/\/heads/\/for}
+
     bar inline "recent commit info"
     git show --stat --oneline HEAD
-    
+
     bar inline "last synced time"
     #show last synced time
     oldIFS=${IFS}; IFS='';
@@ -858,7 +857,7 @@ function gittinfo(){
     else clog "last manifest-synced date(check date of files below): " $(ls -lct ${GITT_PATH}/.git| tail -5);fi
     IFS=${oldIFS}
 
-    under "branch info" 
+    under "branch info"
     gittbranch list
 }
 
@@ -868,9 +867,9 @@ function gittshow(){
 ## ---------------------------------------------------------------------------
 # print information(commit info) of current repository#
 # $1: number of commit
-# $2: other option such as --all (all branch)    
+# $2: other option such as --all (all branch)
     #topic/working branch
-    bar outline "gitt show is based on command: git log "    
+    bar outline "gitt show is based on command: git log "
     bar inline "git commit history with option (to see all branche, gitt show 20 --all)"
     git log --decorate --graph -n${2:-15} --pretty=format:'%Cred%h -%C(yellow)%s %Cgreen(%ci) %C(blue)<%an>%Creset' $1
 
@@ -878,8 +877,8 @@ function gittshow(){
     echo "--since(=after), --before(=until)"
     echo "6 hour, 2-day, 2-week, 1-month, 1-year"
     clog "ex:" "--since=2-weeks, --since=04:24, --before=6-hours, --after=2022-11-10 --before=2022-11-20-23"
-    read -p "input add option [enter(default):--pretty="short" --name-only | input option with default]" 
-    
+    read -p "input add option [enter(default):--pretty="short" --name-only | input option with default]"
+
     git log --pretty="short" --name-only ${reply} |more -60
 }
 
@@ -893,11 +892,11 @@ function gittreset(){
     case $1 in
       all)  repo forall -cj${NJOBS} 'git reset --hard ; git clean -xdf'
             echo "reset all repositories" ;;
-      ''|*) if gittcheck_isgitproject; then 
-                
+      ''|*) if gittcheck_isgitproject; then
+
                 showRUN git reset --hard; showRUN git clean -xdf
-            else 
-                warn "this is not a git directory"; 
+            else
+                warn "this is not a git directory";
             fi  ;;
     esac
 }
@@ -908,26 +907,26 @@ function gittfind(){
 ## ---------------------------------------------------------------------------
 # print information(commit info) of current repository#
 # $1: number of commit
-# $2: other option such as --all (all branch)    
-    bar outline "search in commit with regexp(\$1) in files(\$2)"    
+# $2: other option such as --all (all branch)
+    bar outline "search in commit with regexp(\$1) in files(\$2)"
 
     under "git log --committer=\"$1\""
-    clog 'committer history' "ex) git log --committer='.*joongkeun' "    
+    clog 'committer history' "ex) git log --committer='.*joongkeun' "
     git log --committer="$1"
 
-    under "git log -i --grep=\"$1\" " 
-    clog 'commit message history' "ex) git log -i --grep='.*debugprint' " 
+    under "git log -i --grep=\"$1\" "
+    clog 'commit message history' "ex) git log -i --grep='.*debugprint' "
     git log -i --grep="$1"
-    
-    under "git log -i -G\"$1\" ${@:2}" 
-    clog 'commit contents history' "ex) git log -i -G'.*debugprint' zlib.c" 
+
+    under "git log -i -G\"$1\" ${@:2}"
+    clog 'commit contents history' "ex) git log -i -G'.*debugprint' zlib.c"
     git log -i -G"$1" "${@:2}"
 
-    under "git grep -n \"$1\" ${@:2}" 
-    clog 'current files tracked in git' "ex) git grep -n '.*debugprint' *.c" 
+    under "git grep -n \"$1\" ${@:2}"
+    clog 'current files tracked in git' "ex) git grep -n '.*debugprint' *.c"
     git grep -n "$1" "${@:2}"
 
-    under "git log -L :\"$1\":${@:2} " 
+    under "git log -L :\"$1\":${@:2} "
     clog 'function in git history' "ex) git log -L :func_debugprint:zlib.c"
     git log -L :"$1":"${@:2}"
 }
@@ -951,8 +950,8 @@ case "$1" in
     branch)     gittbranch "${@:2}";;
     debug)      gittdebug "${@:2}";;
     '')         gittmenu "${@:2}";;
-    *)          git "${@}";;    
-esac    
+    *)          git "${@}";;
+esac
 return $ret
 }
 
@@ -970,9 +969,9 @@ case "$1" in
                 reppinfo  "${@:2}";;
     show)       reppcheck_precondition print_y || return 1
                 #reppinfo "${@:2}"  2>&1 | tee ${REPP_ROOT}/repp.status
-                reppshow "${@:2}"  2>&1 
+                reppshow "${@:2}"  2>&1
                 info "please check file [${REPP_ROOT}/repp.status]"
-                warn "you can use this file to compare other repo.";;                
+                warn "you can use this file to compare other repo.";;
     go)         reppcheck_precondition print_y || return 1
                 local menu_items=('go ROOT　dir' 'go Manifests　dir' 'go GIT　root dir' 'exit')
                 run_menu "${menu_items[@]}"
@@ -989,7 +988,7 @@ case "$1" in
     branch)     reppcheck_precondition print_y || return 1
                 reppbranch "${@:2}";;
     mani)       reppcheck_precondition print_y || return 1
-                reppmani "${@:2}";;                
+                reppmani "${@:2}";;
     init)       reppinit "${@:2}"
                 if [ $? -eq 0 ]; then
                     info "To RUN next command:"
@@ -1006,9 +1005,9 @@ case "$1" in
                 reppcheck_connection "${@:2}";;
     server)     reppcheck_precondition print_n || return 1
                 reppcheck_serverdelay "${@:2}";;
-    '') 
+    '')
                 reppmenu "${@:2}";;
-    *) 
+    *)
                 repo "${@}";;
 esac
 return $ret
@@ -1024,7 +1023,7 @@ function reppcheck_precondition(){
     local ret=1
 
     reppfind_repodir .repo/manifests 5 print_n
-    if [ -d "${REPP_PATH}" ];then 
+    if [ -d "${REPP_PATH}" ];then
         pushd ${REPP_PATH}; REPP_ROOT=${REPP_PATH%/.repo*}
             #set global variable
         REPP_REMOTE=$(git remote -v |grep fetch |awk '{print $2}')
@@ -1032,15 +1031,15 @@ function reppcheck_precondition(){
         REPP_URL=$(cat ../repo/.git/config |grep url|sed 's/.*= \(.*\)/\1/')
         REPP_MIRROR=$(cat ../manifests.git/config |grep reference|sed 's/.*= \(.*\)/\1/')
         REPP_COUNT=$($REPP_PATH/../repo/repo list |wc -l)
-        
+
         popd
         ret=0
     fi
 
-    if [[ $ret -eq 1 && "$1" = "print_y" ]]; then 
+    if [[ $ret -eq 1 && "$1" = "print_y" ]]; then
         printf "%s\n" ${REPP_PATH_ALL[@]};
         bar inline "WARNING"
-        err "you are not in repo project, please check !";      
+        err "you are not in repo project, please check !";
     fi
     return $ret
 }
@@ -1057,19 +1056,19 @@ function gittdebug(){
         for var in \
         '${GITT_REMOTE}' '${GITT_PROJECT}' '${GITT_BRANCH}' '${GITT_REVIEW}' '${GITT_URL}' '${GITT_PATH}' \
         '${REPP_PATH}' '${REPP_ROOT}' '${REPP_REMOTE}' '${REPP_BRANCH}' '${REPP_URL}' '${REPP_MIRROR}' '${REPP_COUNT}'
-        do 
+        do
            dlog $var $(eval echo $var)
         done
-        
+
         bar inline "[${GITT_PROJECT}] print repo variable"
         showRUN repo forall ${GITT_PROJECT} -c 'echo ${REPO_REMOTE}\| ${REPO_PROJECT}\| ${REPO_PATH}\| ${REPO_LREV}\| ${REPO_RREV}'
-        
+
         bar inline "[all repo] print repo variable"
         dlog '${REPO_PROJECT}| ${REPO_REMOTE}| ${REPO_PATH}| ${REPO_RREV}| ${REPO_LREV}| ${REPO_OUTERPATH}| ${REPO_INNERPATH}| ${REPO_COUNT}'
         repo forall -c 'echo ${REPO_PROJECT}\| ${REPO_REMOTE}\| ${REPO_PATH}\| ${REPO_RREV}\| ${REPO_LREV}\| ${REPO_OUTERPATH}\| ${REPO_INNERPATH}\| ${REPO_COUNT}' | more -60
 EOL
 
-    ##run echo 
+    ##run echo
     source ${file_log}
 }
 
@@ -1084,8 +1083,8 @@ REPP_PATH_ALL=()
 
 (return 0 2>/dev/null) && sourced=1 || sourced=0
 if [ $sourced -eq 0 ]; then repp $@;
-else  #if sourced 
-    echo "[WELCOME] repp utility is applied for current shell" 
+else  #if sourced
+    echo "[WELCOME] repp utility is applied for current shell"
     #hide local function, need to implements
 fi
 
