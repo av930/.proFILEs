@@ -105,12 +105,13 @@ function gittbranch_list(){
 # show branch local & remote
 # $1 all or filter
     local filter
+    local opt="$1"
 
     ## list option must be wrapped with quoat ex) --list '*relese*'
     bar inline "branch local"
     echo "these branches are existed in local repository"
     clog "[local]" "could be synced by remote, if so, traced is marked"
-    git branch -vv
+    showRUN git branch -vv
 
 
     ## prevent globbing
@@ -120,8 +121,8 @@ function gittbranch_list(){
     echo "shows the branches downloaded when git fetch equivalent command was executed"
     clog "[not latest]" "could be latest by git pull"
 
-    [ -z "${1}" ] && filter="" || filter="--list *${1}*"
-    git branch -rvv --sort=-committerdate ${filter} | head -20
+    [ -z "${opt}" ] && filter="" || filter="--list *${opt}*"
+    showRUN git branch -rvv --sort=-committerdate ${filter} | head -10
 
 
     bar inline "sort by recently created branches"
@@ -130,8 +131,8 @@ function gittbranch_list(){
     clog "[always latest]" "read from remote live"
     warn "this command is not correct, please watch out"
 
-    [ -z "${1}" ] && filter="*" || filter="*${1}*"
-    showRUN git ls-remote -h ${GITT_REMOTE} refs/heads/${filter} --sort=-committerdate | head -20
+    [ -z "${opt}" ] && filter="*" || filter="*${opt}*"
+    showRUN git ls-remote -h ${GITT_REMOTE} refs/heads/${filter} --sort=-committerdate | head -10
     set +o noglob
 }
 
@@ -395,6 +396,7 @@ function reppbranch(){
 				ex) repp branch remove (shows commands) 
 				ex) repp branch checkexist (shows commands & run default) 
 				ex) repp branch checksum
+				ex) repp branch compare 
 EOF
     ;;    list) bar inline "show remote branches only including ${name} git project"
                 showRUN repo --color=always forall -pc 'git ls-remote -h ${REPO_REMOTE} refs/heads/*${1}*' ${name} |more
@@ -422,19 +424,23 @@ EOF
                 repo forall -c 'printf "%80s " ${REPO_PROJECT}; git ls-remote -h ${REPO_REMOTE} refs/heads/$1' ${name} 
     ;;  checksum) ##don' use showRUN, md5sum includes showRUN command.
                 bar inline "1. md5sum of local HEAD in all repository"
-                repo forall -c 'git log -1 --pretty=format:%H%n' |md5sum
+                repo forall -c 'git log -1 --pretty=format:%H%n' | md5sum
 
                 bar inline "2. md5sum of remote all tracking branch in all repository"
                 repo forall -c 'git ls-remote -h ${REPO_REMOTE} refs/heads/${REPO_RREV} | cut -f1' |md5sum
                 #repo forall -c 'git ls-remote -h ${REPO_REMOTE} refs/heads/$1 | cut -f1' ${name:-${REPP_BRANCH}} |md5sum
     ;;  compare)  
-                bar inline "generate branch info current remote branch and specific remote branch ${name:?"check help command"}"
+                bar inline "generate branch info local, remote tracking branch, and specific remote branch"
                 #repo forall -pc 'git diff --shortstat tagA tagB'
                 fileA=$(mktemp); fileB=$(mktemp)
-                repo forall -c 'printf "%s %s %s" $(git ls-remote -h ${REPO_REMOTE} refs/heads/${REPO_RREV}) ${REPO_PROJECT}' > ${fileA}
-                repo forall -c 'printf "%s %s %s" $(git ls-remote -h ${REPO_REMOTE} refs/heads/$1) ${REPO_PROJECT}' ${name} > ${fileB}
+                repo forall -c 'printf "%s %s %s" $(git log -1 --pretty=format:%H%n) ${REPO_RREV} ${REPO_PROJECT}' > ${fileA}
+                repo forall -c 'printf "%s %s %s" $(git ls-remote -h ${REPO_REMOTE} refs/heads/${REPO_RREV}) ${REPO_PROJECT}' > ${fileB}
+                if [ -n "${name}" ]; then 
+                    fileC=$(mktemp)
+                    repo forall -c 'printf "%s %s %s" $(git ls-remote -h ${REPO_REMOTE} refs/heads/$1) ${REPO_PROJECT}' ${name} > ${fileC}
+                fi
                 
-                info "please compare with vimdiff ${fileA} ${fileB}"
+                info "please compare with vimdiff ${fileA} ${fileB} ${fileC}"
     ;;       *) echo "usage) repp branch help"
     esac
 }
@@ -767,6 +773,7 @@ function reppcheck_precondition(){
 }
 
 
+
 function reppmenu(){
 ## ---------------------------------------------------------------------------
 # show ui menu for this script
@@ -802,7 +809,6 @@ local MENU=(
     ex) repp server, repp server lamp.lge.com 29418"
 )
 
-    
     
 printf ${green}
 cat << PREFACE
@@ -852,6 +858,7 @@ local MENU=(
 )
 
 
+
 printf ${green}
 cat << PREFACE
 ==============================================================
@@ -877,6 +884,8 @@ select CHOICE in "${MENU[@]}"; do
     if [ -n "$?" ]; then return 1;fi
 done
 }
+
+
 
 ##oneline function
 gittcheck_isgitproject(){ git -C "$1" rev-parse --is-inside-work-tree &> /dev/null ;}
@@ -1111,6 +1120,7 @@ return $ret
 
 
 function reppdebug(){
+## ---------------------------------------------------------------------------
 #reppdebug & gittdebug
 #repo forall -c 'echo ${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}'
     local file_log=$(mktemp)
