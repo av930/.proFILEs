@@ -35,7 +35,11 @@ err()    { log "${RED}ERROR: ${NCOL} ${*}"   ;}
 #${2:+[$2] }: if $2 exist, use '[$2] '
 #${line:(${2:+3}+${#2})}: if $2 is exist, skip 3 '-' chars for '[] ' chars
 bar()    { printf "\n${!1}%s%s ${NCOL}\n" "${2:+[$2] }" "${line:(${2:+3}+${#2})}" ;}
-under()  { printf "\n${CYAN}%s\n${green}%s${NCOL}%b" "${1:+<$1> }" "${linedb}" "$2" ;}
+under()  { 
+    local temp="${1}"
+    if [ "${1:(-2)}" = "\n" ]; then temp=${temp::-2}; local ret="\n"; fi
+    printf "\n${CYAN}%s\n${green}%b${NCOL}" "${temp:+< ${temp} > }" "${linedb}${ret}"  ;
+}
 
 
 function printElement(){ 
@@ -70,6 +74,17 @@ function showRUN(){ echo "\$ $@"; "$@" ; }
 # show command before execution
 # $1: command
 # usage: showRUN repo sync -qcj${njobs:-16} --no-tags --no-clone-bundle $1
+
+
+function showRUNQ(){ 
+## ---------------------------------------------------------------------------
+# show command before execution
+# $1: command
+# usage: showRUN repo sync -qcj${njobs:-16} --no-tags --no-clone-bundle $1
+    echo "\$ $@"; 
+    read -p "continue [y:continue|other:break]" 
+    if [ "$reply" == y ]; then "$@" ; fi 
+}
 
 
 ## ---------------------------------------------------------------------------
