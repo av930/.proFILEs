@@ -1058,12 +1058,12 @@ case "$1" in
     ;;      '')     gittmenu "${@:2}"          
     ;;    info)     gittinfo 
     ;;    show)     gittshow "${@:2}"
+    ;;      go)     cd "${GITT_PATH}"     
     ;;  commit)     gittcommit "${@:2}"
-    ;;      go)     cd "${GITT_PATH}" 
-    ;;   reset)     gittreset "${@:2}"
+    ;;  branch)     gittbranch "${@:2}"        
     ;;    find)     gittfind "${@:2}"
-    ;;  branch)     gittbranch "${@:2}"
-    ;;   debug)     gittdebug "${@:2}"
+    ;;   reset)     gittreset "${@:2}"
+    ;;   debug)     reppdebug "${@:2}"
     ;;       *)     bar outline "result of native git"
                     git "${@}";;
 esac
