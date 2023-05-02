@@ -100,69 +100,6 @@ CHANGE
 
 
 
-function gittbranch_list(){
-## ---------------------------------------------------------------------------
-# show branch local & remote
-# $1 all or filter
-    local filter
-    local opt="$1"
-
-    ## list option must be wrapped with quoat ex) --list '*relese*'
-    bar inline "branch local"
-    echo "these branches are existed in local repository"
-    clog "[local]" "could be synced by remote, if so, traced is marked"
-    showRUN git branch -vv
-
-
-    ## prevent globbing
-    set -o noglob
-    bar inline "sort by recently updated branches by new commit"
-    echo "branch: remote tracked with filter (${filter:-all}) top 20 in local repository"
-    echo "shows the branches downloaded when git fetch equivalent command was executed"
-    clog "[not latest]" "could be latest by git pull"
-
-    [ -z "${opt}" ] && filter="" || filter="--list *${opt}*"
-    showRUN git branch -rvv --sort=-committerdate ${filter} | head -10
-
-
-    bar inline "sort by recently created branches"
-    echo "branch: remote all with filter (${filter:-all}) by date top 20 in remote repository"
-    echo "shows the branches existed in remote"
-    clog "[always latest]" "read from remote live"
-    warn "this command is not correct, please watch out"
-
-    [ -z "${opt}" ] && filter="*" || filter="*${opt}*"
-    showRUN git ls-remote -h ${GITT_REMOTE} refs/heads/${filter} --sort=-committerdate | head -10
-    set +o noglob
-}
-
-
-function gittbranch(){
-## ---------------------------------------------------------------------------
-# read file and print line "include" keyword
-# $1 command
-# $2 branch name or branch postfix
-    local cmd=$1
-    local name=$2
-
-
-    case $cmd in
-       help) cat <<- EOF
-				ex) gitt branch list <''|name-filter>
-				ex) gitt branch create|new <name>
-				ex) gitt branch delete|remove <name>
-EOF
-    ;; create|new)  if [ -z "${name}" ]; then err "branch name must be input" && return 1;fi
-                showRUN git push ${GITT_REMOTE} HEAD:refs/heads/${name}
-    ;; delete|remove)  if [ -z "${name}" ]; then err "branch name must be input" && return 1;fi
-                showRUN git push ${GITT_REMOTE} --delete ${name}
-    ;; list) gittbranch_list "${name}"
-    ;; *) echo "usage) gitt branch help"
-    ;; esac
-}
-
-
-
 function reppget_repcmd(){
 ## ---------------------------------------------------------------------------
 # get repo command from exising repo project
@@ -440,7 +377,7 @@ EOF
                     repo forall -c 'printf "%s %s %s" $(git ls-remote -h ${REPO_REMOTE} refs/heads/$1) ${REPO_PROJECT}' ${name} > ${fileC}
                 fi
                 
-                info "please compare with vimdiff ${fileA} ${fileB} ${fileC}"
+                info "please compare command: vimdiff ${fileA} ${fileB} ${fileC}"
     ;;       *) echo "usage) repp branch help"
     esac
 }
@@ -951,24 +888,28 @@ function gittinfo(){
     #show last synced time
     oldIFS=${IFS}; IFS='';
     if [ -f ${GITT_PATH}/.git/FETCH_HEAD ]; then clog "last manifest-synced date: " $(stat -c %y ${GITT_PATH}/.git/FETCH_HEAD );
-    else clog "last manifest-synced date(check date of files below): " $(ls -lct ${GITT_PATH}/.git| tail -5);fi
+    else clog "last manifest-synced date(check date of files below):" "\n$(ls -lct ${GITT_PATH}/.git| tail -1)";fi
     IFS=${oldIFS}
-
-    under "branch info"
-    gittbranch list
 }
 
 
 
 function gittshow(){
 ## ---------------------------------------------------------------------------
-# print information(commit info) of current repository#
-# $1: number of commit
-# $2: other option such as --all (all branch)
+# show commit history by git log, or show commit by git show
+# $1: "number of commit" or "commit sha1"
     #topic/working branch
+    local depth="${1:-15}"
+    
+    if [[ ${#depth} -gt 3 ]] && [[ ${depth} =~ ^[0-9a-f]+$ ]]; then 
+        bar outline "call native git"
+        git show --stat ${depth}
+        return 0 
+    fi
+    
     bar outline "gitt show is based on command: git log "
-    bar inline "git commit history with option (to see all branche, gitt show 20 --all)"
-    git log --decorate --graph -n${2:-15} --pretty=format:'%Cred%h -%C(yellow)%s %Cgreen(%ci) %C(blue)<%an>%Creset' $1
+    bar inline "git commit history with option (to see all branche, gitt show 15 --all)"
+    showRUN git log --decorate --graph -n${depth} --pretty=format:'%Cred%h -%C(yellow)%s %Cgreen(%ci) %C(blue)<%an>%Creset' 
 
     bar inline "git commit diff history"
     echo "--since(=after), --before(=until)"
@@ -987,21 +928,127 @@ function gittcommit(){
 # $1: number of commit
 # $2: other option such as --all (all branch)
     case $1 in
-       help) cat <<-EOF
+       help|'') cat <<-EOF
 				ex) gitt commit help $1
 				ex) gitt commit auto
 				ex) gitt commit info
 EOF
-    ;; auto)  msg=$(date +"%y%m%d:%H%M")
-              git commit -m "${msg}: ${1:-test}"
-              git show
-    ;; ''|*)  echo "do notthing"
+    ;; auto)    msg=$(date +"%y%m%d:%H%M")
+                git commit -m "${msg}: ${1:-test}"
+                git show
+    ;; *)       bar inline "local HEAD commit for ${GITT_BRANCH} "
+                git show --oneline HEAD
+                bar inline "tracking HEAD commit for m/${GITT_BRANCH}"
+                git show --oneline ${GITT_REMOTE}/${GITT_BRANCH}
+                bar inline "remote HEAD commit for refs/heads/${GITT_BRANCH}"
+                git ls-remote -h ${GITT_REMOTE} refs/heads/${GITT_BRANCH}
     esac
+}
+
+
+
+function gittbranch_list(){
+## ---------------------------------------------------------------------------
+# show branch local & remote
+# $1 all or filter
+    local filter
+    local opt="$1"
+
+    ## list option must be wrapped with quoat ex) --list '*relese*'
+    bar inline "branch local"
+    echo "these branches are existed in local repository"
+    clog "[local]" "could be synced by remote, if so, traced is marked"
+    showRUN git branch -vv
+
+
+    ## prevent globbing
+    set -o noglob
+    bar inline "sort by recently updated branches by new commit (newest from down)"
+    echo "branch: remote tracked with filter (${filter:-all}) top 10 in local repository"
+    echo "shows the branches downloaded when git fetch equivalent command was executed"
+    clog "[not latest]" "could be latest by git pull"
+
+    [ -z "${opt}" ] && filter="" || filter="--list *${opt}*"
+    showRUN git branch -rvv --sort=committerdate ${filter} | tail -10
+
+
+    [ -z "${opt}" ] && filter="*" || filter="*${opt}*"
+    bar inline "lookup remote branch ${filer}"
+    echo "branch: remote all with filter (${filter:-all}) by date top 10 in remote repository"
+    clog "[always latest]" "read from remote live"
+    warn "this command sort by date(--sort=-committerdate) is not correct, please watch out"
+    set +o noglob
     
-    bar outline "gitt show is based on command: git log "
-    bar inline "git commit history with option (to see all branche, gitt show 20 --all)"
+    showRUN git ls-remote -h ${GITT_REMOTE} refs/heads/${filter} | tail -10
+    echo "get all branches and sort by date recent its commit"
+    clog "> git fetch" 
+    clog "> git for-each-ref --sort=committerdate refs/ --format='%(color:yellow)%(committerdate:short) %(color:red)%(objectname:short) %(color:green)%(refname:short) %(color:blue)%(authorname)%(color:reset) %(contents:subject)' "
+    
+    bar inline "find remote branch which are at same local HEAD"    
+    git ls-remote -h ${GITT_REMOTE}| grep $(git log -1 --pretty=format:%H%n)
+}
 
 
+function gittbranch(){
+## ---------------------------------------------------------------------------
+# read file and print line "include" keyword
+# $1 command
+# $2 branch name or branch postfix
+    local cmd=$1
+    local name=$2
+
+    case $cmd in
+       help) cat <<- EOF
+				ex) gitt branch list <''|name-filter>
+				ex) gitt branch create|new <name>
+				ex) gitt branch delete|remove <name>
+EOF
+    ;; create|new)  if [ -z "${name}" ]; then err "branch name must be input" && return 1;fi
+                showRUNQ git push ${GITT_REMOTE} HEAD:refs/heads/${name}
+    ;; delete|remove)  if [ -z "${name}" ]; then err "branch name must be input" && return 1;fi
+                showRUNQ git push ${GITT_REMOTE} --delete ${name}
+    ;; list) gittbranch_list "${name}"
+    ;; *) echo "usage) gitt branch help"
+    ;; esac
+}
+
+
+
+function gittfind(){
+## ---------------------------------------------------------------------------
+# print information(commit info) of current repository#
+# $1: regexp or string
+# $2: file, dir and area
+    local keyword="$1"
+    local area="${@:2}"
+    local file_log=$(mktemp)
+
+    bar outline "search in commit with regexp(${keyword}) in files(${area})"
+    
+    cat <<EOL > ${file_log}
+    under "find committer only in committer in history\n"
+    echo "ex) git log --author=".*${keyword}.*" ${area}"
+    echo "ex) git log --owner=".*${keyword}.*" ${area}"
+    showRUN git log --committer=".*${keyword}.*" ${area}
+
+    under "find keyword only in commit message of history\n"
+    showRUN git log -i --grep="${keyword}" ${area}
+    
+    under "find commit diff in history \n"
+    echo "ex) git grep -e regexp1 --or -e regexp2"
+    echo "ex) git grep -e regexp1 --and -e regexp2"
+    showRUN git grep -n "${keyword}" ${area}
+EOL
+
+    ## show commit diff including keyword
+    #git log -p -S"${keyword}" ${area}
+    
+    
+    ## find string in function
+    #under "find string in :fuction:file\n"
+    #showRUN git log -L :"${keyword}":"${area}"
+    ##run echo
+    source ${file_log}
 }
 
 
@@ -1011,7 +1058,8 @@ function gittreset(){
 # reset git repositories
 # $1 target
 
-    case $1 in
+    local cmd=$1
+    case ${cmd} in
         all)  repo forall -cj${NJOBS} 'git reset --hard ; git clean -xdf'
               echo "reset all repositories" 
     ;; ''|*)  if gittcheck_isgitproject; then
@@ -1020,36 +1068,6 @@ function gittreset(){
                 warn "this is not a git directory";
               fi
     esac
-}
-
-
-
-function gittfind(){
-## ---------------------------------------------------------------------------
-# print information(commit info) of current repository#
-# $1: number of commit
-# $2: other option such as --all (all branch)
-    bar outline "search in commit with regexp(\$1) in files(\$2)"
-
-    under "git log --committer=\"$1\""
-    clog 'committer history' "ex) git log --committer='.*joongkeun' "
-    git log --committer="$1"
-
-    under "git log -i --grep=\"$1\" "
-    clog 'commit message history' "ex) git log -i --grep='.*debugprint' "
-    git log -i --grep="$1"
-
-    under "git log -i -G\"$1\" ${@:2}"
-    clog 'commit contents history' "ex) git log -i -G'.*debugprint' zlib.c"
-    git log -i -G"$1" "${@:2}"
-
-    under "git grep -n \"$1\" ${@:2}"
-    clog 'current files tracked in git' "ex) git grep -n '.*debugprint' *.c"
-    git grep -n "$1" "${@:2}"
-
-    under "git log -L :\"$1\":${@:2} "
-    clog 'function in git history' "ex) git log -L :func_debugprint:zlib.c"
-    git log -L :"$1":"${@:2}"
 }
 
 
@@ -1073,7 +1091,7 @@ case "$1" in
     ;;    find)     gittfind "${@:2}"
     ;;   reset)     gittreset "${@:2}"
     ;;   debug)     reppdebug "${@:2}"
-    ;;       *)     bar outline "result of native git"
+    ;;       *)     bar outline "call native git"
                     git "${@}";;
 esac
 return $ret
