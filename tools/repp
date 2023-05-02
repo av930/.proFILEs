@@ -934,7 +934,7 @@ function formatprint(){
     #cmd preprocessor 
     case ${cmd} in 
                  help) echo "pre-process cmd"
-    ;;   *git?status*) :
+    ;;   *git?status*) under "file changes list\n"
     ;;              *) echo "not found"
     esac
 
@@ -944,20 +944,39 @@ function formatprint(){
 
     ##read one line from array "${resultline[@]}"
     ##for line in "${resultline[@]}"; do while read item; do
+    printf "%15s | %-15s -- \t%s\n" "indexed area" "working tree" "filelist"
+    echo ${linemi}
     for line in "${resultline[@]}"; do
- 
-        #DEBUG "KJK:[${line[${index}]}]"
-        #echo "KJK:[${line::2}]"
+        #echo "KJK:[${line:0:1}][${line:1:1}]"
             ##custom handler for each item.
-            case ${line::2} in
+            case ${line:0:1} in
                 help) echo "aaa"
-            ;;    '##')   bar inline "file changes in branch: ${line}"
-            ;;    ' D')   printf "%25s:  %s\n" "deleted" "${line:3}"
-            ;;    '??')   printf "%25s:  %s\n" "created" "${line:3}"
-            ;;    'M ')   printf "%25s:  %s\n" "modified and committed" "${line:3}"
-            ;;    ' M')   printf "%25s:  %s\n" "modified" "${line:3}"
-            ;;       *)   clog "must classfied"  "${line}"
+            ;;    '#')   bar inline "file changes in branch: ${line}"
+            ;;    '?')   printf "%15s | " "new" 
+            ;;    '!')   printf "%15s | " "new"
+            ;;    ' ')   printf "%15s | " ""            
+            ;;    'A')   printf "%15s | " "added" 
+            ;;    'M')   printf "%15s | " "modified"
+            ;;    'D')   printf "%15s | " "deleted"
+            ;;    'T')   printf "%15s | " "type changed"
+            ;;    'R')   printf "%15s | " "renamed"
+            ;;    'C')   printf "%15s | " "copied"
+            ;;    'U')   printf "%15s | " "unmerged"
+            ;;      *)   clog "must classfied"  "${line}"
             esac
+            case ${line:1:1} in
+                help) echo "aaa"
+            ;;    '?')   printf "%-15s -- \t%s\n" "untracked" "${line:3}"
+            ;;    '!')   printf "%-15s -- \t%s\n" "ignored" "${line:3}"
+            ;;    ' ')   printf "%-15s -- \t%s\n" "untracked" "${line:3}"          
+            ;;    'A')   printf "%-15s -- \t%s\n" "added" "${line:3}"
+            ;;    'M')   printf "%-15s -- \t%s\n" "modified" "${line:3}"
+            ;;    'D')   printf "%-15s -- \t%s\n" "deleted" "${line:3}"
+            ;;    'T')   printf "%-15s -- \t%s\n" "type changed" "${line:3}"
+            ;;    'R')   printf "%-15s -- \t%s\n" "renamed" "${line:3}"
+            ;;    'C')   printf "%-15s -- \t%s\n" "copied" "${line:3}"
+            ;;    'U')   printf "%-15s -- \t%s\n" "unmerged" "${line:3}"
+            esac            
             #printf "%${width}s\n" "${item}"
             #index=$(( ++index % ${#cmd[@]} ))
     ##done <<< "${line}"; done
@@ -981,8 +1000,7 @@ EOF
                 git commit -m "${msg}: ${1:-test}"
                 git show --stat --oneline HEAD
                 clog "[run]" "git push $GITT_REMOTE HEAD:refs/heads/${GITT_BRANCH}"
-    ;; *)       under "file changes list"
-                formatprint git status -sb --porcelain 
+    ;; *)       formatprint git status -s --porcelain 
     esac
 }
 
