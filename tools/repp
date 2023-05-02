@@ -848,7 +848,7 @@ function gittinfo(){
 # main handler for this scriptre
 # TODO: clone command
     local TEMP
-    under "git info"
+    local review_gerrit=admin/repos
     bar inline "git path"
     if ! gittcheck_gitpath print_y ;then echo "we are not in git project" && return 1; fi
 
@@ -865,16 +865,19 @@ function gittinfo(){
       help)             echo "site customization"
 	;;*github.com*)     GIT_SITE=$(printf "https://%s" ${GITT_URL}|sed -E 's#^.*github.com:(.*.git)$#http://github.com/\1#')
 	;;*vgit.lge.com*manifest*) case ${GITT_URL} in #remove starting string 'vgit.lge.com:29420/'
-                              *vgit.lge.com:29420*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'na' admin/repos/${GITT_URL##*0/} ) ;;
-                              *vgit.lge.com:29430*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'eu' admin/repos/${GITT_URL##*0/} ) ;;
-                              *vgit.lge.com:29440*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'as' admin/repos/${GITT_URL##*0/} ) ;;
-                              *vgit.lge.com:29550*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'adas' admin/repos/${GITT_URL##*0/} ) ;;
-                              *vgit.lge.com:29999*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'devops_test' admin/repos/${GITT_URL##*9/} ) ;;
+                              *vgit.lge.com:29420*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'na' ${review_gerrit}/${GITT_URL##*0/} ) ;;
+                              *vgit.lge.com:29430*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'eu' ${review_gerrit}/${GITT_URL##*0/} ) ;;
+                              *vgit.lge.com:29440*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'as' ${review_gerrit}/${GITT_URL##*0/} ) ;;
+                              *vgit.lge.com:29550*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'adas' ${review_gerrit}/${GITT_URL##*0/} ) ;;
+                              *vgit.lge.com:29999*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'devops_test' ${review_gerrit}/${GITT_URL##*9/} ) ;;
                               *) GIT_SITE="please add site custom setting" ;;
                               esac
-	;;''|*)             GIT_SITE=$(printf "%s/admin/repos/%s" $(echo ${GITT_REVIEW}|sed -E 's#(.*)[/]$#\1#') ${GITT_PROJECT} )
+	;;''|*)             GIT_SITE=$(printf "%s/${review_gerrit}/%s" $(echo ${GITT_REVIEW}|sed -E 's#(.*)[/]$#\1#') ${GITT_PROJECT} )
     ;;esac
-    clog "review system site:" ${GIT_SITE}
+    clog "review system site:" ${GIT_SITE} 
+    clog "branch ${GITT_BRANCH} url on gitiles & gerrit:" 
+    clog "gitiles: "${GIT_SITE/"${review_gerrit}"/"plugins/gitiles"}/+/refs/heads/${GITT_BRANCH} 
+    clog " gerrit: "${GIT_SITE/"${review_gerrit}/"/"gitweb?p="}.git\;a=shortlog\;h=refs/heads/${GITT_BRANCH}
 
     bar inline "git push commands"
     TEMP=$(printf "git push $GITT_REMOTE HEAD:refs/heads/%s" ${GITT_BRANCH})
@@ -922,26 +925,64 @@ function gittshow(){
 
 
 
+function formatprint(){
+## ---------------------------------------------------------------------------
+
+    local cmd=$*
+    local index=0 line;
+
+    #cmd preprocessor 
+    case ${cmd} in 
+                 help) echo "pre-process cmd"
+    ;;   *git?status*) :
+    ;;              *) echo "not found"
+    esac
+
+    readarray -t resultline < <( ${cmd[*]} )
+    #resultline=("${cmd[*]}" "${resultline[@]}")
+    #declare -p resultline
+
+    ##read one line from array "${resultline[@]}"
+    ##for line in "${resultline[@]}"; do while read item; do
+    for line in "${resultline[@]}"; do
+ 
+        #DEBUG "KJK:[${line[${index}]}]"
+        #echo "KJK:[${line::2}]"
+            ##custom handler for each item.
+            case ${line::2} in
+                help) echo "aaa"
+            ;;    '##')   bar inline "file changes in branch: ${line}"
+            ;;    ' D')   printf "%25s:  %s\n" "deleted" "${line:3}"
+            ;;    '??')   printf "%25s:  %s\n" "created" "${line:3}"
+            ;;    'M ')   printf "%25s:  %s\n" "modified and committed" "${line:3}"
+            ;;    ' M')   printf "%25s:  %s\n" "modified" "${line:3}"
+            ;;       *)   clog "must classfied"  "${line}"
+            esac
+            #printf "%${width}s\n" "${item}"
+            #index=$(( ++index % ${#cmd[@]} ))
+    ##done <<< "${line}"; done
+    done
+}
+
+
+
 function gittcommit(){
 ## ---------------------------------------------------------------------------
 # print information(commit info) of current repository#
 # $1: number of commit
 # $2: other option such as --all (all branch)
     case $1 in
-       help|'') cat <<-EOF
+       help)    cat <<-EOF
 				ex) gitt commit help $1
 				ex) gitt commit auto
 				ex) gitt commit info
 EOF
     ;; auto)    msg=$(date +"%y%m%d:%H%M")
                 git commit -m "${msg}: ${1:-test}"
-                git show
-    ;; *)       bar inline "local HEAD commit for ${GITT_BRANCH} "
-                git show --oneline HEAD
-                bar inline "tracking HEAD commit for m/${GITT_BRANCH}"
-                git show --oneline ${GITT_REMOTE}/${GITT_BRANCH}
-                bar inline "remote HEAD commit for refs/heads/${GITT_BRANCH}"
-                git ls-remote -h ${GITT_REMOTE} refs/heads/${GITT_BRANCH}
+                git show --stat --oneline HEAD
+                clog "[run]" "git push $GITT_REMOTE HEAD:refs/heads/${GITT_BRANCH}"
+    ;; *)       under "file changes list"
+                formatprint git status -sb --porcelain 
     esac
 }
 
