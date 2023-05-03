@@ -409,49 +409,20 @@ EOF
 
 
 
-
-function reppfind_initerror(){
-## ---------------------------------------------------------------------------
-# run command, get return code and print guide
-    local file_error=$(mktemp)
-    local ret=1 #return 1 is success, 0 is fail
-    echo "\$ $@"
-    time "$@" 2> >(tee -a ${file_error})
-    #"$@" | tee -a ${file_error}
-
-    grep -nEe "(fatal|fail|error)" ${file_error} >/dev/null
-    if [ $? -eq 0 ]; then
-        bar outline "check error"
-        err "${file_error}"
-        ret=0
-    fi
-
-    grep 'Permission denied (publickey)' ${file_error} >/dev/null
-    if [ $? -eq 0 ]; then
-        err "http://collab.lge.com/main/display/SWIFR/repo#publickey"
-        ret=0
-    fi
-
-    #if [ $? -ne 0 ];then reppcheck_sshconnection ssh -p vc.integrator@vgit.lge.com:29430;fi
-
-    return $ret
-}
-
-
-
 function reppinit(){
 ## ---------------------------------------------------------------------------
 # repo init helper
 # $1 short repo init command
     ##option handle
+    local cmd="$1"
     
-    case $1 in
+    case $cmd in
        help|'')    cat <<-EOF
 			ex) repp init -u ssh://${USER}@vgit.lge.com:29440/honda/linux/manifest -b tsu_25.5my_release
 			ex) repp init -u https://android.googlesource.com/platform/manifest -b android-12.1.0_r1
 			ex) repp init -b lampauto_r_release -m all.xml
-			ex) repp init -u ssh://lamp.lge.com:29418/platform/manifest.git -b lampauto_r_release \
-			     -m lampauto/lampauto-gm-recent.xml --reference=/data001/vc.integrator/mirror/lampauto_r_release/ \
+			ex) repp init -u ssh://lamp.lge.com:29418/platform/manifest.git -b lampauto_r_release 
+			     -m lampauto/lampauto-gm-recent.xml --reference=/data001/vc.integrator/mirror/lampauto_r_release/ 
 			     --repo-url=ssh://lamp.lge.com:29418/repo/git-repo.git
 			
 EOF
@@ -460,13 +431,17 @@ EOF
        ;; *) :
     esac
     
+    
+    #### parameter parsing
     local url revision manifest platform reference depth repo_url extra ret=0
     if ! options=$(getopt -l reference:,depth:,repo-url:,no-clone-bundle,partial-clone,no-tags,mirror -o b:m:p:u: -- "$@")
     then err 'please check "repo init --help"'; return 1; fi
 
     ##reset legacy positional parameter except $options
     eval set -- "$options"
+    ##parse parameter from options using shift
     while true; do
+        $DEBUG [$1][$2]    
         case $1 in
             ##when option has sub option, should shift 2 or just shift
             -u|--manifest-url)                                          url=$2;         shift 2;;
@@ -484,14 +459,21 @@ EOF
         esac
     done
 
-    ##if url has lamp and url is null, default url is 
-    if [ -z "${url}" ] && [[ "$revision" == *lamp* ]]; then url="ssh://lamp.lge.com:29418/platform/manifest.git"; fi
-
+    #### parameter check
+    ##if url has lamp and url is null, default url is lamp or return
+    case ${url}+${revision} in
+         +*lamp*) url="ssh://lamp.lge.com:29418/platform/manifest.git" ;;
+         +*) err "-u manifest-url is necessary" ;;         
+         *+*) : ;;
+    esac
+    ##if reference dir is existed, set reference as default.
+    if [ -z "${reference}" ];then reference="${reference:-${path_mirror}/${revision}}"; [ ! -d "${reference}" ] && reference=''; fi
+    ##issue https://github.com/OP-TEE/manifest/issues/157
+    if [ -z "${repo_url}" ] && [ "${url}" != "${url/lamp/}" ];then repo_url='ssh://lamp.lge.com:29418/repo/git-repo.git'; fi
+    
+    #### run repo command
     ##url handle with replication server
     local file_info=$(mktemp)
-    if [ -z "${reference}" ];then reference="${reference:-${path_mirror}/${revision}}"; fi
-    if [ -z "${repo_url}" ] && [ "${url}" != "${url/lamp/}" ];then repo_url='ssh://lamp.lge.com:29418/repo/git-repo.git';fi;
-
     cmd_repoinit="repo init ${url:+-u ${url}} ${revision:+-b ${revision}} ${manifest:+-m ${manifest}} ${platform:+-p ${platform}} ${reference:+--reference=${reference}} ${depth:+--depth=${depth}} ${repo_url:+--repo-url=${repo_url}} ${extra} $@"
 
     ##make final repo init cmd
@@ -499,13 +481,16 @@ EOF
     printf "${cmd_repoinit}\n" >> ${file_info}
 
     ##execute cmd
-    if reppfind_initerror ${cmd_repoinit}; then ret=1; fi
+    reppcheck_initcmd ${cmd_repoinit}
+    if [ "$?" -eq 1 ]; then ret=1; fi
 
     ##show repo info
     bar outline >> ${file_info}
     cat ${file_info}; rm -f ${file_info}
 
-    return $ret
+    ##go next step or not
+    if [ "$ret" -eq 0 ]; then info "to repo sync?:[enter:continue| ctrl+c:break] "; reppsync; 
+    else repp connect help; fi
 }
 
 
@@ -582,9 +567,9 @@ function reppcheck_gerritconnection(){
     echo "\$ $@" ;"$@"
 
     case $? in
-     0) ;;
-     1) echo Generic error, usually because invalid command line options or malformed configuration;;
-     *) echo Gerrit Connection Error;;
+       0) :
+    ;; 1) echo Generic error, usually because invalid command line options or malformed configuration
+    ;; *) echo Gerrit Connection Error
     esac
 }
 
@@ -609,10 +594,33 @@ function reppcheck_sshconnection(){
                     bar outline "check IP/PORT setting in (.ssh/config) with below"
                     ping $server -c2
     ;; *publickey*) err check publickey
-    ;; *)           echo unknown error is occured, please check log [${file_error}]
+    ;; *)           err "unknown error is occured, please check log [${file_error}]"
     esac
 
     #rm -f ${file_error}
+}
+
+
+
+function reppcheck_initcmd(){
+## ---------------------------------------------------------------------------
+# run command, get return code and print guide
+    local file_error=$(mktemp)
+    local ret=1 #return 1 is success, 0 is fail
+    echo "\$ $@"
+    time "$@" 2> >(tee -a ${file_error})
+    #"$@" | tee -a ${file_error}
+
+
+    case $(cat ${file_error}) in
+        help)                           echo "init error handler"
+    ;; *fatal*|*fail*|*error*)          err "check error log [${file_error}]"
+    ;; *Permission?denied*publickey*)   err "check error permission"
+    ;; *)                               ret=0
+    esac
+    
+    [ "$ret" -eq 1 ] && echo "check http://collab.lge.com/main/pages/viewpage.action?pageId=1620608725"
+    return $ret
 }
 
 
@@ -623,6 +631,13 @@ function reppconnect(){
 # $1 server
 # $2 port
 # $3 password
+    local cmd="$1"
+    case ${cmd} in 
+        help) echo "repp connect vgit.lge.com 29420 tiger/tools tiger_release"; return 1;
+    ;;     *) :
+    esac
+
+
     local server_port=${REPP_REMOTE#*@}
     local server=${1:-${server_port%:*}}
     local port=${2:-$(echo ${server_port} | grep -oP '(?<=:)[0-9]+(?=/)')}
@@ -1228,7 +1243,6 @@ case "$1" in
     ;; commit)      reppcommit "${@:2}"
     ;; find|list)   reppfind "${@:2}"
     ;; init)        reppinit "${@:2}"
-                    if [ $? -eq 0 ]; then info "to repo sync?:[enter:continue| ctrl+c:break] "; reppsync; fi
     ;; sync)        reppsync "${@:2}"
     ;; branch)      reppbranch "${@:2}"
     ;; mani)        reppmani "${@:2}"
