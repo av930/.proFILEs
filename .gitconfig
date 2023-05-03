@@ -26,18 +26,18 @@
 ################ user defined
 ## without ! mean git command
 ## with ! mean shell command
-[alias]
-    alias   = config --get-regexp ^alias\\.
-    st      = status
-    loga    = log --oneline --decorate --graph -n 15 --all
-    logo    = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr)%Creset %C(blue)<%an>%Creset' --abbrev-commit --date=relative
-    tagcur  = describe --tags --abbrev=0 --match
-    space   = diff --cached --no-color > stage.diff && git apply --index -R stage.diff && git apply --index --whitespace=fix stage.diff && rm -f stage.diff
-    diffc   = difftool -t bc
-    diffv   = difftool -t vimdiff
-    ci      = commit --verbose
-    pushfor = push origin HEAD:refs/for/
-    clear   = "!_gitclear() { git reset --hard $1; git clean -xdf; }; _gitclear"
+## git alias moved to script tools/repp
+#[alias]
+#    alias   = config --get-regexp ^alias\\.
+#    st      = status
+#    loga    = log --oneline --decorate --graph -n 15 --all
+#    logo    = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr)%Creset %C(blue)<%an>%Creset' --abbrev-commit --date=relative
+#    tagcur  = describe --tags --abbrev=0 --match
+#    diffc   = difftool -t bc
+#    diffv   = difftool -t vimdiff
+#    ci      = commit --verbose
+#    pushfor = push origin HEAD:refs/for/
+#    clear   = "!_gitclear() { git reset --hard $1; git clean -xdf; }; _gitclear"
 
 ################ commit config
 [commit]

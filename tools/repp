@@ -26,6 +26,32 @@ account=vc.integrator
 path_mirror="/data001/${account}"/mirror
 
 
+##------------------------ alias & oneline func ------------------------------
+##============================================================================
+## git alias
+
+source <(cat <<\EOF
+    git config --global alias.alias 'config --get-regexp ^alias\.'
+    git config --global alias.st 'status'
+    git config --global alias.ci 'commit --verbose'
+    git config --global alias.loga 'log --oneline --decorate --graph -n 15 --all'
+    git config --global alias.logo "log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr)%Creset %C(blue)<%an>%Creset' --abbrev-commit --date=relative"
+    git config --global alias.tagcur 'describe --tags --abbrev=0 --match'
+    git config --global alias.diffc 'difftool -t bc'
+    git config --global alias.diffv 'difftool -t vimdiff'
+    git config --global alias.difft 'difftool --dir-diff -t vimdiff'
+
+    ## NEEDTO: sudo apt-get install icdiff
+    #git config --global alias.diffi "difftool --extcmd 'icdiff'"
+    git config --global alias.diffi '!_gitdiff() { git difftool --extcmd "icdiff $@"; }; _gitdiff' --replace-all
+    #git config --global alias.clear !_gitclear() { git reset --hard $1; git clean -xdf; }; _gitclear
+EOF
+)
+
+
+## oneline function
+gittcheck_isgitproject(){ git -C "$1" rev-parse --is-inside-work-tree &> /dev/null ;}
+
 ##--------------------------- Menu Functions --------------------------------
 ##============================================================================
 
@@ -824,8 +850,6 @@ done
 
 
 
-##oneline function
-gittcheck_isgitproject(){ git -C "$1" rev-parse --is-inside-work-tree &> /dev/null ;}
 
 function gittcheck_gitpath(){
 ## ---------------------------------------------------------------------------
@@ -944,7 +968,7 @@ function formatprint(){
 
     ##read one line from array "${resultline[@]}"
     ##for line in "${resultline[@]}"; do while read item; do
-    printf "%15s | %-15s -- \t%s\n" "indexed area" "working tree" "filelist"
+    printf "%14s | %-14s -- \t%s\n" "indexed area" "working tree" "filelist"
     echo ${linemi}
     for line in "${resultline[@]}"; do
         #echo "KJK:[${line:0:1}][${line:1:1}]"
@@ -952,30 +976,30 @@ function formatprint(){
             case ${line:0:1} in
                 help) echo "aaa"
             ;;    '#')   bar inline "file changes in branch: ${line}"
-            ;;    '?')   printf "%15s | " "new" 
-            ;;    '!')   printf "%15s | " "new"
-            ;;    ' ')   printf "%15s | " ""            
-            ;;    'A')   printf "%15s | " "added" 
-            ;;    'M')   printf "%15s | " "modified"
-            ;;    'D')   printf "%15s | " "deleted"
-            ;;    'T')   printf "%15s | " "type changed"
-            ;;    'R')   printf "%15s | " "renamed"
-            ;;    'C')   printf "%15s | " "copied"
-            ;;    'U')   printf "%15s | " "unmerged"
+            ;;    '?')   printf "%14s | " "new" 
+            ;;    '!')   printf "%14s | " "new"
+            ;;    ' ')   printf "%14s | " ""            
+            ;;    'A')   printf "%14s | " "added" 
+            ;;    'M')   printf "%14s | " "modified"
+            ;;    'D')   printf "%14s | " "deleted"
+            ;;    'T')   printf "%14s | " "type changed"
+            ;;    'R')   printf "%14s | " "renamed"
+            ;;    'C')   printf "%14s | " "copied"
+            ;;    'U')   printf "%14s | " "unmerged"
             ;;      *)   clog "must classfied"  "${line}"
             esac
             case ${line:1:1} in
                 help) echo "aaa"
-            ;;    '?')   printf "%-15s -- \t%s\n" "untracked" "${line:3}"
-            ;;    '!')   printf "%-15s -- \t%s\n" "ignored" "${line:3}"
-            ;;    ' ')   printf "%-15s -- \t%s\n" "untracked" "${line:3}"          
-            ;;    'A')   printf "%-15s -- \t%s\n" "added" "${line:3}"
-            ;;    'M')   printf "%-15s -- \t%s\n" "modified" "${line:3}"
-            ;;    'D')   printf "%-15s -- \t%s\n" "deleted" "${line:3}"
-            ;;    'T')   printf "%-15s -- \t%s\n" "type changed" "${line:3}"
-            ;;    'R')   printf "%-15s -- \t%s\n" "renamed" "${line:3}"
-            ;;    'C')   printf "%-15s -- \t%s\n" "copied" "${line:3}"
-            ;;    'U')   printf "%-15s -- \t%s\n" "unmerged" "${line:3}"
+            ;;    '?')   printf "%-14s -- \t%s\n" "untracked" "${line:3}"
+            ;;    '!')   printf "%-14s -- \t%s\n" "ignored" "${line:3}"
+            ;;    ' ')   printf "%-14s -- \t%s\n" "untracked" "${line:3}"          
+            ;;    'A')   printf "%-14s -- \t%s\n" "added" "${line:3}"
+            ;;    'M')   printf "%-14s -- \t%s\n" "modified" "${line:3}"
+            ;;    'D')   printf "%-14s -- \t%s\n" "deleted" "${line:3}"
+            ;;    'T')   printf "%-14s -- \t%s\n" "type changed" "${line:3}"
+            ;;    'R')   printf "%-14s -- \t%s\n" "renamed" "${line:3}"
+            ;;    'C')   printf "%-14s -- \t%s\n" "copied" "${line:3}"
+            ;;    'U')   printf "%-14s -- \t%s\n" "unmerged" "${line:3}"
             esac            
             #printf "%${width}s\n" "${item}"
             #index=$(( ++index % ${#cmd[@]} ))
@@ -1001,6 +1025,13 @@ EOF
                 git show --stat --oneline HEAD
                 clog "[run]" "git push $GITT_REMOTE HEAD:refs/heads/${GITT_BRANCH}"
     ;; *)       formatprint git status -s --porcelain 
+                printf "\n\n"
+                read -p "to see diff in detail [ enter:continue| n/ ctrl+c:break| showline:--line-numbers ]: " 
+                case "$REPLY" in
+                    n) clog "you can use with options:" "git diffi --line-numbers"
+                ;;  line) git diffi --line-numbers
+                ;;  *) git diffi
+                esac
     esac
 }
 
@@ -1080,11 +1111,10 @@ function gittfind(){
 # $2: file, dir and area
     local keyword="$1"
     local area="${@:2}"
-    local file_log=$(mktemp)
 
     bar outline "search in commit with regexp(${keyword}) in files(${area})"
     
-    cat <<EOL > ${file_log}
+    source <(cat <<\EOL
     under "find committer only in committer in history\n"
     echo "ex) git log --author=".*${keyword}.*" ${area}"
     echo "ex) git log --owner=".*${keyword}.*" ${area}"
@@ -1098,16 +1128,16 @@ function gittfind(){
     echo "ex) git grep -e regexp1 --and -e regexp2"
     showRUN git grep -n "${keyword}" ${area}
 EOL
+)
 
     ## show commit diff including keyword
     #git log -p -S"${keyword}" ${area}
-    
-    
+     
     ## find string in function
     #under "find string in :fuction:file\n"
     #showRUN git log -L :"${keyword}":"${area}"
     ##run echo
-    source ${file_log}
+
 }
 
 
@@ -1200,12 +1230,12 @@ function reppdebug(){
 ## ---------------------------------------------------------------------------
 #reppdebug & gittdebug
 #repo forall -c 'echo ${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}'
-    local file_log=$(mktemp)
     
     if ! gittcheck_isgitproject; then pushd ${REPP_PATH}; fi
+    gittcheck_gitpath print_n ; 
+    popd
     
-    gittcheck_gitpath print_n    
-    cat <<\EOL > ${file_log}
+    source <(cat <<\EOL
         bar inline "GITT_VARIABLE && REPP_VARIABLE"
         for var in \
         '${GITT_PROJECT}' '${GITT_REMOTE}' '${GITT_BRANCH}' '${GITT_REVIEW}' '${GITT_URL}' '${GITT_PATH}' \
@@ -1221,11 +1251,8 @@ function reppdebug(){
         dlog                '${REPO_COUNT}, ${REPO_LREV}, ${REPO_REMOTE}, ${REPO_RREV}, ${REPO_PROJECT}, ${REPO_PATH}, ${REPO_OUTERPATH}, ${REPO_INNERPATH}'
         repo forall -c 'echo ${REPO_COUNT}, ${REPO_LREV}, ${REPO_REMOTE}, ${REPO_RREV}, ${REPO_PROJECT}, ${REPO_PATH}, ${REPO_OUTERPATH}, ${REPO_INNERPATH}' | more -60
 EOL
-
-
-    popd
+)
     ##run echo
-    source ${file_log}
 }
 
 
