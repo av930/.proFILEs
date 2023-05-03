@@ -42,14 +42,6 @@ under()  {
 }
 
 
-function printElement(){ 
-## ---------------------------------------------------------------------------
-    local arr=("${@:3}")
-    info "$1"
-    printf '%s\0' "${arr[@]}" |grep -z -- $2
-}
-
-
 function printToFILE(){ 
 ## ---------------------------------------------------------------------------
 ## printToFILE $(mktemp) title contents title-color
