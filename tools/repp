@@ -23,8 +23,8 @@ path_mirror="/data001/${account}"/mirror
 
 ##------------------------ alias & oneline func ------------------------------
 ##============================================================================
-## git alias
-
+#### git alias
+## load direct from below
 source <(cat <<\EOF
     git config --global alias.alias 'config --get-regexp ^alias\.'
     git config --global alias.st 'status'
@@ -53,6 +53,28 @@ gittcheck_isgitproject(){ git -C "$1" rev-parse --is-inside-work-tree &> /dev/nu
 
 ##--------------------------- Menu Functions --------------------------------
 ##============================================================================
+
+function tempfunc(){
+## ---------------------------------------------------------------------------
+# template for bash fuction 
+# $1 parameter explanation
+# $2 parameter explanation
+    local cmd=$1
+    local opt=$2
+
+    case $cmd in
+       help) cat <<- EOF
+				usage) gitt branch list <''|name-filter>
+				usage) gitt branch create|new <name>
+				usage) gitt branch delete|remove <name>
+EOF
+    ;; create|*new*)  showRUNQ echo "tempfunc"
+    ;; list) echo tempfunc
+    ;; *) echo "default functionality"
+    ;; esac
+}
+
+
 
 function reppshow_manifesttree(){
 ## ---------------------------------------------------------------------------
@@ -94,10 +116,11 @@ function reppmani(){
 
     case ${cmd} in
            ''|help) cat <<- EOF
-				ex) repp mani help
-				ex) repp mani info
-				ex) repp mani gen <outfile>
-				ex) repp mani change <group|upstream|dest-branch|etc> <str> <filter>
+				usage) repp mani help
+				usage) repp mani info
+				usage) repp mani gen <outfile>
+				usage) repp mani change <groups|upstream|dest-branch|etc> <str> <filter>
+				ex) repp mani change groups deststring pdk
 EOF
     ;;        info) bar inline "recently changed manifest file [default 10 commit]"
                     showRUN git log -10 --name-status --abbrev=6 --date=format:"%Y-%m-%d %H:%M" --pretty=format:"%C(yellow)%ad %C(red)%h %C(green)%s%C(reset)"
@@ -112,17 +135,20 @@ EOF
                     clog "ex) infix: change field[item] with [str] " "repp mani change name str"
                     clog "ex) infix: change field[item] includig filter [xxx] with [str] " "repp mani change name str poky\n"
                     cat <<- CHANGE
-					     infix : cat repp.xml | sed -E 's#${item}="([^"]*)"#${item}="${str}"#'                    
+					     infix : cat repp.xml | sed -E 's#${item}="([^"]*)"#${item}="${str}"#'
 					    prefix : cat repp.xml | sed -E 's#${item}="([^"]*)"#${item}="${str}\1"#'
 					   postfix : cat repp.xml | sed -E 's#${item}="([^"]*)"#${item}="\1${str}"#'
-					  infilter : cat repp.xml | sed -E 's#${item}="([^"]*${filter}[^"]*)"#${item}="${str}"#'                       
+					  infilter : cat repp.xml | sed -E 's#${item}="([^"]*${filter}[^"]*)"#${item}="${str}"#'
 					 prefilter : cat repp.xml | sed -E 's#${item}="([^"]*${filter}[^"]*)"#${item}="${str}\1"#'
 					postfilter : cat repp.xml | sed -E 's#${item}="([^"]*${filter}[^"]*)"#${item}="\1${str}"#'
+                    
+					   verifiy : cat repp.xml | sed -E 's#${item}="([^"]*${filter}[^"]*)"#${item}="\1${str}"#' | grep --color=auto ${str}
+					   preview : icdiff <( cat repp.xml ) <( cat repp.xml | sed -E 's#${item}="([^"]*${filter}[^"]*)"#${item}="\1${str}"#' )
 CHANGE
     ;; esac
 
 }
-
+ 
 
 
 function reppget_repcmd(){
@@ -346,19 +372,18 @@ function reppbranch(){
 # $1 manifest output file name
 # $2 command
 # $3 branch name or branch postfix
-# todo: branch 생성/각각 생성, 제거, 생성(rev까지)확인
     local cmd=$1
     local name=$2
 
     case ${cmd} in
        ''|help) cat <<- EOF
-				ex) repp branch help
-				ex) repp branch list
-				ex) repp branch create (shows commands) 
-				ex) repp branch remove (shows commands) 
-				ex) repp branch checkexist (shows commands & run default) 
-				ex) repp branch checksum
-				ex) repp branch compare 
+				usage) repp branch help
+				usage) repp branch list
+				usage) repp branch create (shows commands) 
+				usage) repp branch remove (shows commands) 
+				usage) repp branch checkexist (shows commands & run default) 
+				usage) repp branch checksum
+				usage) repp branch compare 
 EOF
     ;;    list) bar inline "show remote branches only including ${name} git project"
                 showRUN repo --color=always forall -pc 'git ls-remote -h ${REPO_REMOTE} refs/heads/*${1}*' ${name} |more
@@ -439,7 +464,7 @@ EOF
 
     ##reset legacy positional parameter except $options
     eval set -- "$options"
-    ##parse parameter from options using shift
+    ##parse parameter from options using shift, which shifts the $1, $2, ... value sequencely 
     while true; do
         $DEBUG [$1][$2]    
         case $1 in
@@ -461,10 +486,11 @@ EOF
 
     #### parameter check
     ##if url has lamp and url is null, default url is lamp or return
-    case ${url}+${revision} in
-         +*lamp*) url="ssh://lamp.lge.com:29418/platform/manifest.git" ;;
-         +*) err "-u manifest-url is necessary" ;;         
-         *+*) : ;;
+    local sep='~'
+    case ${url}$sep${revision} in
+         $sep*lamp*) url="ssh://lamp.lge.com:29418/platform/manifest.git" ;;
+         $sep*) err "-u manifest-url is necessary" ;;         
+         *$sep*) : ;;
     esac
     ##if reference dir is existed, set reference as default.
     if [ -z "${reference}" ];then reference="${reference:-${path_mirror}/${revision}}"; [ ! -d "${reference}" ] && reference=''; fi
@@ -1046,23 +1072,26 @@ function gittcommit(){
 # print information(commit info) of current repository#
 # $1: number of commit
 # $2: other option such as --all (all branch)
-    case $1 in
+    local cmd="$1"
+    local opt="${@:2}"
+    case $cmd in
        help)    cat <<-EOF
-				ex) gitt commit help $1
-				ex) gitt commit auto
-				ex) gitt commit
+				usage) gitt commit help $1
+				usage) gitt commit auto
+				usage) gitt commit diff <path>
+				usage) gitt commit
 EOF
     ;; auto)    msg=$(date +"%y%m%d:%H%M")
                 git commit -m "${msg}: ${1:-test}"
                 git show --stat --oneline HEAD
                 clog "[run]" "git push $GITT_REMOTE HEAD:refs/heads/${GITT_BRANCH}"
-    ;; *)       formatprint git status -s --porcelain 
+    ;; *)       formatprint git status -s --porcelain
                 printf "\n\n"
                 read -p "to see diff in detail [ enter:contiue| line:compare with line | q(ctrl+c):break ]: " 
                 case "$REPLY" in
                     n) clog "you can use with options:" "git diffi --line-numbers"
-                ;;  line) git diffi --line-numbers 
-                ;;  *) git diffi 
+                ;;  line) git diffi --line-numbers
+                ;;  *) git diffi
                 esac
     esac
 }
@@ -1111,6 +1140,7 @@ function gittbranch_list(){
 }
 
 
+
 function gittbranch(){
 ## ---------------------------------------------------------------------------
 # read file and print line "include" keyword
@@ -1121,9 +1151,9 @@ function gittbranch(){
 
     case $cmd in
        help) cat <<- EOF
-				ex) gitt branch list <''|name-filter>
-				ex) gitt branch create|new <name>
-				ex) gitt branch delete|remove <name>
+				usage) gitt branch list <''|name-filter>
+				usage) gitt branch create|new <name>
+				usage) gitt branch delete|remove <name>
 EOF
     ;; create|new)  if [ -z "${name}" ]; then err "branch name must be input" && return 1;fi
                 showRUNQ git push ${GITT_REMOTE} HEAD:refs/heads/${name}
@@ -1174,6 +1204,36 @@ EOL
 
 
 
+function gittdiff(){
+## ---------------------------------------------------------------------------
+# read file and print line "include" keyword
+# $1 command
+# $2 branch name or branch postfix
+    local path="$1"
+    local rev1="$2"
+    local rev2="$3"
+    
+    local sep='~'
+
+    case $path$sep$rev1$sep$rev2 in
+    help*) cat <<- EOF
+				usage) gitt diff help
+				usage) gitt diff <path> <rev1> <rev2>
+				ex) gitt diff HEAD <cached|HEAD^>                
+				ex) gitt diff 
+EOF
+    ;;?*$sep?*$sep?*)  clog "3" "git diff"
+    ;;?*$sep?*$sep)  clog "2" "git diff"
+    ;;?*$sep$sep)  clog "1" "git diff"
+                showRUN git difftool @:${path} @^:${path}
+    ;;$sep$sep)  clog "0" "git diff"
+    ;;      *)  clog "diff branch:" "in specific path"
+                showRUN git difftool ${opt1}:${path} ${opt2}:${path}
+    ;; esac
+}
+
+
+
 function gittreset(){
 ## ---------------------------------------------------------------------------
 # reset git repositories
@@ -1210,6 +1270,7 @@ case "$1" in
     ;;  commit)     gittcommit "${@:2}"
     ;;  branch)     gittbranch "${@:2}"        
     ;;    find)     gittfind "${@:2}"
+    ;;    diff)     gittdiff "${@:2}"
     ;;   reset)     gittreset "${@:2}"
     ;;   debug)     reppdebug "${@:2}"
     ;;       *)     bar outline "call native git"
