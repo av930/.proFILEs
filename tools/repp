@@ -129,21 +129,21 @@ EOF
                     clog "-m default.xml" "use default.xml as input"
                     clog "--json " "generate manifest to json format"
                     read -p "input option :" opt
-                    showRUN repo manifest ${opt} -o ${item:-repp.xml}
+                    showRUN repo manifest ${opt} -o ${item:-${REPPFILE_XML}}
     ;;      change) under "please run one of these 'repo manifest' commands to change string in manifest\n"
                     clog "usage) repp mani change <group|upstream|dest-branch|etc> <change-string> <filter>"
                     clog "ex) infix: change field[item] with [str] " "repp mani change name str"
                     clog "ex) infix: change field[item] includig filter [xxx] with [str] " "repp mani change name str poky\n"
                     cat <<- CHANGE
-					     infix : cat repp.xml | sed -E 's#${item}="([^"]*)"#${item}="${str}"#'
-					    prefix : cat repp.xml | sed -E 's#${item}="([^"]*)"#${item}="${str}\1"#'
-					   postfix : cat repp.xml | sed -E 's#${item}="([^"]*)"#${item}="\1${str}"#'
-					  infilter : cat repp.xml | sed -E 's#${item}="([^"]*${filter}[^"]*)"#${item}="${str}"#'
-					 prefilter : cat repp.xml | sed -E 's#${item}="([^"]*${filter}[^"]*)"#${item}="${str}\1"#'
-					postfilter : cat repp.xml | sed -E 's#${item}="([^"]*${filter}[^"]*)"#${item}="\1${str}"#'
+					     infix : cat ${REPPFILE_XML} | sed -E 's#${item}="([^"]*)"#${item}="${str}"#'
+					    prefix : cat ${REPPFILE_XML} | sed -E 's#${item}="([^"]*)"#${item}="${str}\1"#'
+					   postfix : cat ${REPPFILE_XML} | sed -E 's#${item}="([^"]*)"#${item}="\1${str}"#'
+					  infilter : cat ${REPPFILE_XML} | sed -E 's#${item}="([^"]*${filter}[^"]*)"#${item}="${str}"#'
+					 prefilter : cat ${REPPFILE_XML} | sed -E 's#${item}="([^"]*${filter}[^"]*)"#${item}="${str}\1"#'
+					postfilter : cat ${REPPFILE_XML} | sed -E 's#${item}="([^"]*${filter}[^"]*)"#${item}="\1${str}"#'
                     
-					   verifiy : cat repp.xml | sed -E 's#${item}="([^"]*${filter}[^"]*)"#${item}="\1${str}"#' | grep --color=auto ${str}
-					   preview : icdiff <( cat repp.xml ) <( cat repp.xml | sed -E 's#${item}="([^"]*${filter}[^"]*)"#${item}="\1${str}"#' )
+					   verifiy : cat ${REPPFILE_XML} | sed -E 's#${item}="([^"]*${filter}[^"]*)"#${item}="\1${str}"#' | grep --color=auto ${str}
+					   preview : icdiff <( cat ${REPPFILE_XML} ) <( cat ${REPPFILE_XML} | sed -E 's#${item}="([^"]*${filter}[^"]*)"#${item}="\1${str}"#' )
 CHANGE
     ;; esac
 
@@ -236,22 +236,22 @@ function reppshow(){
 
     ##run command "repo info"
     bar outline "it takes time to get information..."
-    bar inline "repo status: uncommitted changes list saved to [ repp.status ]"
-    echo "repo status" > ${REPP_ROOT}/repp.status
+    bar inline "repo status: uncommitted changes list saved to [ ${REPPFILE_STATUS} ]"
+    echo "repo status" > ${REPPFILE_STATUS}
 
     ##remove colored output with 1) sed command, 2) --color option
-    #repo status -j8 |sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" >> ${REPP_ROOT}/repp.status
-    repo --no-pager --color=never status -j8 >> ${REPP_ROOT}/repp.status
+    #repo status -j8 |sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" >> ${REPPFILE_STATUS}
+    repo --no-pager --color=never status -j8 >> ${REPPFILE_STATUS}
 
     ##list up repo commit, remote, branch, project, path
     reppfind |more -60
 
     ## repo info command is duplicated with reppfind functionality, so remove it.
-    #bar inline "repo info: git repo/source path /branch rev saved to [ ${REPP_ROOT}/repp.status ]"
-    #echo "repo info" >> ${REPP_ROOT}/repp.status
-    #repo info |sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" >> ${REPP_ROOT}/repp.status
+    #bar inline "repo info: git repo/source path /branch rev saved to [ ${REPPFILE_STATUS} ]"
+    #echo "repo info" >> ${REPPFILE_STATUS}
+    #repo info |sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" >> ${REPPFILE_STATUS}
     
-    info "please check file [${REPP_ROOT}/repp.status]"
+    info "please check file [${REPPFILE_STATUS}]"
     warn "you can use this file to compare other repo."
 }
 
@@ -318,7 +318,7 @@ function reppcommit(){
             count=20
             log "\nonly shows recent maxium 20 first-commits(git log -1) from all repository"
             ;;
-        *)  out=${REPP_ROOT}/repp.commit
+        *)  out=${REPPFILE_COMMIT}
             count=${REPP_COUNT}
             log "\check file [$out], all -1 commits are saved"
             ;;
@@ -343,23 +343,24 @@ function reppfind(){
 # usage: reppfind [path|project]
     local cmd="$1"
     
-    bar inline "all repository info is save to repo-root-path/repp.csv" > /dev/stderr
-    clog "repp.csv should be read by excel menu [data> text> select file> file open wizard]"
-    file_log=${REPP_ROOT}/repp.csv
-    repo forall -j1 -c 'printf "%.6s|%.7s|%-22.22s|%-74.74s|%.80s \n" "${REPO_LREV}" "${REPO_REMOTE}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"' \
-     > $file_log
+    bar inline "all repository info is save to ${REPPFILE_CSV}" > /dev/stderr
+    clog "${REPPFILE_CSV} should be read by excel menu [data> text> select file> file open wizard]"
+	if [ -f "${REPPFILE_CSV}" ]; 
+	then info "reuse generated file [${REPPFILE_CSV}] or remove it";
+	else repo forall -j1 -c 'printf "%.6s|%.7s|%-22.22s|%-74.74s|%.80s \n" "${REPO_LREV}" "${REPO_REMOTE}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"' > ${REPPFILE_CSV}
+	fi
 
     case ${cmd} in
       comment) @로 시작하면 coloume을 출력
-    ;; @rev)      echo "REPO_LREV";    awk -v FS="|" '{print $1}' $file_log
-    ;; @remote)   echo "REPO_REMOTE";  awk -v FS="|" '{print $2}' $file_log |sort |uniq
-    ;; @branch)   echo "REPO_RREV";    awk -v FS="|" '{print $3}' $file_log |sort |uniq
-    ;; @project)  echo "REPO_PROJECT"; awk -v FS="|" '{print $4}' $file_log |sort
-    ;; @path)     echo "REPO_PATH" > /dev/stderr;   awk -v FS="|" '{print $5}' $file_log |sort
+    ;; @rev)      echo "REPO_LREV";    awk -v FS="|" '{print $1}' ${REPPFILE_CSV}
+    ;; @remote)   echo "REPO_REMOTE";  awk -v FS="|" '{print $2}' ${REPPFILE_CSV} |sort |uniq
+    ;; @branch)   echo "REPO_RREV";    awk -v FS="|" '{print $3}' ${REPPFILE_CSV} |sort |uniq
+    ;; @project)  echo "REPO_PROJECT"; awk -v FS="|" '{print $4}' ${REPPFILE_CSV} |sort
+    ;; @path)     echo "REPO_PATH" > /dev/stderr;   awk -v FS="|" '{print $5}' ${REPPFILE_CSV} |sort
     ;; "")        printf "\e[1;33m%6.6s %7.7s %-22.22s %-74.74s %.80s \e[0m\n" "REPO_LREV" "REPO_REMOTE" "REPO_RREV" "REPO_PROJECT" "REPO_PATH"
-                  cat $file_log | tee  >(wc -l)
+                  cat ${REPPFILE_CSV} | tee  >(wc -l)
     ;; *)         printf "\e[1;33m%6.6s %7.7s %-22.22s %-74.74s %.80s \e[0m\n" "REPO_LREV" "REPO_REMOTE" "REPO_RREV" "REPO_PROJECT" "REPO_PATH"
-                  cat $file_log | grep -i --color=always ${cmd}
+                  cat ${REPPFILE_CSV} | grep -i --color=always ${cmd}
     ;;
     esac
 }
@@ -803,7 +804,7 @@ local MENU=(
 "info: shows repository info such as manifest path, repo cmd, tree of manifests, etc
     ex) repp info, repp info default.xml, repp info event/manifest.xml"
 "show: shows uncommited changes, top -1 commits, md5 sum, repo info for all repositories
-    ex) repp show, repp show|more, repp show| grep build, cat repp.status"
+    ex) repp show, repp show|more, repp show| grep build, cat ${REPPFILE_STATUS}"
 "go: move path to repo root dir, manifest dir, git path nearby with similar depth.
     ex) repp go (selcetion menu popup)"
 "commit: shows lastest commits(git log -1) from all repository (default 20)
@@ -1241,6 +1242,7 @@ EOF
     ;;?*$sep$sep)  clog "1" "git diff"
                 showRUN git difftool @:${path} @^:${path}
     ;;$sep$sep)  clog "0" "git diff"
+				showRUN git difftool
     ;;      *)  clog "diff branch:" "in specific path"
                 showRUN git difftool ${opt1}:${path} ${opt2}:${path}
     ;; esac
@@ -1371,6 +1373,11 @@ EOL
 GITT_REMOTE= &&GITT_PROJECT= &&GITT_BRANCH= &&GITT_REVIEW= &&GITT_URL= &&GITT_PATH=
 REPP_PATH= &&REPP_ROOT= &&REPP_REMOTE= &&REPP_BRANCH= &&REPP_URL= &&REPP_MIRROR= &&REPP_COUNT= &&REPP_CMD=
 REPP_PATH_ALL=()
+REPPFILE_STATUS={REPP_ROOT}/repp.status
+REPPFILE_COMMIT={REPP_ROOT}/repp.commit
+REPPFILE_CSV={REPP_ROOT}/repp.csv
+REPPFILE_XML=repp.csv
+
 
 (return 0 2>/dev/null) && sourced=1 || sourced=0
 if [ $sourced -eq 0 ]; then repp $@;
