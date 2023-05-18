@@ -1077,22 +1077,36 @@ function gittcommit(){
     case $cmd in
        help)    cat <<-EOF
 				usage) gitt commit help $1
-				usage) gitt commit auto
-				usage) gitt commit diff <path>
-				usage) gitt commit
+				usage) gitt commit auto      #add auto commit				
+				usage) gitt commit           #show commit info and diff with cached
+				usage) gitt diff help        #show diff with specific rev
 EOF
     ;; auto)    msg=$(date +"%y%m%d:%H%M")
                 git commit -m "${msg}: ${1:-test}"
                 git show --stat --oneline HEAD
                 clog "[run]" "git push $GITT_REMOTE HEAD:refs/heads/${GITT_BRANCH}"
-    ;; *)       formatprint git status -s --porcelain
+    ;; reset)   cat <<-EOF
+				guide) git reset flow
+				1) git log: check reset point in repository
+				2) git reset <rev> <option>
+				   current : repository index workspace| current status
+				    --soft :      >>>>> index workspace| keep commit & file, retry from 'git push' 
+				    --mixed:            >>>>> workspace| keep only  file, retry from 'git add' (default)
+				    --hard :                     >>>>> | remove all, retry from scratch
+				3) retry from each step
+				flow) git log> git reset c3cef36787        > add modification> git add -A> git commit        > git push
+				flow) git log> git reset c3cef36787 --soft > add modification> git add -A> git commit --amend> git push
+				info) 'git reset --hard' restored by this 'git reflog > git reset --hard <relog rev>'
+EOF
+    ;;     *)   formatprint git status -s --porcelain
                 printf "\n\n"
-                read -p "to see diff in detail [ enter:contiue| line:compare with line | q(ctrl+c):break ]: " 
+                read -p "to see diff with cached in detail [ enter:compare| line:compare with line | q(ctrl+c):break ]: " 
                 case "$REPLY" in
-                    n) clog "you can use with options:" "git diffi --line-numbers"
+                    help) clog "you can use with options:" "git diffi --line-numbers"
                 ;;  line) git diffi --line-numbers
                 ;;  *) git diffi
                 esac
+				if [ $? -ne 0 ];then echo "need to install 'sudo apt-get install icdiff'"; fi
     esac
 }
 
