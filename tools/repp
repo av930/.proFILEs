@@ -169,18 +169,18 @@ function reppget_repcmd(){
     count=$(grep -c include ${file_tempa})
     if [ -L "${file_tempa}" ];then
         file_tempb=$(readlink "${file_tempa}")
-        FILE_MANI=${file_tempb#*/}
+        REPPFILE_MANI=${file_tempb#*/}
     elif [ $count -eq 1 ]; then
         file_tempb=$(grep include $file_tempa |sed -E 's/<.*name="(.*)".\/>/\1/')
-        FILE_MANI=${file_tempb// /}
+        REPPFILE_MANI=${file_tempb// /}
     else
-        FILE_MANI=default.xml
+        REPPFILE_MANI=default.xml
     fi
 
     if [ -n "$REPP_MIRROR" ];then EXTRA_OPTION="--reference=$REPP_MIRROR"; fi
     if [ "$1" = "info" ];then
         bar inline "repo-init cmd"
-        REPP_CMD="repo init -u $REPP_REMOTE -b $REPP_BRANCH -m $FILE_MANI --repo-url=$REPP_URL $EXTRA_OPTION"
+        REPP_CMD="repo init -u $REPP_REMOTE -b $REPP_BRANCH -m $REPPFILE_MANI --repo-url=$REPP_URL $EXTRA_OPTION"
         log "${REPP_CMD}"
     fi
     return 0
@@ -192,7 +192,7 @@ function reppinfo(){
 ## ---------------------------------------------------------------------------
 # print information of repo
 # $1 manifests file (default is current manifests)
-    local manifest=${1:-${FILE_MANI}}
+    local manifest=${1:-${REPPFILE_MANI}}
 
     pushd ${REPP_PATH}
     #oldIFS=${IFS}; IFS='';
@@ -785,6 +785,10 @@ function reppcheck_precondition(){
         popd
         ret=0
     fi
+	REPPFILE_STATUS=${REPP_ROOT}/repp.status
+	REPPFILE_COMMIT=${REPP_ROOT}/repp.commit
+	REPPFILE_CSV=${REPP_ROOT}/repp.csv
+	REPPFILE_XML=repp.csv
 
     if [[ $ret -eq 1 && "$1" = "print_y" ]]; then
         printf "%s\n" ${REPP_PATH_ALL[@]};
@@ -1349,7 +1353,8 @@ function reppdebug(){
         bar inline "GITT_VARIABLE && REPP_VARIABLE"
         for var in \
         '${GITT_PROJECT}' '${GITT_REMOTE}' '${GITT_BRANCH}' '${GITT_REVIEW}' '${GITT_URL}' '${GITT_PATH}' \
-        '${REPP_PATH}' '${REPP_ROOT}' '${REPP_REMOTE}' '${REPP_BRANCH}' '${REPP_URL}' '${REPP_MIRROR}' '${REPP_COUNT}'
+        '${REPP_PATH}' '${REPP_ROOT}' '${REPP_REMOTE}' '${REPP_BRANCH}' '${REPP_URL}' '${REPP_MIRROR}' '${REPP_COUNT}' \
+		'${REPPFILE_STATUS}' '${REPPFILE_COMMIT}' '${REPPFILE_CSV}' '${REPPFILE_XML}' '${REPPFILE_MANI}'
         do
            dlog "$var\t" $(eval echo $var)
         done
@@ -1373,11 +1378,6 @@ EOL
 GITT_REMOTE= &&GITT_PROJECT= &&GITT_BRANCH= &&GITT_REVIEW= &&GITT_URL= &&GITT_PATH=
 REPP_PATH= &&REPP_ROOT= &&REPP_REMOTE= &&REPP_BRANCH= &&REPP_URL= &&REPP_MIRROR= &&REPP_COUNT= &&REPP_CMD=
 REPP_PATH_ALL=()
-REPPFILE_STATUS={REPP_ROOT}/repp.status
-REPPFILE_COMMIT={REPP_ROOT}/repp.commit
-REPPFILE_CSV={REPP_ROOT}/repp.csv
-REPPFILE_XML=repp.csv
-
 
 (return 0 2>/dev/null) && sourced=1 || sourced=0
 if [ $sourced -eq 0 ]; then repp $@;
