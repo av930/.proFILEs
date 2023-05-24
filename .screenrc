@@ -195,7 +195,9 @@ bind r eval "source $HOME/.screenrc" "echo '.screenrc reloaded!'"
 ## create & kill current window (exit)
 ## kill for buffer, # remove for window
 ## kill & remove will close both of buffer & window
-bind , screen
+#bind , screen
+## open screen window at current directory
+bind , stuff "screen^M"
 bind . eval 'kill' 'remove'
 
 ## window split horizontal
