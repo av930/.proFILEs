@@ -390,10 +390,12 @@ function reppbranch(){
 				usage) repp branch compare 
 EOF
     ;;    list) bar inline "show remote branches only including ${name} git project"
-                showRUN repo --color=always forall -pc 'git ls-remote -h ${REPO_REMOTE} refs/heads/*${1}*' ${name} |more
+                #showRUN repo --color=always forall -pc 'git ls-remote -h ${REPO_REMOTE} refs/heads/*${1}*' ${name} |more
+				showRUN repo --color=always forall -c 'printf "\t\t >>>> [%s] %s\n" ${REPO_REMOTE} ${REPO_PROJECT}; git ls-remote -h ${REPO_REMOTE} refs/heads/*${1}*' ${name} |more
     ;;  create|new) 
                 under "please run one of these 'git push' commands to create branch in remote\n"
-                info "<branch name> will be passing to 'git push' cmd in position of parameter \${1}\n"
+                info "<branch name> will be passing to 'git push' cmd in position of parameter \${1}"
+				info "variable preview: \${REPO_REMOTE}|\${REPO_RREV} $(repo forall . -c 'echo ${REPO_REMOTE}\|${REPO_RREV}')\n"
                 clog "infix:" "repo forall -pc 'git push \${REPO_REMOTE} HEAD:refs/heads/\${1}' ${name:-<branch-name>}"
                 clog "prefix :" "repo forall -pc 'git push \${REPO_REMOTE} HEAD:refs/heads/\${1}_\${REPO_RREV}' ${name:-<branch-prefix>}"                
                 clog "postfix:" "repo forall -pc 'git push \${REPO_REMOTE} HEAD:refs/heads/\${REPO_RREV}_\${1}' ${name:-<branch-postfix>}"
@@ -412,7 +414,7 @@ EOF
                 clog "postfix:" "repo forall -pc 'git ls-remote -h \${REPO_REMOTE} refs/heads/\${REPO_RREV}_\$1' ${name:-<branch-postfix>}"
                 
                 bar inline "check exact ${name} remote branche is existed for all gits"
-                repo forall -c 'printf "%80s " ${REPO_PROJECT}; git ls-remote -h ${REPO_REMOTE} refs/heads/$1' ${name} 
+				showRUN repo forall -c 'printf "[%10s] %70s %s %s\n" ${REPO_REMOTE} ${REPO_PROJECT} $(git ls-remote -h ${REPO_REMOTE} refs/heads/$1)' ${name} 
     ;;  checksum) ##don' use showRUN, md5sum includes showRUN command.
                 bar inline "1. md5sum of local HEAD in all repository"
                 repo forall -c 'git log -1 --pretty=format:%H%n' | md5sum
@@ -424,11 +426,11 @@ EOF
                 bar inline "generate branch info local, remote tracking branch, and specific remote branch"
                 #repo forall -pc 'git diff --shortstat tagA tagB'
                 fileA=$(mktemp); fileB=$(mktemp)
-                repo forall -c 'printf "%s %s %s" $(git log -1 --pretty=format:%H%n) ${REPO_RREV} ${REPO_PROJECT}' > ${fileA}
-                repo forall -c 'printf "%s %s %s" $(git ls-remote -h ${REPO_REMOTE} refs/heads/${REPO_RREV}) ${REPO_PROJECT}' > ${fileB}
+                repo forall -c 'printf "%s %s %s\n" $(git log -1 --pretty=format:%H%n) ${REPO_RREV} ${REPO_PROJECT}' > ${fileA}
+                repo forall -c 'printf "%s %s %s\n" $(git ls-remote -h ${REPO_REMOTE} refs/heads/${REPO_RREV}) ${REPO_PROJECT}' > ${fileB}
                 if [ -n "${name}" ]; then 
                     fileC=$(mktemp)
-                    repo forall -c 'printf "%s %s %s" $(git ls-remote -h ${REPO_REMOTE} refs/heads/$1) ${REPO_PROJECT}' ${name} > ${fileC}
+                    repo forall -c 'printf "%s %s %s\n" $(git ls-remote -h ${REPO_REMOTE} refs/heads/$1) ${REPO_PROJECT}' ${name} > ${fileC}
                 fi
                 
                 info "please compare command: vimdiff ${fileA} ${fileB} ${fileC}"
@@ -920,6 +922,7 @@ done
 
 function gittcheck_initvar(){
 ## ---------------------------------------------------------------------------
+	if ! gittcheck_isgitproject; then err "this is not git project"; return 1; fi
     ##readarray -t GITT_REMOTE < <(git remote -v |cut -f1|uniq)
     GITT_REMOTE=$(git remote|head -1)
 
@@ -1255,11 +1258,7 @@ function gittreset(){
     case ${cmd} in
          all)   repo forall -cj${NJOBS} 'git reset --hard ; git clean -xdf'
                 echo "reset all repositories" 
-    ;; clear)   if gittcheck_isgitproject; then
-                    showRUNQ y "git reset --hard; showRUN git clean -xdf"
-                else
-                    warn "this is not a git directory";
-                fi
+    ;; clear)   showRUNQ y "git reset --hard; showRUN git clean -xdf"
     ;;  help) 	cat <<-EOF
 				usage) gitt reset clear #remove all changes and reset
 				usage) gitt reset       #show detail reset commands
@@ -1289,8 +1288,13 @@ function gitt(){
 # $1 command
 local ret=0
 
-if ! gittcheck_isgitproject; then err "we are not in git project" && return 1; 
-else gittcheck_initvar print_n; fi
+case "$1" in
+		    help)   "echo gitt help"
+       ;;init|go)   :
+       ;;      *)   gittcheck_initvar print_y  
+                    [ "$?" -ne 0 ] && return 1
+esac
+
 
 case "$1" in
     ##$1:below ${@:2}:parameters
@@ -1320,10 +1324,11 @@ function repp(){
 local ret=0
 
 case "$1" in
-         init|go)  : 
-       ;;help|server|connect)  reppcheck_initvar print_n
-       ;;   *)  reppcheck_initvar print_y  
-                [ "$?" -ne 0 ] && return 1
+		    help)   "echo repp help"
+       ;;init|go)   : 
+       ;;server|connect)  reppcheck_initvar print_n
+       ;;   *)      reppcheck_initvar print_y  
+                    [ "$?" -ne 0 ] && return 1
 esac
 
 case "$1" in
