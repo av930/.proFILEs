@@ -29,7 +29,7 @@ source <(cat <<\EOF
     git config --global alias.alias 'config --get-regexp ^alias\.'
     git config --global alias.st 'status'
     git config --global alias.ci 'commit --verbose'
-    git config --global alias.loga 'log --oneline --decorate --graph -n 15 --all'
+    git config --global alias.loga 'log --oneline --decorate --graph -n 20 --all'
     git config --global alias.logo "log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr)%Creset %C(blue)<%an>%Creset' --abbrev-commit --date=relative"
     git config --global alias.tagcur 'describe --tags --abbrev=0 --match'
     git config --global alias.diffc 'difftool -t bc'
@@ -1088,9 +1088,9 @@ function gittcommit(){
     case $cmd in
        help)    cat <<-EOF
 				usage) gitt commit help $1
+				usage) gitt commit info      #show commit info and diff with cached
 				usage) gitt commit auto      #add auto commit				
 				usage) gitt commit reset     #show useful reset command 
-				usage) gitt commit           #show commit info and diff with cached
 				usage) gitt diff help        #show diff with specific rev
 EOF
     ;; auto)    msg=$(date +"%y%m%d:%H%M")
@@ -1098,7 +1098,7 @@ EOF
                 git show --stat --oneline HEAD
                 clog "[run]" "git push $GITT_REMOTE HEAD:refs/heads/${GITT_BRANCH}"
     ;; reset)   gittreset help
-    ;;     *)   formatprint git status -s --porcelain
+    ;; info)    formatprint git status -s --porcelain
                 printf "\n\n"
                 read -p "to see diff with cached in detail [ enter:compare| line:compare with line | q(ctrl+c):break ]: " 
                 case "$REPLY" in
@@ -1107,52 +1107,77 @@ EOF
                 ;;  *) git diffi
                 esac
 				if [ $? -ne 0 ];then echo "need to install 'sudo apt-get install icdiff'"; fi
+	;;     *)   gittcommit help
     esac
 }
 
 
 
-function gittbranch_list(){
+function gittbranch_info(){
 ## ---------------------------------------------------------------------------
 # show branch local & remote
 # $1 all or filter
-    local filter
-    local opt="$1"
 
-    ## list option must be wrapped with quoat ex) --list '*relese*'
-    bar inline "branch local"
-    echo "these branches are existed in local repository"
-    clog "[local]" "could be synced by remote, if so, traced is marked"
+	## local branch
+    #list option must be wrapped with quoat ex) --list '*relese*'
+    bar inline "info: branch local"
+    clog "[local]" "* marked is current branch"
     showRUN git branch -vv
 
+    ## remote branch
+    bar inline "info: branch remote"
+	clog "[remote]" "tracking branch"
+	echo ${GITT_BRANCH}
 
-    ## prevent globbing
-    set -o noglob
-    bar inline "sort by recently updated branches by new commit (newest from down)"
-    echo "branch: remote tracked with filter (${filter:-all}) top 10 in local repository"
-    echo "shows the branches downloaded when git fetch equivalent command was executed"
-    clog "[not latest]" "could be latest by git pull"
-
-    [ -z "${opt}" ] && filter="" || filter="--list *${opt}*"
-    showRUN git branch -rvv --sort=committerdate ${filter} | tail -10
-
-
-    [ -z "${opt}" ] && filter="*" || filter="*${opt}*"
-    bar inline "lookup remote branch ${filer}"
-    echo "branch: remote all with filter (${filter:-all}) by date top 10 in remote repository"
-    clog "[always latest]" "read from remote live"
-    warn "this command sort by date(--sort=-committerdate) is not correct, please watch out"
-    set +o noglob
-    
-    showRUN git ls-remote -h ${GITT_REMOTE} refs/heads/${filter} | tail -10
-    echo "get all branches and sort by date recent its commit"
-    clog "> git fetch" 
-    clog "> git for-each-ref --sort=committerdate refs/ --format='%(color:yellow)%(committerdate:short) %(color:red)%(objectname:short) %(color:green)%(refname:short) %(color:blue)%(authorname)%(color:reset) %(contents:subject)' "
-    
+    ## remote branch which are same to local HEAD
     bar inline "find remote branch which are at same local HEAD"    
+	clog "[always latest]" "read from remote live"
     git ls-remote -h ${GITT_REMOTE}| grep $(git log -1 --pretty=format:%H%n)
+	
+	bar inline "git log all branches cmd:'git loga' "
+	git loga
 }
 
+
+
+function gittbranch_remote(){
+## -------------------- -------------------------------------------------------
+# show branch local & remote
+# $1 all or filter
+    local opt="$1"
+    local filter	
+
+	read -p "'git fetch' is needed to get recent branch details [enter:continue| ctrl+c:break] :"
+	git fetch
+	bar inline "info: remote tag recent 20 by date"
+	echo "get all branches and sort by date recent its commit"
+    showRUN git for-each-ref --color=always --sort=creatordate refs/tags \
+	--format='%(color:yellow)%(committerdate:short) %(color:red)%(objectname:short) %(color:green)%(refname:short) %(color:blue)%(authorname)%(color:reset) %(contents:subject)' \
+	| tail -20
+	
+	bar inline "info: remote branch recent 20 by date"
+	showRUN git for-each-ref --color=always --sort=committerdate refs/remotes \
+	--format='%(color:yellow)%(committerdate:short) %(color:red)%(objectname:short) %(color:green)%(refname:short) %(color:blue)%(authorname)%(color:reset) %(contents:subject)' \
+	| tail -20
+	
+    # bar inline "lookup remote branch ${filer}"
+    # echo "branch: remote all with filter (${filter:-all}) in remote repository"
+    # clog "[always latest]" "read from remote live"
+	#prevent globbing
+  	# set -o noglob
+    # [ -z "${opt}" ] && filter="*" || filter="*${opt}*"
+	# set +o noglob
+    # showRUN git ls-remote -h ${GITT_REMOTE} refs/heads/${filter} | more
+
+    # bar inline "sort by recently updated branches by new commit (newest from down)"
+    # echo "branch: remote tracked with filter (${filter:-all}) top 10 in local repository"
+    # echo "shows the branches downloaded when git fetch equivalent command was executed"
+    # clog "run 'git pull'" "to fetch all latest remote branches"
+    # set -o noglob
+    # [ -z "${opt}" ] && filter="" || filter="--list *${opt}*"
+	# set +o noglob	
+    # showRUN git branch -rvv --sort=committerdate ${filter} | tail -10
+}
 
 
 function gittbranch(){
@@ -1170,11 +1195,12 @@ function gittbranch(){
 				usage) gitt branch delete|remove <name>
 EOF
     ;; create|new)  if [ -z "${name}" ]; then err "branch name must be input" && return 1;fi
-                showRUNQ git push ${GITT_REMOTE} HEAD:refs/heads/${name}
+                showRUNQ y git push ${GITT_REMOTE} HEAD:refs/heads/${name}
     ;; delete|remove)  if [ -z "${name}" ]; then err "branch name must be input" && return 1;fi
-                showRUNQ git push ${GITT_REMOTE} --delete ${name}
-    ;; list) gittbranch_list "${name}"
-    ;; *) echo "usage) gitt branch help"
+                showRUNQ y git push ${GITT_REMOTE} --delete ${name}
+    ;; info) gittbranch_info
+    ;; remote) gittbranch_remote "${name}"
+    ;; *) gittbranch help
     ;; esac
 }
 
@@ -1291,7 +1317,7 @@ local ret=0
 case "$1" in
 		    help)   "echo gitt help"
        ;;init|go)   :
-       ;;      *)   gittcheck_initvar print_y  
+       ;;      *)   gittcheck_initvar print_n
                     [ "$?" -ne 0 ] && return 1
 esac
 
