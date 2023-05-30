@@ -36,6 +36,7 @@ source <(cat <<\EOF
     git config --global alias.diffv 'difftool -t vimdiff'
     git config --global alias.difft 'difftool --dir-diff -t vimdiff'
 
+
     ## NEEDTO: sudo apt-get install icdiff
     #git config --global alias.diffi "difftool --extcmd 'icdiff'"
     git config --global alias.diffi '!_gitdiff() { git difftool --extcmd "icdiff $@"; }; _gitdiff' --replace-all
@@ -382,16 +383,21 @@ function reppbranch(){
     case ${cmd} in
        ''|help) cat <<- EOF
 				usage) repp branch help
-				usage) repp branch list
+				usage) repp branch list 
 				usage) repp branch create (shows commands) 
 				usage) repp branch remove (shows commands) 
-				usage) repp branch checkexist (shows commands & run default) 
 				usage) repp branch checksum
 				usage) repp branch compare 
 EOF
-    ;;    list) bar inline "show remote branches only including ${name} git project"
-                #showRUN repo --color=always forall -pc 'git ls-remote -h ${REPO_REMOTE} refs/heads/*${1}*' ${name} |more
-				showRUN repo --color=always forall -c 'printf "\t\t >>>> [%s] %s\n" ${REPO_REMOTE} ${REPO_PROJECT}; git ls-remote -h ${REPO_REMOTE} refs/heads/*${1}*' ${name} |more
+    ;;  list) 
+                under "please run one of these 'git ls-remote' commands to check if branch is existed in remote\n"
+                info "this command show all git project and show if the branch is existed"
+                clog "prefix:" "repo forall -pc 'git ls-remote -h \${REPO_REMOTE} refs/heads/\$1_\${REPO_RREV}' ${name:-<branch-prefix>}"                
+                clog "postfix:" "repo forall -pc 'git ls-remote -h \${REPO_REMOTE} refs/heads/\${REPO_RREV}_\$1' ${name:-<branch-postfix>}"
+                
+                bar inline "check exact ${name} remote branche is existed for all gits"
+				#showRUNQ y repo forall -c 'printf "%30s| %-70s\n" ${REPO_REMOTE} ${REPO_PROJECT} $(git ls-remote -h ${REPO_REMOTE} refs/heads/$1)' ${name}
+				showRUN repo --color=always forall -c 'printf "\t\t >>>> [%30s] %-60s\n" ${REPO_REMOTE} ${REPO_PROJECT}; git ls-remote -h ${REPO_REMOTE} refs/heads/${1}' ${name:-'*'} |more
     ;;  create|new) 
                 under "please run one of these 'git push' commands to create branch in remote\n"
                 info "<branch name> will be passing to 'git push' cmd in position of parameter \${1}"
@@ -407,14 +413,6 @@ EOF
                 clog "infix:" "repo forall -pc 'git push \${REPO_REMOTE} --delete \${1}' ${name:-<branch-name>}"
                 clog "prefix :" "repo forall -pc 'git push \${REPO_REMOTE} --delete \${1}_\${REPO_RREV}' ${name:-<branch-prefix>}"                
                 clog "postfix:" "repo forall -pc 'git push \${REPO_REMOTE} --delete \${REPO_RREV}_\${1}' ${name:-<branch-postfix>}"
-    ;;  checkexist) 
-                under "please run one of these 'git ls-remote' commands to check if branch is existed in remote\n"
-                info "this command show all git project and show if the branch is existed"
-                clog "prefix:" "repo forall -pc 'git ls-remote -h \${REPO_REMOTE} refs/heads/\$1_\${REPO_RREV}' ${name:-<branch-prefix>}"                
-                clog "postfix:" "repo forall -pc 'git ls-remote -h \${REPO_REMOTE} refs/heads/\${REPO_RREV}_\$1' ${name:-<branch-postfix>}"
-                
-                bar inline "check exact ${name} remote branche is existed for all gits"
-				showRUN repo forall -c 'printf "[%10s] %70s %s %s\n" ${REPO_REMOTE} ${REPO_PROJECT} $(git ls-remote -h ${REPO_REMOTE} refs/heads/$1)' ${name} 
     ;;  checksum) ##don' use showRUN, md5sum includes showRUN command.
                 bar inline "1. md5sum of local HEAD in all repository"
                 repo forall -c 'git log -1 --pretty=format:%H%n' | md5sum
@@ -434,6 +432,7 @@ EOF
                 fi
                 
                 info "please compare command: vimdiff ${fileA} ${fileB} ${fileC}"
+				info "please compare command: icdiff ${fileA} ${fileB} |more"
     ;;       *) echo "usage) repp branch help"
     esac
 }
@@ -1140,7 +1139,7 @@ function gittbranch_info(){
 
 
 
-function gittbranch_remote(){
+function gittbranch_list(){
 ## -------------------- -------------------------------------------------------
 # show branch local & remote
 # $1 all or filter
@@ -1187,19 +1186,24 @@ function gittbranch(){
 # $2 branch name or branch postfix
     local cmd=$1
     local name=$2
+    local target=$3
 
     case $cmd in
        help) cat <<- EOF
-				usage) gitt branch list <''|name-filter>
-				usage) gitt branch create|new <name>
-				usage) gitt branch delete|remove <name>
+				usage) gitt branch info                         #show current branch info
+				usage) gitt branch list <''|name-filter>        #show remote tag/branches
+				usage) gitt branch create|new <name>            #create new branch with exact-name
+				usage) gitt branch delete|remove <name>         #delete branch with exact-name
+				usage) gitt branch compare <branch1> <branch2>  #compare branch A to branch B
+				usage) gitt branch compare <branch1>            #compare branch A to current
 EOF
     ;; create|new)  if [ -z "${name}" ]; then err "branch name must be input" && return 1;fi
                 showRUNQ y git push ${GITT_REMOTE} HEAD:refs/heads/${name}
     ;; delete|remove)  if [ -z "${name}" ]; then err "branch name must be input" && return 1;fi
                 showRUNQ y git push ${GITT_REMOTE} --delete ${name}
     ;; info) gittbranch_info
-    ;; remote) gittbranch_remote "${name}"
+    ;; list) gittbranch_list "${name}"
+    ;; compare) gittdiff "branch" "${name}" "${target:-HEAD}"
     ;; *) gittbranch help
     ;; esac
 }
@@ -1249,11 +1253,52 @@ function gittdiff(){
 # read file and print line "include" keyword
 # $1 command
 # $2 branch name or branch postfix
-    local path="$1"
+    local cmd="$1"
     local rev1="$2"
     local rev2="$3"
-    
+    local path="$4"
     local sep='~'
+	local cmd_diff="git difftool"
+	if command -v icdiff > /dev/null ; then cmd_diff="git difftool --extcmd icdiff";fi
+
+    case $cmd in
+    help) cat <<- EOF
+				usage) gitt diff help
+				usage) gitt diff <path> <rev1> <rev2>
+				ex) gitt diff HEAD <cached|HEAD^>                
+				ex) gitt diff 
+EOF
+
+    ;;default|'')  clog "default" "    unstaged >>> diff <<< staged"
+				showRUN ${cmd_diff}
+    ;;staged)   clog "cached"  "      staged >>> diff <<< HEAD"
+				showRUN ${cmd_diff} --cached
+    ;;HEAD)     clog "HEAD" "unstaged/staged >>> diff <<< HEAD"
+	            git add -N . #to compare new untracked file
+				showRUN  ${cmd_diff} HEAD
+    ;;HEAD^)    clog "HEAD" "          HEAD^ >>> diff <<< HEAD"
+				showRUN  ${cmd_diff} HEAD^ HEAD
+    ;;branch)   clog "branch" "     branch A >>> diff <<< branch B"
+                showRUN ${cmd_diff} ${rev1} ${rev2} ${path}
+    ;;commit)   clog "commit" "     commit A >>> diff <<< commit B"
+				showRUN ${cmd_diff} ${rev1}..${rev2} ${path}
+    ;;      *)  err "gitt diff help"
+    ;; esac
+}
+
+
+
+function __gittdiff(){
+## ---------------------------------------------------------------------------
+# read file and print line "include" keyword
+# $1 command
+# $2 branch name or branch postfix
+    local path="$1"
+    local rev1="$2"
+    local rev2="$3"    
+    local sep='~'
+	local cmd_diff="git difftool"
+	if command -v icdiff > /dev/null ; then cmd_diff="git difftool --extcmd icdiff";fi
 
     case $path$sep$rev1$sep$rev2 in
     help*) cat <<- EOF
@@ -1262,17 +1307,20 @@ function gittdiff(){
 				ex) gitt diff HEAD <cached|HEAD^>                
 				ex) gitt diff 
 EOF
+
+    ;;branch$sep?*$sep?*)  clog "branch diff" "need to icdiff"
+				showRUN ${cmd_diff} ${rev1}..${rev2}
     ;;?*$sep?*$sep?*)  clog "3" "git diff"
+				showRUN  ${cmd_diff} ${rev1}..${rev2}
     ;;?*$sep?*$sep)  clog "2" "git diff"
     ;;?*$sep$sep)  clog "1" "git diff"
-                showRUN git difftool @:${path} @^:${path}
-    ;;$sep$sep)  clog "0" "git diff"
-				showRUN git difftool
+                showRUN ${cmd_diff} @:${path} @^:${path}
+    ;;$sep$sep)  clog "cached diff" "git diff"
+				showRUN ${cmd_diff} --cached
     ;;      *)  clog "diff branch:" "in specific path"
-                showRUN git difftool ${opt1}:${path} ${opt2}:${path}
+                showRUN ${cmd_diff} ${rev1} ${rev2} ${path}
     ;; esac
 }
-
 
 
 function gittreset(){
@@ -1284,7 +1332,7 @@ function gittreset(){
     case ${cmd} in
          all)   repo forall -cj${NJOBS} 'git reset --hard ; git clean -xdf'
                 echo "reset all repositories" 
-    ;; clear)   showRUNQ y "git reset --hard; showRUN git clean -xdf"
+    ;; clear)   showRUNQ y git reset --hard && showRUN git clean -xdf
     ;;  help) 	cat <<-EOF
 				usage) gitt reset clear #remove all changes and reset
 				usage) gitt reset       #show detail reset commands
@@ -1293,7 +1341,7 @@ EOF
 				guide) git reset flow
 				1) git log: check reset point in repository
 				2) git reset <rev> <option>
-				   current : worksapce index repository | description
+				   current : workspace index repository | description
 				   -----------------------------------------------------------------------------------------------------
 				    --soft : workspace index <<<<       | keep commit & file, retry from 'git push' 
 				    --mixed: workspace <<<<             | keep only  file, retry from 'git add' (default)
@@ -1315,7 +1363,7 @@ function gitt(){
 local ret=0
 
 case "$1" in
-		    help)   "echo gitt help"
+		    help)   gitthelp "${@:2}"
        ;;init|go)   :
        ;;      *)   gittcheck_initvar print_n
                     [ "$?" -ne 0 ] && return 1
@@ -1435,6 +1483,30 @@ EOL
     ##run echo
 }
 
+
+
+function gitthelp(){
+## ---------------------------------------------------------------------------
+#reppdebug & gittdebug
+#repo forall -c 'echo ${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}'
+
+    case ${cmd} in
+         help)  echo "print git help"  
+    ;; area)    cat <<-EOF
+				guide) git area
+				current : workspace      | index     |   local repository     remote repository
+				-----------------------------------------------------------------------------------------------------
+				          working area   | cached    |   history              remote
+                          unstaged       | staged    |   commit
+                          untracked      | tracked	 |	 tree 
+
+EOF
+    ;; 		*)  echo cat <<-EOF
+				usage) gitt help area #show git area 
+				usage) gitt reset     #show detail reset commands
+EOF
+esac
+}
 
 
 ##============================================================================
