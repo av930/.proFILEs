@@ -76,10 +76,11 @@ function showRUNQ(){
 	if [ "$1" = y ]; then 
 	    echo "\$ ${@:2}"; 
 		read -p "continue [y:continue|other:break]" 
-		if [ "$REPLY" == 'y' ]; then "eval ${@:2}" ; fi 
+		#if [ "$REPLY" == 'y' ]; then "eval ${@:2}" ; fi 
+		if [ "$REPLY" == 'y' ]; then "${@:2}" ; fi 
 	else
 		echo "\$ ${@}"; 
-		eval "${@}"
+		"${@}"
 	fi	
 }
 
