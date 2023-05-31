@@ -1060,7 +1060,7 @@ function formatprint(){
                 help) echo "aaa"
             ;;    '?')   printf "%-14s -- \t%s\n" "untracked" "${line:3}"
             ;;    '!')   printf "%-14s -- \t%s\n" "ignored" "${line:3}"
-            ;;    ' ')   printf "%-14s -- \t%s\n" "untracked" "${line:3}"          
+            ;;    ' ')   printf "%-14s -- \t%s\n" "tracked" "${line:3}"          
             ;;    'A')   printf "%-14s -- \t%s\n" "added" "${line:3}"
             ;;    'M')   printf "%-14s -- \t%s\n" "modified" "${line:3}"
             ;;    'D')   printf "%-14s -- \t%s\n" "deleted" "${line:3}"
@@ -1217,8 +1217,15 @@ function gittfind(){
 # $2: file, dir and area
     local keyword="$1"
     local area="${@:2}"
-
-    bar outline "search in commit with regexp(${keyword}) in files(${area})"
+	
+    case $keyword in
+       help) cat <<- EOF
+				usage) gitt find docker                         #find string 'docker'
+				usage) gitt find docker dock                    #find string 'docker' in file 'dock'
+EOF
+    ;; '')  gitt find help
+	;; *)   bar outline "search in commit with regexp(${keyword}) in files(${area:-file list or path})"
+    esac
     
     source <(cat <<\EOL
     under "find only in committer in history\n"
@@ -1226,8 +1233,8 @@ function gittfind(){
     echo "ex) git log --owner=".*${keyword}.*" ${area}"
     showRUN git log --committer=".*${keyword}.*" ${area}
 
-    under "find only in commit message of history\n"
-    showRUN git log -i --grep="${keyword}" ${area}
+    under "find only in commit message of history with file-changes\n"
+    showRUN git log -i --name-status --grep="${keyword}" ${area}
     
     under "find in commit diff in history \n"
     echo "ex) git grep -e regexp1 --or -e regexp2"
@@ -1254,35 +1261,43 @@ function gittdiff(){
 # $1 command
 # $2 branch name or branch postfix
     local cmd="$1"
-    local rev1="$2"
-    local rev2="$3"
-    local path="$4"
-    local sep='~'
+    local path="$2"
+    local rev1="$3"
+    local rev2="$4"
+
 	local cmd_diff="git difftool"
+	
 	if command -v icdiff > /dev/null ; then cmd_diff="git difftool --extcmd icdiff";fi
+	if [ -z "${path}" ]; then path=.;fi
 
     case $cmd in
     help) cat <<- EOF
-				usage) gitt diff help
-				usage) gitt diff <path> <rev1> <rev2>
-				ex) gitt diff HEAD <cached|HEAD^>                
-				ex) gitt diff 
+				help) default <path> is . (current dir)
+				usage) gitt diff head <path>                    #    HEAD >>> diff <<< unstaged & staged(add empty path)
+				usage) gitt diff head^ <path>                   #    HEAD >>> diff <<< HEAD^ 				
+				usage) gitt diff staged <path>                  #    HEAD >>> diff <<< staged				
+				usage) gitt diff work <path>                    #  staged >>> diff <<< unstaged(workspace)
+				usage) gitt diff <path> <branchA> <branchB>     #branch A >>> diff <<< branch B, <path> is mandatory
+				usage) gitt diff <path> <commitA> <commitB>     #commit A >>> diff <<< commit B, <path> is ignored
 EOF
-
-    ;;default|'')  clog "default" "    unstaged >>> diff <<< staged"
-				showRUN ${cmd_diff}
-    ;;staged)   clog "cached"  "      staged >>> diff <<< HEAD"
-				showRUN ${cmd_diff} --cached
-    ;;HEAD)     clog "HEAD" "unstaged/staged >>> diff <<< HEAD"
-	            git add -N . #to compare new untracked file
-				showRUN  ${cmd_diff} HEAD
-    ;;HEAD^)    clog "HEAD" "          HEAD^ >>> diff <<< HEAD"
-				showRUN  ${cmd_diff} HEAD^ HEAD
-    ;;branch)   clog "branch" "     branch A >>> diff <<< branch B"
+    ;;  head)   under "        HEAD >>> diff <<< unstaged/staged\n"
+				warn "automatically 'git add empty path' to show diff untracked new file"
+				git add -N . #to compare new untracked file
+				showRUN  ${cmd_diff} HEAD -- ${path}
+    ;; head^)   under "        HEAD >>> diff <<< HEAD^ \n"
+				#= showRUN ${cmd_diff} @ @^ ${path}
+				showRUN ${cmd_diff} HEAD HEAD^ ${path}
+    ;;staged)   under "        HEAD >>> diff <<< staged\n"
+				showRUN ${cmd_diff} --cached -- ${path}
+	;;  work)   under "      staged >>> diff <<< unstaged\n"
+				showRUN ${cmd_diff} -- ${path}
+    ;;branch)   under "    branch A >>> diff <<< branch B \n"
                 showRUN ${cmd_diff} ${rev1} ${rev2} ${path}
-    ;;commit)   clog "commit" "     commit A >>> diff <<< commit B"
-				showRUN ${cmd_diff} ${rev1}..${rev2} ${path}
-    ;;      *)  err "gitt diff help"
+    ;;commit)   under "    commit A >>> diff <<< commit B \n"
+				showRUN ${cmd_diff} ${rev1}..${rev2}
+    ;;  file)   under "    current >>> diff <<< current-1 \n"
+				showRUN ${cmd_diff} @:${path} @^:${path}
+    ;;  *|'')   gitt diff help
     ;; esac
 }
 
