@@ -1274,13 +1274,20 @@ function gittdiff(){
     case $cmd in
     help) cat <<- EOF
 				help) default <path> is . (current dir)
+				usage) gitt diff work <path>                        #  staged >>> diff <<< unstaged(workspace)
+				usage) gitt diff staged <path>                      #    HEAD >>> diff <<< staged				
 				usage) gitt diff head <path>                        #    HEAD >>> diff <<< unstaged & staged(add empty path)
 				usage) gitt diff head^ <path>                       #    HEAD >>> diff <<< HEAD^ 				
-				usage) gitt diff staged <path>                      #    HEAD >>> diff <<< staged				
-				usage) gitt diff work <path>                        #  staged >>> diff <<< unstaged(workspace)
 				usage) gitt diff branch <path> <branchA> <branchB>  #branch A >>> diff <<< branch B, <path> is mandatory
 				usage) gitt diff commit <path> <commitA> <commitB>  #commit A >>> diff <<< commit B, <path> is ignored
+				
+				flow) gitt branch list  # find remote branch name : origin/master
+				      gitt diff branch . HEAD origin/master
 EOF
+	;;  work)   under "      staged >>> diff <<< unstaged\n"
+				showRUN ${cmd_diff} -- ${path}
+    ;;staged)   under "        HEAD >>> diff <<< staged\n"
+				showRUN ${cmd_diff} --cached -- ${path}
     ;;  head)   under "        HEAD >>> diff <<< unstaged/staged\n"
 				warn "automatically 'git add empty path' to show diff untracked new file"
 				git add -N . #to compare new untracked file
@@ -1288,10 +1295,6 @@ EOF
     ;; head^)   under "        HEAD >>> diff <<< HEAD^ \n"
 				#= showRUN ${cmd_diff} @ @^ ${path}
 				showRUN ${cmd_diff} HEAD HEAD^ ${path}
-    ;;staged)   under "        HEAD >>> diff <<< staged\n"
-				showRUN ${cmd_diff} --cached -- ${path}
-	;;  work)   under "      staged >>> diff <<< unstaged\n"
-				showRUN ${cmd_diff} -- ${path}
     ;;branch)   under "    branch A >>> diff <<< branch B \n"
 	            warn "to see remote branch, run 'gitt branch list'"
                 showRUN ${cmd_diff} ${rev1} ${rev2} ${path}
