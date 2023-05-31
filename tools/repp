@@ -1284,7 +1284,7 @@ function gittdiff(){
 				flow) gitt branch list  # find remote branch name : origin/master
 				      gitt diff branch . HEAD origin/master
 EOF
-	;;  work)   under "      staged >>> diff <<< unstaged\n"
+    ;;  work)   under "      staged >>> diff <<< unstaged\n"
 				showRUN ${cmd_diff} -- ${path}
     ;;staged)   under "        HEAD >>> diff <<< staged\n"
 				showRUN ${cmd_diff} --cached -- ${path}
