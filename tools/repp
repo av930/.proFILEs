@@ -1086,7 +1086,7 @@ function gittcommit(){
     local opt="${@:2}"
     case $cmd in
        help)    cat <<-EOF
-				usage) gitt commit help $1
+				usage) gitt commit help 
 				usage) gitt commit info      #show commit info and diff with cached
 				usage) gitt commit auto      #add auto commit				
 				usage) gitt commit reset     #show useful reset command 
@@ -1132,6 +1132,7 @@ function gittbranch_info(){
     bar inline "find remote branch which are at same local HEAD"    
 	clog "[always latest]" "read from remote live"
     git ls-remote -h ${GITT_REMOTE}| grep $(git log -1 --pretty=format:%H%n)
+	if [ $? -eq 0 ]; warn "local branch is same to remote branch, to see, please 'git branch'"; fi
 	
 	bar inline "git log all branches cmd:'git loga' "
 	git loga
@@ -1273,12 +1274,12 @@ function gittdiff(){
     case $cmd in
     help) cat <<- EOF
 				help) default <path> is . (current dir)
-				usage) gitt diff head <path>                    #    HEAD >>> diff <<< unstaged & staged(add empty path)
-				usage) gitt diff head^ <path>                   #    HEAD >>> diff <<< HEAD^ 				
-				usage) gitt diff staged <path>                  #    HEAD >>> diff <<< staged				
-				usage) gitt diff work <path>                    #  staged >>> diff <<< unstaged(workspace)
-				usage) gitt diff <path> <branchA> <branchB>     #branch A >>> diff <<< branch B, <path> is mandatory
-				usage) gitt diff <path> <commitA> <commitB>     #commit A >>> diff <<< commit B, <path> is ignored
+				usage) gitt diff head <path>                        #    HEAD >>> diff <<< unstaged & staged(add empty path)
+				usage) gitt diff head^ <path>                       #    HEAD >>> diff <<< HEAD^ 				
+				usage) gitt diff staged <path>                      #    HEAD >>> diff <<< staged				
+				usage) gitt diff work <path>                        #  staged >>> diff <<< unstaged(workspace)
+				usage) gitt diff branch <path> <branchA> <branchB>  #branch A >>> diff <<< branch B, <path> is mandatory
+				usage) gitt diff commit <path> <commitA> <commitB>  #commit A >>> diff <<< commit B, <path> is ignored
 EOF
     ;;  head)   under "        HEAD >>> diff <<< unstaged/staged\n"
 				warn "automatically 'git add empty path' to show diff untracked new file"
@@ -1292,6 +1293,7 @@ EOF
 	;;  work)   under "      staged >>> diff <<< unstaged\n"
 				showRUN ${cmd_diff} -- ${path}
     ;;branch)   under "    branch A >>> diff <<< branch B \n"
+	            warn "to see remote branch, run 'gitt branch list'"
                 showRUN ${cmd_diff} ${rev1} ${rev2} ${path}
     ;;commit)   under "    commit A >>> diff <<< commit B \n"
 				showRUN ${cmd_diff} ${rev1}..${rev2}
