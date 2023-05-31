@@ -388,7 +388,7 @@ EOF
                   cat ${REPPFILE_CSV} | tee  >(wc -l)
     ;; all)       printf "\e[1;33m%6.6s %7.7s %-22.22s %-74.74s %.80s \e[0m\n" "REPO_LREV" "REPO_REMOTE" "REPO_RREV" "REPO_PROJECT" "REPO_PATH"
                   cat ${REPPFILE_CSV} | grep -i --color=always ${cmd}
-    ;; *)         repp find help
+    ;; *)         reppfind help
     esac
 
     bar inline "all repository info is save to ${REPPFILE_CSV}"
@@ -458,7 +458,7 @@ EOF
 
                 info "please compare command: vimdiff ${fileA} ${fileB} ${fileC}"
                 info "please compare command: icdiff ${fileA} ${fileB} |more"
-    ;;       *) repp branch help
+    ;;       *) reppbranch help
     esac
 }
 
@@ -546,7 +546,7 @@ EOF
 
     ##go next step or not
     if [ "$ret" -eq 0 ]; then info "to repo sync?:[enter:continue| ctrl+c:break] "; reppsync;
-    else repp connect help; fi
+    else err "'repp connect help' or 'repp init help'"; fi
 }
 
 
@@ -1067,7 +1067,7 @@ function formatprint(){
         #echo "KJK:[${line:0:1}][${line:1:1}]"
             ##custom handler for each item.
             case ${line:0:1} in
-                help) echo "aaa"
+                 help) echo "aaa"
             ;;    '#')   bar inline "file changes in branch: ${line}"
             ;;    '?')   printf "%14s | " "new"
             ;;    '!')   printf "%14s | " "new"
@@ -1082,7 +1082,7 @@ function formatprint(){
             ;;      *)   clog "must classfied"  "${line}"
             esac
             case ${line:1:1} in
-                help) echo "aaa"
+                 help) echo "aaa"
             ;;    '?')   printf "%-14s -- \t%s\n" "untracked" "${line:3}"
             ;;    '!')   printf "%-14s -- \t%s\n" "ignored" "${line:3}"
             ;;    ' ')   printf "%-14s -- \t%s\n" "tracked" "${line:3}"
@@ -1327,7 +1327,7 @@ EOF
                 showRUN ${cmd_diff} ${rev1}..${rev2}
     ;;  file)   under "    current >>> diff <<< current-1 \n"
                 showRUN ${cmd_diff} @:${path} @^:${path}
-    ;;  *|'')   gitt diff help
+    ;;  *|'')   gittdiff help
     ;; esac
 }
 
@@ -1500,8 +1500,8 @@ function gitthelp(){
 #repo forall -c 'echo ${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}'
 
     case ${cmd} in
-         help)  echo "print git help"
-    ;; area)    cat <<-EOF
+        help)   echo "print git help"
+    ;;  area)   cat <<-EOF
 				guide) git area
 				current : workspace      | index     |   local repository     remote repository
 				-----------------------------------------------------------------------------------------------------
@@ -1510,7 +1510,7 @@ function gitthelp(){
 				          untracked      | tracked   |   tree
 
 EOF
-    ;;      *)  echo cat <<-EOF
+    ;;     *)   echo cat <<-EOF
 				usage) gitt help area #show git area
 				usage) gitt reset     #show detail reset commands
 EOF
