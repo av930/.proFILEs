@@ -952,7 +952,8 @@ function gittcheck_initvar(){
 
     ##git config --get-regexp remote.$GITT_REMOTE |sort|grep -Ee "(projectname|review|url)"
     GITT_PROJECT=$(git config --get-regexp remote.*.projectname|cut -d' ' -f2)
-    GITT_BRANCH=$(git branch -ar |grep -e '->' |sed -E 's#.*[/|>](.*)$#\1#')
+    #GITT_BRANCH=$(git branch -ar |grep -e '->' |sed -E 's#.*[/|>](.*)$#\1#')
+    GITT_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
     GITT_REVIEW=$(git config --get-regexp remote.*.review|cut -d' ' -f2|head -1)
     GITT_URL=$(git config --get-regexp remote.${GITT_REMOTE}.url|cut -d' ' -f2|head -1)
     GITT_PATH=$(git rev-parse --show-toplevel)
@@ -996,7 +997,8 @@ function gittinfo(){
     clog "gitiles: "${GIT_SITE/"${review_gerrit}"/"plugins/gitiles"}/+/refs/heads/${GITT_BRANCH}
     clog " gerrit: "${GIT_SITE/"${review_gerrit}/"/"gitweb?p="}.git\;a=shortlog\;h=refs/heads/${GITT_BRANCH}
 
-    bar inline "git push commands"
+    bar inline "git clone & push commands"
+    clog " git clone:" "git clone ${GITT_URL} -b ${GITT_BRANCH}"
     TEMP=$(printf "git push $GITT_REMOTE HEAD:refs/heads/%s" ${GITT_BRANCH})
     clog " git push direct:" $TEMP
     clog " git push review:" ${TEMP/\/heads/\/for}
@@ -1067,7 +1069,7 @@ function formatprint(){
         #echo "KJK:[${line:0:1}][${line:1:1}]"
             ##custom handler for each item.
             case ${line:0:1} in
-                 help) echo "aaa"
+                 help)   :
             ;;    '#')   bar inline "file changes in branch: ${line}"
             ;;    '?')   printf "%14s | " "new"
             ;;    '!')   printf "%14s | " "new"
@@ -1082,7 +1084,7 @@ function formatprint(){
             ;;      *)   clog "must classfied"  "${line}"
             esac
             case ${line:1:1} in
-                 help) echo "aaa"
+                 help)   :
             ;;    '?')   printf "%-14s -- \t%s\n" "untracked" "${line:3}"
             ;;    '!')   printf "%-14s -- \t%s\n" "ignored" "${line:3}"
             ;;    ' ')   printf "%-14s -- \t%s\n" "tracked" "${line:3}"
