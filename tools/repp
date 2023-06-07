@@ -11,6 +11,9 @@ PATH_DIR="${PATH_FULL%/*}"
 PATH_FILE="${PATH_FULL##*/}"
 DIR_CURR=$(pwd)
 LC_ALL=C.UTF-8
+GERRIT_URL="http://vgit.lge.com"
+GERRIT=( "na" "eu" "as" "adas" "devops_test" )
+
 
 $DEBUG "[$_][$BASH_SOURCE][$0]  [${PATH_FULL}][${PATH_DIR}][${PATH_FILE}]"
 
@@ -77,6 +80,7 @@ EOF
 
 
 
+## repp ======================================================================================================================
 function reppshow_manifesttree(){
 ## ---------------------------------------------------------------------------
 # read file and print line "include" keyword
@@ -123,7 +127,7 @@ function reppmani(){
 				usage) repp mani change <groups|upstream|dest-branch|etc> <str> <filter>
 				ex) repp mani change groups deststring pdk
 EOF
-    ;;  info)   bar inline "recently changed manifest file [default 10 commit]"
+    ;;  info)   bar inline "recently changed history [git log 10]"
                 showRUN git log -10 --name-status --abbrev=6 --date=format:"%Y-%m-%d %H:%M" --pretty=format:"%C(yellow)%ad %C(red)%h %C(green)%s%C(reset)"
     ;;   gen)   bar inline "current manifest.xml regnerated with option"
                 clog "-r --suppress-dest-branch --suppress-upstream-revision" "generate revision without -- option"
@@ -362,22 +366,22 @@ function reppfind(){
     local cmd="$1"
 
     if [ -f "${REPPFILE_CSV}" ];
-    then info "reuse generated file [${REPPFILE_CSV}] or remove it";
+    then info "reuse generated file [\${REPPFILE_CSV}] or remove it";
     else repo forall -j1 -c 'printf "%.6s|%.7s|%-22.22s|%-74.74s|%.80s \n" "${REPO_LREV}" "${REPO_REMOTE}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"' > ${REPPFILE_CSV}
     fi
 
     case ${cmd} in
         help) cat <<- EOF
-				 info) ${REPPFILE_CSV} is saved. can read by excel menu [data> text> select file> file open wizard]
-                usage) repp find all                      #show rev,remote,branch,project,path info for all repo
-				usage) repp find build                    #list git which has string 'build'
-				usage) cat ${REPPFILE_CSV}| grep -v build #list git info not containing 'build'
-				usage) repp find @rev                     #print rev colume for all repo
-				usage) repp find @remote                  #print project colume for all repo
-				usage) repp find @branch                  #print branch colume for all repo
-				usage) repp find @project                 #print project colume for all repo
-				usage) repp find @path                    #print path colume for all repo
-				usage) repp find @project |grep meta      #print project colume containing 'meta'
+				 info) \${REPPFILE_CSV} is saved. can read by excel menu [data> text> select file> file open wizard]
+				usage) repp find all                       #show rev,remote,branch,project,path info for all repo
+				usage) repp find build                     #list git which has string 'build'
+				usage) cat \${REPPFILE_CSV}| grep -v build  #list git info not containing 'build'
+				usage) repp find @rev                      #print rev colume for all repo
+				usage) repp find @remote                   #print project colume for all repo
+				usage) repp find @branch                   #print branch colume for all repo
+				usage) repp find @project                  #print project colume for all repo
+				usage) repp find @path                     #print path colume for all repo
+				usage) repp find @project |grep meta       #print project colume containing 'meta'
 EOF
     ;; @rev)      echo "<REPO_LREV>";    awk -v FS="|" '{print $1}' ${REPPFILE_CSV}
     ;; @remote)   echo "<REPO_REMOTE>";  awk -v FS="|" '{print $2}' ${REPPFILE_CSV} |sort |uniq
@@ -391,7 +395,7 @@ EOF
     ;; *)         reppfind help
     esac
 
-    bar inline "all repository info is save to ${REPPFILE_CSV}"
+    clog "all repository info is save to \${REPPFILE_CSV}:" "${REPPFILE_CSV}"
 }
 
 
@@ -617,49 +621,6 @@ function reppversion(){
 
 
 
-function reppcheck_gerritconnection(){
-## ---------------------------------------------------------------------------
-# run command, get return code and print guide
-    echo "\$ $@" ;"$@"
-
-    case $? in
-       0) :
-    ;; 1) echo Generic error, usually because invalid command line options or malformed configuration
-    ;; *) echo Gerrit Connection Error
-    esac
-}
-
-
-
-function reppcheck_sshconnection(){
-## ---------------------------------------------------------------------------
-# run command, get return code and print guide
-    local server="$1"
-    local port="$2"
-    local file_error="$(mktemp)"
-    #echo "\$ ssh -T $1 -p $2 -vvv" ;
-    echo "ssh -T $server -p $port -vvv 2> $file_error"
-    echo \n| ssh -T $server -p $port -vvv 2> $file_error
-
-    case $(cat ${file_error}) in
-        help)       echo "ssh connection error msg handler"
-    ;; *success*)   echo "good, it works"
-                    return 0
-    ;; *Connection?refused*)
-                    bar outline "check log in ${file_error}"
-                    grep -En "*Connection refused*" $file_error
-
-                    bar outline "check IP/PORT setting in (.ssh/config) with below"
-                    ping $server -c2
-    ;; *publickey*) err check publickey
-    ;; *)           err "unknown error is occured, please check log [${file_error}]"
-    esac
-
-    #rm -f ${file_error}
-}
-
-
-
 function reppcheck_initcmd(){
 ## ---------------------------------------------------------------------------
 # run command, get return code and print guide
@@ -683,6 +644,95 @@ function reppcheck_initcmd(){
 
 
 
+
+
+function reppcheck_servergerrit(){
+## ---------------------------------------------------------------------------
+# run command, get return code and print guide
+    local key=$(code def gerrit)
+    local user=$1    
+    local server=$2
+    local oriproject=$3 ; 
+    local gitproject=${oriproject//'/'/'%2F'}
+    local branch=$4
+    local ret
+    
+    bar inline "step2.1-gerritserver: [remote] check if gerrit service is valid"
+    clog checkpoint "check gerrit service is online from web"
+    ret=$(curl -s -u ${account}:${key} ${server}/a/config/server/version)
+    case ${ret} in
+    *[2-9].[0-9].[0-9]*)   echo "ok. version is [${ret}]";;
+    *)                      err "gerrit is not working, please check"; return 1;;
+    esac
+    
+    bar inline "step2.2-gerritserver: [remote] check if I can access gerrit server from gerrit setting"
+    clog checkpoint "check gerrit service is online from web"
+    if [ -z "${oriproject}" ];then info "usage) repp connect vgit.lge.com 29420 tiger/tools tiger_release" && return 1;fi
+    if [[ "$oriproject" == *.git* ]]; then err ".git postfix must be removed in [$oriproject]"; fi
+    ret=$(curl -s -u ${account}:${key} ${server}/a/accounts/?suggest\&q=${user})
+    [[ "$ret" =~ "_account_id" ]] &&  echo "gerrit account existed [${user}]" || err "create gerrit account [${user}] by login"
+    
+    bar inline "step2.3-gerritserver: [remote] check if I can access git project from gerrit setting"
+    clog checkpoint "check git name path is correct and can access"
+    ret=$(curl -s -u ${account}:${key} ${server}/a/projects/${gitproject})
+    [[ "$ret" =~ "ACTIVE" ]] &&  echo "git existed and accessed [${oriproject}]" || err "check git project path [${oriproject}]"
+
+    bar inline "step2.4-gerritserver: [remote] check if I can access the branch from gerrit setting (default: master)"
+    clog checkpoint "check branch name path is correct and can access"
+    [ -z "${branch}" ] && branch="master" || branch="${branch}"
+    ret=$(curl -s -u ${account}:${key} ${server}/a/projects/${gitproject}/branches?m=${branch})
+    [[ "$ret" =~ "ref" ]] &&  echo "branch existed and accessed [${branch}]" || err "check git branch is existed or permission allowed [${branch}]"
+}
+
+
+
+function reppcheck_serverlocal(){
+## ---------------------------------------------------------------------------
+# run command, get return code and print guide
+    
+    local server=$1
+    local port=$2
+    local gitproject=$3
+    local branch=$4
+    local ret
+    
+    local file_error="$(mktemp)"
+    #echo "\$ ssh -T $1 -p $2 -vvv" ;
+    bar inline "step3.1-localserver: [remote] check if sshd is serviced on this port $port "
+    clog checkpoint "check port num is correct? check account and ssh-key is matched and registered?"
+    
+    #echo "ssh -T $server -p $port -vvv 2> $file_error"
+    echo \n| ssh -T $server -p $port -vvv 2> $file_error
+
+    case $(cat ${file_error}) in
+        help)       echo "ssh connection error msg handler"
+    ;; *success*)   echo "good, SSHD is active on port [$port] in server [$server], you can connect"
+    ;; *Connection?refused*)
+                    err "check log in ${file_error}"
+                    grep -En "*Connection refused*" $file_error
+                    err "check IP/PORT setting in (.ssh/config) with below"
+                    ping $server -c2
+                    return 1
+    ;; *publickey*) err check publickey
+                    return 1
+    ;; *)           err "unknown error is occured, please check log [${file_error}]"
+                    return 1
+    esac
+
+    bar inline "step3.2-localserver: [remote] check if I can access git project from local-server"
+    clog checkpoint "check git name path is correct and can access"
+    ret=$(ssh $server -p $port gerrit ls-projects --prefix ${gitproject})
+    [ -n "$ret" ] &&  echo "gitproject existed and accessed [${gitproject}]" || err "check git project is existed or permission allowed [${gitproject}]"
+
+    bar inline "step3.3-localserver: [remote] check if I can access the branch from local-server (default: master)"
+    clog checkpoint "check branch name path is correct and can access"
+    ret=$(ssh $server -p $port gerrit ls-projects --prefix ${gitproject} -b ${branch})
+    [ -n "$ret" ] &&  echo "branch existed and accessed [${branch}]" || err "check git branch is existed or permission allowed [${branch}]"
+    #rm -f ${file_error}
+}
+
+
+
 function reppconnect(){
 ## ---------------------------------------------------------------------------
 # check connection and report error
@@ -691,46 +741,87 @@ function reppconnect(){
 # $3 password
     local cmd="$1"
     case ${cmd} in
-        help) echo "repp connect vgit.lge.com 29420 tiger/tools tiger_release"; return 1;
+        help) echo "repp connect [url]       [port] [git]       [branch]"
+              echo "repp connect vgit.lge.com 29420 tiger/tools tiger_release"
+              echo "repp connect ${account}@vgit.lge.com 29420 tiger/tools tiger_release"
+              return 1;
     ;;     *) :
     esac
 
+    local user=${1=vc.integrator}
     local server_port=${REPP_REMOTE#*@}
-    local server=${1:-${server_port%:*}}
-    local port=${2:-$(echo ${server_port} | grep -oP '(?<=:)[0-9]+(?=/)')}
-    local gitproject=${3:-${server_port#*/}}
-    local branch=${4:-${REPP_BRANCH}}
-    local ret
-
+    local server=${2:-${server_port%:*}}
+    local port=${3:-$(echo ${server_port} | grep -oP '(?<=:)[0-9]+(?=/)')}
+    local gitproject=${4:-${server_port#*/}}
+    local branch=${5:-${REPP_BRANCH}}
+ 
 
     #local port=$(echo ${server_port} | grep -oP '(?<=:)[0-9]+(?=/)')
-    bar inline "step1: [local] check if ssh is installed"
+    bar inline "step1.1-ssh: [local] check if ssh is installed"
+    clog checkpoint "install proper version of ssh"
     if [ -x "$(command -v ssh)" ]; then  log "ssh is installed in [$(which ssh)]"; else err "ssh is not installed, install it"; fi
-    if [ -z $server ] || [ -z $port ];then warn "usage) repp connect vgit.lge.com 29418 tiger/tools tiger_release" && return 1;fi
-
-    bar inline "step2: [remote] check if server tcp port is well listened"
-    timeout 5 bash -c "</dev/tcp/$server/$port"
+    
+    if [ -z $server ] || [ -z $port ];then warn "usage) repp connect vgit.lge.com 29420 tiger/tools tiger_release" && return 1;fi
+    bar inline "step1.2-tcp: [remote] check if server tcp port is well listened"
+    clog checkpoint "check port num is correct? firewall is active? internet is on?"
+    timeout 5 bash -c "</dev/tcp/${server%%/*}/$port"
     if [ $? == 0 ];then echo "server $server over port $port is listened";
     else echo "server $server over port $port is not listened, please contact server manager"; fi
 
-    bar inline "step3: [remote] check if sshd is serviced on this port $port "
-    reppcheck_sshconnection $server $port
+    reppcheck_servergerrit ${user} ${server} ${gitproject} ${branch}
+    reppcheck_serverlocal ${server%%/*} $port ${gitproject} ${branch}
+    under "show account info for [${user}] on [${server}]\n"
+    reppgerrit account ${user} ${server} ${gitproject} ${branch}
+}
 
-    bar inline "step4: [remote] check if gerrit service is valid"
-    reppcheck_gerritconnection ssh $server -p $port gerrit version
 
-    if [ -z $gitproject ];then info "usage) repp connect vgit.lge.com 29420 tiger/tools tiger_release" && return 1;fi
-    if [[ "$gitproject" == *.git* ]]; then err ".git must be removed in [$gitproject]"; fi
-    bar inline "step5: [remote] check if I can access git project"
-    ret=$(ssh $server -p $port gerrit ls-projects --prefix ${gitproject})
-    [ -n "$ret" ] &&  echo "can accessed [${ret}]" || err "check git project path [${gitproject}]"
 
-    bar inline "step6: [remote] check if I can access the branch (default: master)"
-    [ -z "${branch}" ] && branch="master" || branch="${branch}"
-    ret=''
-    ret=$(ssh $server -p $port gerrit ls-projects --prefix ${gitproject} -b ${branch})
-    [ -n "$ret" ] &&  echo "can accessed [${branch}: ${ret% *}]" || err "check git branch is existed or permission allowed, contact project owner [${branch}]"
-
+function reppgerrit(){
+## ---------------------------------------------------------------------------
+# read information from gerrit
+# $1 server
+# $2 port
+# $3 password
+    local key=$(code def gerrit)
+    local cmd=$1
+    local user=$2
+    local server=$3
+    local oriproject=$4
+    local gitproject=${oriproject//'/'/'%2F'}    
+    local branch=$5
+ 
+    local cmd="$1"
+    case ${cmd} in
+       help)    cat <<-EOF
+				usage) repp gerrit account joongkeun.kim vgit.lge.com/na
+				usage) gitt commit info      #show commit info and diff with cached
+EOF
+    ;;account) 
+            bar outline "info gerritserver: show gerrit account"
+            curl -s -u ${account}:${key} ${server}/a/accounts/?suggest\&q=${user} |more
+                
+            bar outline "info gerritserver: show all groups which account belong to"
+            curl -s -u ${account}:${key} ${server}/a/accounts/${user}/groups |sed '1d' | jq  '.[].name' |sort |more
+            
+            
+            cat <<-EOF
+			ex) curl -s -u ${account}:${key} ${server}/a/groups/?m=<group_name>                      ## find group which has string <group_name>
+			ex) curl -s -u ${account}:${key} ${server}/a/groups/<group_name>/members?recursive       ## show group member for <group_name>
+			ex) curl -s -u ${account}:${key} ${server}/a/groups/<group_name>/groups/                 ## list sub-group in <group_name>
+			ex) curl -s -u ${account}:${key} ${server}/a/groups/<group_name>/members/<account>       ## add account to group
+			ex) curl -s -u ${account}:${key} ${server}/a/groups/<group_name>/members|grep <account>  ## check account is existed in <group_name>
+			ex) curl -s -u ${account}:${key} ${server}/a/accounts/<account>/sshkeys                  ## get ssh-key for specific account
+EOF
+    ;;project)
+            bar outline "info gerritserver: show gerrit project which including ${oriproject}"
+            curl -s -u ${account}:${key} ${server}/a/projects/?m=${gitproject}
+            
+            cat <<-EOF
+			ex) curl -s -u ${account}:${key} ${server}/a/projects/<project_name>/children/?recursive ##find child projects of <project name>
+EOF
+ 
+    ;;     *) :
+    esac
 }
 
 
@@ -834,35 +925,21 @@ function reppmenu(){
 ## ---------------------------------------------------------------------------
 # show ui menu for this script
 local MENU=(
-"help: shows all command list"
-"info: shows repository info such as manifest path, repo cmd, tree of manifests, etc
-    ex) repp info, repp info default.xml, repp info event/manifest.xml"
-"show: shows uncommited changes, top -1 commits, md5 sum, repo info for all repositories
-    ex) repp show, repp show|more, repp show| grep build, cat ${REPPFILE_STATUS}"
-"go: move path to repo root dir, manifest dir, git path nearby with similar depth.
-    ex) repp go (selcetion menu popup)"
-"commit: shows lastest commits(git log -1) from all repository (default 20)
-    ex) repp commit, repp commit 4, repp commit log.txt(save as)"
-"find: (list) search string in all [repo path] : [repo revision] : [repo name]
-    ex) repp find, repp list|more, repp find build, repp list|grep -v build
-    ex) repp find @rev [@rep| @remote| @branch| @git| @path)"
-"init: repo init with automatic options
-    ex) repp init -u ssh://${USER:+${USER}@}vgit.lge.com:29420/linux/manifest.git -b mib3_release
-    ex) repp init -b lampauto_r_release -m lampauto/lampauto-gm-recent.xml
-    ex) repp init -u https://android.googlesource.com/platform/manifest -b android-12.1.0_r1"
-"sync: repo sync with optimized multi-job and options
-    ex) repp sync, repp sync 8, repp sync 16 --force-sync(more options)"
-"branch: repo push or repo ls-remote"
+"info: shows repository info such as manifest path, repo cmd, tree of manifests, etc"
+"show: shows uncommitted changes, top -1 commits, md5 sum for all repository"
+"go: move to repo root dir, manifest dir, git path nearby with similar depth"
+"commit: shows latest commits(git log -1) from all repository (default 20)"
+"find: search(list) string in all (repo revision, remote, branch, project, path)"
+"branch: show branch info, push remote branch, look-up remote-branch"
 "mani: repo manifest handling"
-"reset: reset all repositories to original state
-    in case) use this, when repository has dirty commits."
+"init: repo init with automatic options"
+"sync: repo sync with optimized multi-job and options"
+"reset: reset all repositories to original state"
 "version: check repo & python version and provide repo upgrade"
-"debug: debug REPO, REPP, GITT variable"
-"connect: find accessibility for manifest git or normal git
-    ex) repp connect, repp connect vgit.lge.com 29420 tiger/tools tiger_release
-        repp connect [git-server] [port] [project]  [branch]"
-"server: check delay from server or confirm the server status
-    ex) repp server, repp server lamp.lge.com 29418"
+"connect: check the connection with git host server and accessibilty for branch of git"
+"gerrit: get information from gerrit"
+"server: check delay from server or confirm the server status"
+"debug: show variable REPO, REPP, REPPFILE, GITT variable used in script"
 )
 
 
@@ -894,6 +971,8 @@ done
 }
 
 
+
+## gitt ======================================================================================================================
 
 function gittmenu(){
 ## ---------------------------------------------------------------------------
@@ -1299,7 +1378,7 @@ function gittdiff(){
 
     case $cmd in
     help) cat <<- EOF
-				help) default <path> is . (current dir)
+				help) if default <path> is mitted, . (current dir) will be used
 				usage) gitt diff work <path>                        #  staged >>> diff <<< unstaged(workspace)
 				usage) gitt diff staged <path>                      #    HEAD >>> diff <<< staged
 				usage) gitt diff HEAD <path>                        #    HEAD >>> diff <<< unstaged & staged(add empty path)
@@ -1367,6 +1446,12 @@ EOF
 
 
 
+## gerrit ======================================================================================================================
+
+
+
+
+##==========================================================================================================================
 function gitt(){
 ## ---------------------------------------------------------------------------
 # main handler for this scriptre
@@ -1425,15 +1510,16 @@ case "$1" in
     ;; go)          reppgo "${@:2}"
     ;; commit)      reppcommit "${@:2}"
     ;; find|list)   reppfind "${@:2}"
-    ;; init)        reppinit "${@:2}"
-    ;; sync)        reppsync "${@:2}"
     ;; branch)      reppbranch "${@:2}"
     ;; mani)        reppmani "${@:2}"
+    ;; init)        reppinit "${@:2}"
+    ;; sync)        reppsync "${@:2}"
     ;; reset)       gittreset all
     ;; version)     reppversion "${@:2}"
-    ;; debug)       reppdebug "${@:2}"
     ;; connect)     reppconnect "${@:2}"
+    ;; gerrit)      reppgerrit "${@:2}"
     ;; server)      reppserver "${@:2}"
+    ;; debug)       reppdebug "${@:2}"
     ;; *)           bar outline "result of native repo"
                     repo "${@}"
 esac

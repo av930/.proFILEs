@@ -109,10 +109,18 @@ function getCurrentIP(){
 }
 
 function code(){
-   case $1 in
-      en) export ENCODE=$( echo $2 | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey );;
-      de) echo "${ENCODE}" | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey ;;
-   esac
+## ---------------------------------------------------------------------------
+# en/decoding as variable: code env <keyname> <key>; code dev <keyname>
+# en/decoding as file: code enf <keyfile> <key>; code def <keyfile>
+    case $1 in
+       help) info "variable is live during session, file is live permanent"
+             echo "en/decoding as variable: code env <keyname> <key>; code dev <keyname>"
+             echo "en/decoding as file    : code enf <keyfile> <key>; code def <keyfile>"
+      ;;env) export ENCODE_$2=$( echo $3 | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey )
+      ;;dev) echo "${ENCODE_$2}" | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 
+      ;;enf) echo $( echo $3 | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey ) > $HOME/.key_$2
+      ;;def) cat $HOME/.key_$2 | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 
+    esac
 }
 
 
