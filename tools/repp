@@ -650,13 +650,13 @@ function reppcheck_servergerrit(){
 ## ---------------------------------------------------------------------------
 # run command, get return code and print guide
     local key=$(code def gerrit)
-    local user=$1    
+    local user=$1
     local server=$2
-    local oriproject=$3 ; 
+    local oriproject=$3 ;
     local gitproject=${oriproject//'/'/'%2F'}
     local branch=$4
     local ret
-    
+
     bar inline "step2.1-gerritserver: [remote] check if gerrit service is valid"
     clog checkpoint "check gerrit service is online from web"
     ret=$(curl -s -u ${account}:${key} ${server}/a/config/server/version)
@@ -664,14 +664,14 @@ function reppcheck_servergerrit(){
     *[2-9].[0-9].[0-9]*)   echo "ok. version is [${ret}]";;
     *)                      err "gerrit is not working, please check"; return 1;;
     esac
-    
+
     bar inline "step2.2-gerritserver: [remote] check if I can access gerrit server from gerrit setting"
     clog checkpoint "check gerrit service is online from web"
     if [ -z "${oriproject}" ];then info "usage) repp connect vgit.lge.com 29420 tiger/tools tiger_release" && return 1;fi
     if [[ "$oriproject" == *.git* ]]; then err ".git postfix must be removed in [$oriproject]"; fi
     ret=$(curl -s -u ${account}:${key} ${server}/a/accounts/?suggest\&q=${user})
     [[ "$ret" =~ "_account_id" ]] &&  echo "gerrit account existed [${user}]" || err "create gerrit account [${user}] by login"
-    
+
     bar inline "step2.3-gerritserver: [remote] check if I can access git project from gerrit setting"
     clog checkpoint "check git name path is correct and can access"
     ret=$(curl -s -u ${account}:${key} ${server}/a/projects/${gitproject})
@@ -689,18 +689,18 @@ function reppcheck_servergerrit(){
 function reppcheck_serverlocal(){
 ## ---------------------------------------------------------------------------
 # run command, get return code and print guide
-    
+
     local server=$1
     local port=$2
     local gitproject=$3
     local branch=$4
     local ret
-    
+
     local file_error="$(mktemp)"
     #echo "\$ ssh -T $1 -p $2 -vvv" ;
     bar inline "step3.1-localserver: [remote] check if sshd is serviced on this port $port "
     clog checkpoint "check port num is correct? check account and ssh-key is matched and registered?"
-    
+
     #echo "ssh -T $server -p $port -vvv 2> $file_error"
     echo \n| ssh -T $server -p $port -vvv 2> $file_error
 
@@ -754,13 +754,13 @@ function reppconnect(){
     local port=${3:-$(echo ${server_port} | grep -oP '(?<=:)[0-9]+(?=/)')}
     local gitproject=${4:-${server_port#*/}}
     local branch=${5:-${REPP_BRANCH}}
- 
+
 
     #local port=$(echo ${server_port} | grep -oP '(?<=:)[0-9]+(?=/)')
     bar inline "step1.1-ssh: [local] check if ssh is installed"
     clog checkpoint "install proper version of ssh"
     if [ -x "$(command -v ssh)" ]; then  log "ssh is installed in [$(which ssh)]"; else err "ssh is not installed, install it"; fi
-    
+
     if [ -z $server ] || [ -z $port ];then warn "usage) repp connect vgit.lge.com 29420 tiger/tools tiger_release" && return 1;fi
     bar inline "step1.2-tcp: [remote] check if server tcp port is well listened"
     clog checkpoint "check port num is correct? firewall is active? internet is on?"
@@ -785,66 +785,64 @@ function reppgerrit(){
     local key=$(code def gerrit)
     local cmd=$1
     local user=$2
-    local server=$3
-    local oriproject=$4
-    local gitproject=${oriproject//'/'/'%2F'}    
+    local server=${3:-${GERRIT_URL}/${GERRIT[0]}}
+    local gitproject=${oriproject//'/'/'%2F'}
     local branch=$5
-    local commit=$6
- 
+
     local cmd="$1"
     case ${cmd} in
        help)    cat <<-EOF
-				usage) repp gerrit account joongkeun.kim vgit.lge.com/na honda/linux/manifest tsu_25.5my_release
-				usage) repp gerrit project joongkeun.kim vgit.lge.com/na honda/linux/manifest tsu_25.5my_release
-				usage) repp gerrit branch joongkeun.kim vgit.lge.com/na honda/linux/manifest tsu_25.5my_release
-				usage) repp gerrit commit joongkeun.kim vgit.lge.com/na honda/linux/manifest tsu_25.5my_release
+				usage) repp gerrit account joongkeun.kim vgit.lge.com/na   #show account info from gerrit server
+				usage) repp gerrit command                                 #show gerrit POST command
 EOF
-    ;;account) 
+    ;;account)
             bar outline "info gerritserver: show gerrit account"
-            curl -s -u ${account}:${key} ${server}/a/accounts/?suggest\&q=${user} |more
-                
+            showRUN curl -s -u ${account}:${key} ${server}/a/accounts/?suggest\&q=${user} |more
+
             bar outline "info gerritserver: show all groups which account belong to"
-            curl -s -u ${account}:${key} ${server}/a/accounts/${user}/groups |sed '1d' | jq  '.[].name' |sort |more
-            
-            
+            showRUN curl -s -u ${account}:${key} ${server}/a/accounts/${user}/groups |sed '1d' | jq  '.[].name' |sort |more
+
+    ;;command|*)
+            bar outline "show gerrit account info"
             cat <<-EOF
-			ex) curl -s -u ${account}:${key} ${server}/a/groups/?m=<group_name>                      ## find group which has string <group_name>
-			ex) curl -s -u ${account}:${key} ${server}/a/groups/<group_name>/members?recursive       ## show group member for <group_name>
-			ex) curl -s -u ${account}:${key} ${server}/a/groups/<group_name>/groups/                 ## list sub-group in <group_name>
-			ex) curl -x PUT -u ${account}:${key} ${server}/a/groups/<group_name>/members/<account>   ## add account to group
-			ex) curl -s -u ${account}:${key} ${server}/a/groups/<group_name>/members|grep <account>  ## check account is existed in <group_name>
-			ex) curl -X DELETE -u ${account}:${key} ${server}/a/groups/<group_name>/members/<account>## remote accout from group
-			ex) curl -s -u ${account}:${key} ${server}/a/accounts/<account>/sshkeys                  ## get ssh-key for specific account
+			ex) curl -s -u ${account}:${key} ${server}/a/accounts/?suggest\&q=<user> |more                     ## check if <user> account is existed
+			ex) curl -s -u ${account}:${key} ${server}/a/accounts/${user}/groups |sed '1d' | \\
+			    jq  '.[].name' |sort |more                                                                                                                         ## list group <user> belongs to
+			ex) curl -s -u ${account}:${key} ${server}/a/groups/?m=<group_name>                                ## find group which has string <group_name>
+			ex) curl -s -u ${account}:${key} ${server}/a/groups/<group_name>/members?recursive                 ## show group member for <group_name>
+			ex) curl -s -u ${account}:${key} ${server}/a/groups/<group_name>/groups/                           ## list sub-group in <group_name>
+			ex) curl -s -u ${account}:${key} ${server}/a/groups/<group_name>/members/<account> -X PUT          ## add account to group
+			ex) curl -s -u ${account}:${key} ${server}/a/groups/<group_name>/members|grep <account>            ## check account is existed in <group_name>
+			ex) curl -s -u ${account}:${key} ${server}/a/groups/<group_name>/members/<account> -X DELETE       ## remote accout from group
+			ex) curl -s -u ${account}:${key} ${server}/a/accounts/<account>/sshkeys                            ## get ssh-key for specific account
 EOF
-    ;;project)
-            bar outline "info gerritserver: show gerrit project which name has ${oriproject}"
-            showRUN curl -s -u ${account}:${key} ${server}/a/projects/?m=${gitproject}
-            
+            bar outline "show gerrit project which name has <project-name>"
             cat <<-EOF
-			ex) curl -s -u ${account}:${key} ${server}/a/projects/<project_name>                     ##show default info, labels, parents[id]
-			ex) curl -s -u ${account}:${key} ${server}/a/projects/<project_name>/children/?recursive |sed '1d' | jq  '.[].name' 
-                                                                                                     ##find child projects of <project name>
+			ex) curl -s -u ${account}:${key} ${server}/a/projects/?m=<gitproject>                              ##find git project named <gitproject>
+			ex) curl -s -u ${account}:${key} ${server}/a/projects/<project_name>                               ##find labels, parents[id], basic info
+			ex) curl -s -u ${account}:${key} ${server}/a/projects/<project_name>/children/?recursive | \\
+			    sed '1d' | jq  '.[].name'                                                                                                                          ##find child projects of <project name>
 EOF
-    ;;branch)
-            bar outline "info gerritserver: show gerrit branch which name has ${branch}"
-            showRUN curl -s -u ${account}:${key} ${server}/a/projects/<project_name>/branches/?m=${branch}
-            
+            bar outline "show gerrit branch which name has <branch-name>"
             cat <<-EOF
-			ex) curl -s -u ${account}:${key} ${server}/a/projects/<project_name>                     ##show default info, labels, parents[id]
-			ex) curl -s -u ${account}:${key} ${server}/a/projects/<project_name>/children/?recursive |sed '1d' | jq  '.[].name' 
-                                                                                                     ##find child projects of <project name>
+			ex) curl -s -u ${account}:${key} ${server}/a/projects/<project name>/branches/?m=<branch>          ##list branches including named <branch>
+			ex) curl -s -u ${account}:${key} ${server}/a/projects/<project_name>/branches/<branch-name> \\
+			    -H "Content-Type: application/json" --data '{"sha": "049405ab2885e6c6844b212f83b43f835c904"}'  -X PUT                                              ##create branch with base revision
+			ex) curl -u ${account}:${key} ${server}/a/projects/<project_name>/branches/<branch-name> -X DELETE ##remove branch
 EOF
-    ;;commit)
-            bar outline "info gerritserver: show gerrit branch which name has ${branch}"
-            showRUN curl -s -u ${account}:${key} ${server}/a/projects/<project_name>/branches/?m=${branch}
-            
+            bar outline "show gerrit tag which name has ${tag}"
             cat <<-EOF
-			ex) curl -s -u ${account}:${key} ${server}/a/projects/<project_name>                     ##show default info, labels, parents[id]
-			ex) curl -s -u ${account}:${key} ${server}/a/projects/<project_name>/children/?recursive |sed '1d' | jq  '.[].name' 
-                                                                                                     ##find child projects of <project name>
+			ex) curl -s -u ${account}:${key} ${server}/a/projects/<gitproject>/tags?m=<tag-name>               ##list tag named <tag-name>
+			ex) curl -s -u ${account}:${key} ${server}/a/projects/<gitproject>/tags/<tag-name>                 ##show tag date, tag revision, committer
 EOF
-    
-    ;;     *) :
+            bar outline "show gerrit commit with branch info"
+            cat <<-EOF
+			ex) curl -s -u ${account}:${key} ${server}/a/projects/<gitproject>/commits/<full-sha-code>         ##show commit msg with data, author, committer
+			ex) curl -s -u ${account}:${key} ${server}/a/projects/<gitproject>/commits/<full-sha-code>/in      ##show branches that commit beloings to
+			ex) curl -s -u ${account}:${key} ${server}/a/projects/<gitproject>/commits/<full-sha-code>/files   ##show files that commit has changed
+			ex) curl -s -u ${account}:${key} ${server}/a/changes/?q=hashtag                                    ##show all hashtaged commit
+			ex) curl -s -u ${account}:${key} ${server}/a/changes/?q=hashtag:HITT+OR+hashtag:TAT2               ##show hastag with HITT or TAT2
+EOF
     esac
 }
 
@@ -859,6 +857,7 @@ function reppserver(){
     local server=${1:-${server_port%:*}}
     local port=${2:-$(echo ${server_port} | grep -oP '(?<=:)[0-9]+(?=/)')}
 
+    if [ -z "${server}" ] || [ -z "${port}" ] ; then info "usage) repp server vgit.lge.com 29999"; return 1;fi
     ping $server -s 1016 -c 4 -A
     printf "${yellow}--------------------------------------------------------------------------------------\n${NCOL}"
     if [ $? -ne 0 ]; then continue; fi
@@ -1520,7 +1519,7 @@ local ret=0
 case "$1" in
             help)   "echo repp help"
        ;;init)      :
-       ;;server|connect|gerrit|go)  
+       ;;server|connect|gerrit|go)
                     reppcheck_initvar print_n
        ;;   *)      reppcheck_initvar print_y
                     [ "$?" -ne 0 ] && return 1
