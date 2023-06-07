@@ -789,12 +789,15 @@ function reppgerrit(){
     local oriproject=$4
     local gitproject=${oriproject//'/'/'%2F'}    
     local branch=$5
+    local commit=$6
  
     local cmd="$1"
     case ${cmd} in
        help)    cat <<-EOF
-				usage) repp gerrit account joongkeun.kim vgit.lge.com/na
-				usage) gitt commit info      #show commit info and diff with cached
+				usage) repp gerrit account joongkeun.kim vgit.lge.com/na honda/linux/manifest tsu_25.5my_release
+				usage) repp gerrit project joongkeun.kim vgit.lge.com/na honda/linux/manifest tsu_25.5my_release
+				usage) repp gerrit branch joongkeun.kim vgit.lge.com/na honda/linux/manifest tsu_25.5my_release
+				usage) repp gerrit commit joongkeun.kim vgit.lge.com/na honda/linux/manifest tsu_25.5my_release
 EOF
     ;;account) 
             bar outline "info gerritserver: show gerrit account"
@@ -808,18 +811,39 @@ EOF
 			ex) curl -s -u ${account}:${key} ${server}/a/groups/?m=<group_name>                      ## find group which has string <group_name>
 			ex) curl -s -u ${account}:${key} ${server}/a/groups/<group_name>/members?recursive       ## show group member for <group_name>
 			ex) curl -s -u ${account}:${key} ${server}/a/groups/<group_name>/groups/                 ## list sub-group in <group_name>
-			ex) curl -s -u ${account}:${key} ${server}/a/groups/<group_name>/members/<account>       ## add account to group
+			ex) curl -x PUT -u ${account}:${key} ${server}/a/groups/<group_name>/members/<account>   ## add account to group
 			ex) curl -s -u ${account}:${key} ${server}/a/groups/<group_name>/members|grep <account>  ## check account is existed in <group_name>
+			ex) curl -X DELETE -u ${account}:${key} ${server}/a/groups/<group_name>/members/<account>## remote accout from group
 			ex) curl -s -u ${account}:${key} ${server}/a/accounts/<account>/sshkeys                  ## get ssh-key for specific account
 EOF
     ;;project)
-            bar outline "info gerritserver: show gerrit project which including ${oriproject}"
-            curl -s -u ${account}:${key} ${server}/a/projects/?m=${gitproject}
+            bar outline "info gerritserver: show gerrit project which name has ${oriproject}"
+            showRUN curl -s -u ${account}:${key} ${server}/a/projects/?m=${gitproject}
             
             cat <<-EOF
-			ex) curl -s -u ${account}:${key} ${server}/a/projects/<project_name>/children/?recursive ##find child projects of <project name>
+			ex) curl -s -u ${account}:${key} ${server}/a/projects/<project_name>                     ##show default info, labels, parents[id]
+			ex) curl -s -u ${account}:${key} ${server}/a/projects/<project_name>/children/?recursive |sed '1d' | jq  '.[].name' 
+                                                                                                     ##find child projects of <project name>
 EOF
- 
+    ;;branch)
+            bar outline "info gerritserver: show gerrit branch which name has ${branch}"
+            showRUN curl -s -u ${account}:${key} ${server}/a/projects/<project_name>/branches/?m=${branch}
+            
+            cat <<-EOF
+			ex) curl -s -u ${account}:${key} ${server}/a/projects/<project_name>                     ##show default info, labels, parents[id]
+			ex) curl -s -u ${account}:${key} ${server}/a/projects/<project_name>/children/?recursive |sed '1d' | jq  '.[].name' 
+                                                                                                     ##find child projects of <project name>
+EOF
+    ;;commit)
+            bar outline "info gerritserver: show gerrit branch which name has ${branch}"
+            showRUN curl -s -u ${account}:${key} ${server}/a/projects/<project_name>/branches/?m=${branch}
+            
+            cat <<-EOF
+			ex) curl -s -u ${account}:${key} ${server}/a/projects/<project_name>                     ##show default info, labels, parents[id]
+			ex) curl -s -u ${account}:${key} ${server}/a/projects/<project_name>/children/?recursive |sed '1d' | jq  '.[].name' 
+                                                                                                     ##find child projects of <project name>
+EOF
+    
     ;;     *) :
     esac
 }
@@ -1495,8 +1519,9 @@ local ret=0
 
 case "$1" in
             help)   "echo repp help"
-       ;;init|go)   :
-       ;;server|connect)  reppcheck_initvar print_n
+       ;;init)      :
+       ;;server|connect|gerrit|go)  
+                    reppcheck_initvar print_n
        ;;   *)      reppcheck_initvar print_y
                     [ "$?" -ne 0 ] && return 1
 esac
