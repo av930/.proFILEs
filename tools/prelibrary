@@ -83,7 +83,7 @@ function showRUNQ(){
 		if [ "$REPLY" == 'y' ]; then "${@:2}" ; fi 
 	else
 		echo "\$ ${@}"; 
-		"${@}"
+		eval "${@}"
 	fi	
 }
 
