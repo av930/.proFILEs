@@ -809,24 +809,22 @@ function reppgerrit(){
 # $3 password
     local key=$(code def gerrit)
     local cmd=$1
-    local user=$2
-    local server=${3:-$(getserver na http)}
-    #local gitproject=${oriproject//'/'/'%2F'}
+    local user=${2-${account}}
+    local server=$(getserver ${3:-na} http)
+    local gitproject=${4//'/'/'%2F'}
     #local branch=$5
 
     local cmd="$1"
     case ${cmd} in
        help)    cat <<-EOF
-				usage) repp gerrit account joongkeun.kim vgit.lge.com/na   #show account info from gerrit server
+				usage) repp gerrit help                                    #show account info from gerrit server
 				usage) repp gerrit command                                 #show gerrit POST command
+				usage) repp gerrit cmd joongkeun.kim na  mustang/tm/src    #show gerrit POST command with parameter
 EOF
             bar outline "info gerritserver: show gerrit account"
             showRUN curl -s -u ${account}:${key} ${server}/a/accounts/?suggest\&q=${user} |more
 
-            bar outline "info gerritserver: show all groups which account belong to"
-            showRUNQ "curl -s -u ${account}:${key} ${server}/a/accounts/${user}/groups |sed '1d' | jq  '.[].name' |sort |more"
-
-    ;;command|*)
+    ;;cmd|*)
             bar outline "show gerrit account commands"
             cat <<-EOF
 			## check if <user> account is existed           ex) curl -s -u ${account}:${key} ${server}/a/accounts/?suggest\&q=<user>| more                     
@@ -841,26 +839,26 @@ EOF
 EOF
             bar outline "show gerrit project which name has <project-name>"
             cat <<-EOF
-			##find git project named <gitproject>           ex) curl -s -u ${account}:${key} ${server}/a/projects/?m=<gitproject>                              
-			##find labels, parents[id], basic info          ex) curl -s -u ${account}:${key} ${server}/a/projects/<project_name>                               
-			##find child projects of <project name>         ex) curl -s -u ${account}:${key} ${server}/a/projects/<project_name>/children/?recursive| sed '1d'| jq  '.[].name'
+			##find git project named <gitproject>           ex) curl -s -u ${account}:${key} ${server}/a/projects/?m=${gitproject:-"<project-name>"}                              
+			##find labels, parents[id], basic info          ex) curl -s -u ${account}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}                               
+			##find child projects of <project name>         ex) curl -s -u ${account}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/children/?recursive| sed '1d'| jq  '.[].name'
 EOF
             bar outline "show gerrit branch which name has <branch-name>"
             cat <<-EOF
-			##list branches including named <branch>        ex) curl -s -u ${account}:${key} ${server}/a/projects/<project name>/branches/?m=<branch>          
-			##remove branch                                 ex) curl -u ${account}:${key} ${server}/a/projects/<project_name>/branches/<branch-name> -X DELETE             
-			##create branch with base revision              ex) curl -s -u ${account}:${key} ${server}/a/projects/<project_name>/branches/<branch-name> -H "Content-Type: application/json" --data '{"sha": "049405ab2885e6c6844b212f83b43f835c904"}'  -X PUT
+			##list branches including named <branch>        ex) curl -s -u ${account}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/branches/?m=<branch>          
+			##remove branch                                 ex) curl -s -u ${account}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/branches/<branch-name> -X DELETE             
+			##create branch with base revision              ex) curl -s -u ${account}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/branches/<branch-name> -H "Content-Type: application/json" --data '{"sha": "049405ab2885e6c6844b212f83b43f835c904"}'  -X PUT
 EOF
             bar outline "show gerrit tag which name has ${tag}"
             cat <<-EOF
-			##list tag named <tag-name>                     ex) curl -s -u ${account}:${key} ${server}/a/projects/<gitproject>/tags?m=<tag-name>               
-			##show tag date, tag revision, committer        ex) curl -s -u ${account}:${key} ${server}/a/projects/<gitproject>/tags/<tag-name>                 
+			##list tag named <tag-name>                     ex) curl -s -u ${account}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/tags?m=<tag-name>               
+			##show tag date, tag revision, committer        ex) curl -s -u ${account}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/tags/<tag-name>                 
 EOF
             bar outline "show gerrit commit with branch info"
             cat <<-EOF
-			##show commit msg with data, author, committer  ex) curl -s -u ${account}:${key} ${server}/a/projects/<gitproject>/commits/<full-sha-code>         
-			##show branches that commit beloings to         ex) curl -s -u ${account}:${key} ${server}/a/projects/<gitproject>/commits/<full-sha-code>/in      
-			##show files that commit has changed            ex) curl -s -u ${account}:${key} ${server}/a/projects/<gitproject>/commits/<full-sha-code>/files   
+			##show commit msg with data, author, committer  ex) curl -s -u ${account}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/commits/<full-sha-code>         
+			##show branches that commit beloings to         ex) curl -s -u ${account}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/commits/<full-sha-code>/in      
+			##show files that commit has changed            ex) curl -s -u ${account}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/commits/<full-sha-code>/files   
 			##show all hashtaged commit                     ex) curl -s -u ${account}:${key} ${server}/a/changes/?q=hashtag                                    
 			##show hastag with HITT or TAT2                 ex) curl -s -u ${account}:${key} ${server}/a/changes/?q=hashtag:HITT+OR+hashtag:TAT2               
 EOF
