@@ -1284,14 +1284,7 @@ function gittcommit(){
     local cmd="$1"
     local opt="${@:2}"
     case $cmd in
-       help)    cat <<-EOF
-				usage) gitt commit help
-				usage) gitt commit info      #show commit info and diff with cached
-				usage) gitt commit auto      #add auto commit
-				usage) gitt commit reset     #show useful reset command
-				usage) gitt diff help        #show diff with specific rev
-EOF
-    ;; auto)    msg=$(date +"%y%m%d:%H%M")
+       auto)    msg=$(date +"%y%m%d:%H%M")
                 git commit -m "${msg}: ${opt:-test}"
                 git show --stat --oneline HEAD
                 clog "[run]" "git push $GITT_REMOTE HEAD:refs/heads/${GITT_BRANCH}"
@@ -1305,7 +1298,11 @@ EOF
                 ;;  *) git diffi
                 esac
                 if [ $? -ne 0 ];then echo "need to install 'sudo apt-get install icdiff'"; fi
-    ;;     *)   gittcommit help
+    ;; help|*)    cat <<-EOF
+				usage) gitt commit info      #show commit info and diff with cached
+				usage) gitt commit auto      #add auto commit
+				usage) gitt commit reset     #show useful reset command
+EOF
     esac
 }
 
