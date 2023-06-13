@@ -106,6 +106,7 @@ function getserver() {
 }
 
 
+
 ## repp ======================================================================================================================
 function reppshow_manifesttree(){
 ## ---------------------------------------------------------------------------
@@ -532,7 +533,7 @@ EOF
                 fi
 
                 info "please compare command: vimdiff ${fileA} ${fileB} ${fileC}"
-                info "please compare command: icdiff ${fileA} ${fileB} |more"
+                info "please compare command: icdiff ${fileA} ${fileB} |more -60"
     ;;       *) reppbranch help
     esac
 }
@@ -719,8 +720,6 @@ function reppcheck_initcmd(){
     [ "$ret" -eq 1 ] && echo "check http://collab.lge.com/main/pages/viewpage.action?pageId=1620608725"
     return $ret
 }
-
-
 
 
 
@@ -1081,7 +1080,7 @@ local MENU=(
 "   find: find string(changes) in commit history by multiple way."
 "   diff: compare commit, branch with dir/file"
 "  reset: reset git repository by choices"
-"  debug: same to repp debug"
+"  debug: show GITT & REPO variable"
 )
 
 
@@ -1111,7 +1110,6 @@ select CHOICE in "${MENU[@]}"; do
     if [ -n "$?" ]; then return 1;fi
 done
 }
-
 
 
 
@@ -1482,23 +1480,23 @@ function gittdiff(){
 				      gitt diff branch . default origin/master      #compare default branch to origin/master
 EOF
     ;;  work)   under "      staged >>> diff <<< unstaged\n"
-                showRUN ${cmd_diff} -- ${path}
+                showRUNQ ${cmd_diff} -- ${path} |more -60
     ;;staged)   under "        HEAD >>> diff <<< staged\n"
-                showRUN ${cmd_diff} --cached -- ${path}
+                showRUNQ ${cmd_diff} --cached -- ${path} |more -60
     ;;HEAD|head)     under "        HEAD >>> diff <<< unstaged/staged\n"
                 warn "automatically 'git add empty path' to show diff untracked new file"
                 git add -N . #to compare new untracked file
-                showRUN  ${cmd_diff} HEAD -- ${path}
+                showRUNQ  ${cmd_diff} HEAD -- ${path} |more -60
     ;;HEAD^|head^)   under "        HEAD >>> diff <<< HEAD^ \n"
                 #= showRUN ${cmd_diff} @ @^ ${path}
-                showRUN ${cmd_diff} HEAD HEAD^ ${path}
+                showRUNQ ${cmd_diff} HEAD HEAD^ ${path} |more -60
     ;;branch)   under "    branch A >>> diff <<< branch B \n"
                 warn "to see remote branch, run 'gitt branch list'"
-                showRUN ${cmd_diff} ${rev1} ${rev2} ${path}
+                showRUNQ ${cmd_diff} ${rev1} ${rev2} ${path} |more -60
     ;;commit)   under "    commit A >>> diff <<< commit B \n"
-                showRUN ${cmd_diff} ${rev1}..${rev2}
+                showRUNQ ${cmd_diff} ${rev1}..${rev2} |more -60
     ;;  file)   under "    current >>> diff <<< current-1 \n"
-                showRUN ${cmd_diff} @:${path} @^:${path}
+                showRUNQ ${cmd_diff} @:${path} @^:${path} |more -60
     ;;  *|'')   gittdiff help
     ;; esac
 }
@@ -1587,7 +1585,7 @@ local ret=0
 case "$1" in
             help)   "echo repp help"
        ;;init)      :
-       ;;server|connect|gerrit|go)
+       ;;server|connect|gerrit|go|'')
                     reppcheck_initvar print_n
        ;;   *)      reppcheck_initvar print_y
                     [ "$?" -ne 0 ] && return 1
@@ -1696,6 +1694,7 @@ EOF
 EOF
 esac
 }
+
 
 
 ##============================================================================
