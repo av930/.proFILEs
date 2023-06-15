@@ -444,7 +444,7 @@ function reppfind(){
         help) cat <<- EOF
 				 info) \${REPPFILE_CSV} is saved. can be opened by excel menu [data> text> select file> file open wizard]
 				                          or can be reformatted by excel menu [data> text to columns> select delimter'|'> finish]  
-				usage) repp find all                       # show rev,remote,branch,project,path info for all repo
+				usage) repp find                           # show rev,remote,branch,project,path info for all repo
 				usage) repp find <build>                   # list git which has string 'build'
 				usage) cat \${REPPFILE_CSV}| grep -v build  # list git info not containing 'build'
 				usage) repp find @rev                      # print rev colume for all repo
@@ -480,6 +480,7 @@ function reppbranch(){
 # $3 branch name or branch postfix
     local cmd=$1
     local name=$2
+    
 
     case ${cmd} in
        ''|help) cat <<- EOF
@@ -809,7 +810,7 @@ function reppconnect(){
     clog solution "install proper version of ssh"
     if [ -x "$(command -v ssh)" ]; then  log "ssh is installed in [$(which ssh)]"; else err "ssh is not installed, install it"; fi
 
-    if [ -z $server ]; then warn "usage) repp connect vgit.lge.com 29420 tiger/tools tiger_release" && return 1;fi
+    if [ -z $server ]; then reppconnect help && return 1;fi
     bar inline "step1.2-tcp: [remote] check if server tcp port is well listened"
     clog solution "check port num is correct? firewall is active? internet is on?"
     showRUN timeout 5 bash -c "</dev/tcp/$(getserver vgit)/$port"
@@ -869,6 +870,7 @@ function reppcheck_initvar(){
 # $1 command
     ## find & move manifest dir
     local ret=1
+    local print=$1
 
     ## move to repo root
     reppfind_repodir .repo/manifests 5 print_n
@@ -897,7 +899,7 @@ function reppcheck_initvar(){
     REPPFILE_CSV=${REPP_ROOT}/repp.csv
     REPPFILE_XML=repp.xml
 
-    if [[ $ret -eq 1 && "$1" = "print_y" ]]; then
+    if [[ $ret -eq 1 && "${print}" = "print_y" ]]; then
         printf "%s\n" ${REPP_PATH_ALL[@]};
         bar inline "WARNING"
         err "you are not in repo project, please check !";
@@ -913,7 +915,14 @@ function reppcheck_initvar(){
 
 function gittcheck_initvar(){
 ## ---------------------------------------------------------------------------
-    if ! gittcheck_isgitproject; then err "this is not git project"; return 1; fi
+    if ! gittcheck_isgitproject; then 
+        if [ "$1" = "print_y" ]; then
+            bar inline "WARNING"
+            err "you are not in git project, please check !";
+        fi        
+        return 1; 
+    fi
+
     ##readarray -t GITT_REMOTE < <(git remote -v |cut -f1|uniq)
     GITT_REMOTE=$(git remote|head -1)
 
@@ -922,6 +931,7 @@ function gittcheck_initvar(){
 
     #GITT_BRANCH=$(git branch -ar |grep -e '->' |sed -E 's#.*[/|>](.*)$#\1#')
     GITT_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
+    [ -z "${GITT_BRANCH}" ] && err "check your branch with 'git branch'. Maybe you missed 'repo start <working branch> --all'"
     GITT_REVIEW=$(git config --get-regexp remote.*.review|cut -d' ' -f2|head -1)
     GITT_URL=$(git config --get-regexp remote.${GITT_REMOTE}.url|cut -d' ' -f2|head -1)
     GITT_PATH=$(git rev-parse --show-toplevel)
@@ -1138,7 +1148,7 @@ function gittbranch_list(){
 ## -------------------- -------------------------------------------------------
 # show branch local & remote
 # $1 all or filter
-    local opt="$1"
+    local opt=$1
     local filter
 
     read -p "'git fetch' is needed to get recent branch details [enter:continue| ctrl+c:break] :"
@@ -1154,23 +1164,24 @@ function gittbranch_list(){
     --format='%(color:yellow)%(committerdate:short) %(color:red)%(objectname:short) %(color:green)%(refname:short) %(color:blue)%(authorname)%(color:reset) %(contents:subject)' \
     | tail -20
 
-    # bar inline "lookup remote branch ${filer}"
     # echo "branch: remote all with filter (${filter:-all}) in remote repository"
-    # clog "[always latest]" "read from remote live"
-    #prevent globbing
-    # set -o noglob
-    # [ -z "${opt}" ] && filter="*" || filter="*${opt}*"
-    # set +o noglob
-    # showRUN git ls-remote -h ${GITT_REMOTE} refs/heads/${filter} | more
-
-    # bar inline "sort by recently updated branches by new commit (newest from down)"
-    # echo "branch: remote tracked with filter (${filter:-all}) top 10 in local repository"
-    # echo "shows the branches downloaded when git fetch equivalent command was executed"
-    # clog "run 'git pull'" "to fetch all latest remote branches"
     # set -o noglob
     # [ -z "${opt}" ] && filter="" || filter="--list *${opt}*"
     # set +o noglob
-    # showRUN git branch -rvv --sort=committerdate ${filter} | tail -10
+    
+    # bar inline "lookup remote branch ${filer}"
+
+    # clog "[always latest]" "read from remote live"
+    # showRUN git ls-remote -h ${GITT_REMOTE} refs/heads/${opt} | more -60
+
+    bar inline "sort by recently updated branches by new commit (newest from down)"
+    # echo "shows the branches downloaded when git fetch equivalent command was executed"
+    # clog "run 'git pull'" "to fetch all latest remote branches"
+    #set -o noglob
+    #[ -z "${opt}" ] && filter="" || filter="--list *${opt}*"
+    #showRUN git branch -rvv --sort=committerdate ${filter} | more -60
+    #set +o noglob
+    showRUNQ git branch -rvv --sort=committerdate --list ${opt} | more -60
 }
 
 
@@ -1374,7 +1385,7 @@ function revvcheck_server(){
 
     bar inline "step2.2-gerritserver: [remote] check if gerrit is accessed by ${user} (default: input>current>vgit-na)"
     clog solution "check gerrit service is online from web"
-    if [ -z "${oriproject}" ];then info "usage) repp connect vgit.lge.com 29420 tiger/tools tiger_release" && return 1;fi
+    if [ -z "${oriproject}" ];then info "usage) repp connect testaccount na tiger/tools tiger_release" && return 1;fi
     if [[ "$oriproject" == *.git* ]]; then err ".git postfix must be removed in [$oriproject]"; fi
     ret=$(curl -s -u ${account}:${key} ${server}/a/accounts/?suggest\&q=${user})
     [[ "$ret" =~ "_account_id" ]] &&  echo "gerrit account existed [${user}]" || err "create gerrit account [${user}] by login"
