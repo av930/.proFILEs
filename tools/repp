@@ -1536,6 +1536,13 @@ function revvserver(){
 }
 
 
+##==========================================================================================================================
+## below function allow parameter "*, ?, +, ..." without globbing option
+__noglob() { $@; set +o noglob ;}
+alias revv='set -o noglob; __noglob revv'
+alias gitt='set -o noglob; __noglob gitt'
+alias repp='set -o noglob; __noglob repp'
+
 
 ##==========================================================================================================================
 function revv(){
