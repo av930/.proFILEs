@@ -161,8 +161,9 @@ function reppmani(){
      ''|help)   cat <<- EOF
 				usage) repp mani info
 				usage) repp mani gen <outfile>
+                ex) repp mani gen current.xml                          #default out: ${REPPFILE_XML}
 				usage) repp mani change <groups|upstream|dest-branch|etc> <str> <filter>
-				ex) repp mani change groups deststring pdk
+				ex) repp mani change remote vgit_new vgit_as           #vgit_new->vgit_as in remote field
 EOF
     ;;  info)   ##get global variable and repo init command.
                 reppget_repcmd info
@@ -372,7 +373,8 @@ function gittgo() {
 				usage) gitt go mani         # go manifest dir
 				usage) gitt go git          # go current git root dir
 				usage) gitt go              # same to above
-				usage) gitt go <build>      # show git including string 'build' and show menu to move
+				usage) gitt go <dir>        # show git path including 'dir' and can move
+				   ex) gitt go build        # show git path including 'build' and move to select 
 EOF
       ;;root)   cd "${REPP_ROOT}"     && return 0
       ;;mani)   cd "${REPP_PATH}"     && return 0
@@ -445,14 +447,16 @@ function reppfind(){
 				 info) \${REPPFILE_CSV} is saved. can be opened by excel menu [data> text> select file> file open wizard]
 				                          or can be reformatted by excel menu [data> text to columns> select delimter'|'> finish]  
 				usage) repp find                           # show rev,remote,branch,project,path info for all repo
-				usage) repp find <build>                   # list git which has string 'build'
-				usage) cat \${REPPFILE_CSV}| grep -v build  # list git info not containing 'build'
+				usage) repp find <string>                  # list git which has string 'string' in all git info
+				   ex) repp find build                     # list git which has string 'build' in all git info
+				   ex) repp find |grep -v vendor/qct       # list git info not containing 'vendor/qct'
+				   ex) cat \${REPPFILE_CSV}                 # cat output file
 				usage) repp find @rev                      # print rev colume for all repo
 				usage) repp find @remote                   # print project colume for all repo
 				usage) repp find @branch                   # print branch colume for all repo
 				usage) repp find @project                  # print project colume for all repo
 				usage) repp find @path                     # print path colume for all repo
-				usage) repp find @project |grep <meta>     # print project colume containing 'meta'
+				   ex) repp find @project |grep meta       # print project colume containing 'meta'
 EOF
     ;; @rev)      echo "<REPO_LREV>";    awk -v FS="|" '{print $1}' ${REPPFILE_CSV}
     ;; @remote)   echo "<REPO_REMOTE>";  awk -v FS="|" '{print $2}' ${REPPFILE_CSV} |sort |uniq
@@ -461,9 +465,8 @@ EOF
     ;; @path)     echo "<REPO_PATH>";    awk -v FS="|" '{print $5}' ${REPPFILE_CSV} |sort
     ;; "")        printf "\e[1;33m%6.6s %7.7s %-22.22s %-74.74s %.80s \e[0m\n" "REPO_LREV" "REPO_REMOTE" "REPO_RREV" "REPO_PROJECT" "REPO_PATH"
                   cat ${REPPFILE_CSV} | tee  >(wc -l)
-    ;; all)       printf "\e[1;33m%6.6s %7.7s %-22.22s %-74.74s %.80s \e[0m\n" "REPO_LREV" "REPO_REMOTE" "REPO_RREV" "REPO_PROJECT" "REPO_PATH"
+    ;; *)         printf "\e[1;33m%6.6s %7.7s %-22.22s %-74.74s %.80s \e[0m\n" "REPO_LREV" "REPO_REMOTE" "REPO_RREV" "REPO_PROJECT" "REPO_PATH"
                   cat ${REPPFILE_CSV} | grep -i --color=always ${cmd}
-    ;; *)         reppfind help
     esac
 
     info "\${REPPFILE_CSV} is generated, all repository info is save: ${REPPFILE_CSV}" 
@@ -487,12 +490,14 @@ function reppbranch(){
 				 info) gitt branch info                    # show only current git branch info (local, remote branch and commits)
 
 				usage) repp branch list                    # list all remote branches for all gits
-				usage) repp branch find <*release*>        # find *releae* matching branches
-				usage) repp branch create (shows commands) # show command can create branch for all, some gits
-				usage) repp branch remove (shows commands) # show command can revove branch for all, some gits
+				   ex) repp branch list *release*          # find *releae* matching branches
+				usage) repp branch create                  # show commands can create branch for all, some gits by pre/in/postfix
+				usage) repp branch remove                  # show commands can revove branch for all, some gits
+				   ex) repp branch create release          # show commands to create 'release' branch
 				usage) repp branch checksum                # print local repo checksum and remote tracking branch checksum
 				usage) repp branch compare                 # compare which git is diff between local and remote tracking branch
-				usage) repp branch compare <mig230426>     # compare which git is diff among local, remote tracking, a remote branch.
+				usage) repp branch compare <remote>        # compare which git is diff among local, remote tracking, a remote branch.
+				   ex) repp branch compare mig_230426      # compare between 3 branches (local, remote, mig_230426 branch)
 EOF
     ;;  list|find)
                 under "please run one of these 'git ls-remote' commands to check if branch is existed in remote\n"
@@ -555,6 +560,9 @@ function reppinit(){
 
     case $cmd in
        help|'')    cat <<-EOF
+			 usage) repp init -u <manifest-url> -b <manifest-branch> -m <manifest-name> -p <platform> -c
+			                  --reference=<mirror-path> --depth=<depth> --repo-url=<repo-url>
+			                  --no-clone-bundle --partial-clone --no-tags --mirror
 				ex) repp init -u ssh://${USER}@vgit.lge.com:29440/honda/linux/manifest -b tsu_25.5my_release
 				ex) repp init -u https://android.googlesource.com/platform/manifest -b android-12.1.0_r1
 				ex) repp init -b lampauto_r_release -m all.xml
@@ -787,10 +795,13 @@ function reppconnect(){
 # $3 password
     local cmd="$1"
     case ${cmd} in
-        help)   echo "repp connect   [user]    [review] [gitproject]   [branch]"
-                echo "repp connect testaccount    na    tiger/tools  tiger_release"
-                echo "repp connect $account       na    manifests    current"
-
+    
+       help)    cat <<-EOF        
+			 usage)  repp connect   [user]    [review] [gitproject]   [branch]
+			 ---------------------------------------------------------------------
+			default) repp connect $account    remotes    manifests    current
+			 ex)     repp connect testaccount    na    tiger/tools  tiger_release
+EOF
                 return 1;
     ;;     *) :
     esac
@@ -1106,9 +1117,14 @@ function gittcommit(){
                 esac
                 if [ $? -ne 0 ];then echo "need to install 'sudo apt-get install icdiff'"; fi
     ;; help|*)    cat <<-EOF
-				usage) gitt commit info      #show commit info and diff with cached
-				usage) gitt commit auto      #add auto commit
-				usage) gitt commit reset     #show useful reset command
+				usage) gitt commit info         # show commit info and diff with cached
+				usage) gitt commit auto         # add auto commit
+                   ex) gitt commit auto misc    # add auto commit with msg 'misc'
+				usage) gitt commit reset        # show useful reset command
+
+				guide) gitt diff                # commit diff HEAD, HEAD^, staged, unstaged, revision
+				guide) gitt info                # overall info for current git
+				guide) gitt branch info         # branch info 
 EOF
     esac
 }
@@ -1155,14 +1171,14 @@ function gittbranch_list(){
     git fetch
     bar inline "info: remote tag recent 20 by date"
     echo "get all branches and sort by date recent its tag"
-    showRUN git for-each-ref --color=always --sort=creatordate refs/tags \
-    --format='%(color:yellow)%(committerdate:short) %(color:red)%(objectname:short) %(color:green)%(refname:short) %(color:blue)%(authorname)%(color:reset) %(contents:subject)' \
-    | tail -20
+    showRUNQ "git for-each-ref --color=always --sort=creatordate refs/tags \
+    --format='%(color:yellow)%(committerdate:short) %(color:red)%(objectname:short) %(color:green)%(refname:short) %(color:blue)%(authorname)%(color:reset) %(contents:subject)' | tail -20" 
+    
 
     bar inline "info: remote branch recent 20 by date"
-    showRUN git for-each-ref --color=always --sort=committerdate refs/remotes \
-    --format='%(color:yellow)%(committerdate:short) %(color:red)%(objectname:short) %(color:green)%(refname:short) %(color:blue)%(authorname)%(color:reset) %(contents:subject)' \
-    | tail -20
+    showRUNQ "git for-each-ref --color=always --sort=committerdate refs/remotes \
+    --format='%(color:yellow)%(committerdate:short) %(color:red)%(objectname:short) %(color:green)%(refname:short) %(color:blue)%(authorname)%(color:reset) %(contents:subject)' | tail -20" 
+  
 
     # echo "branch: remote all with filter (${filter:-all}) in remote repository"
     # set -o noglob
@@ -1174,14 +1190,14 @@ function gittbranch_list(){
     # clog "[always latest]" "read from remote live"
     # showRUN git ls-remote -h ${GITT_REMOTE} refs/heads/${opt} | more -60
 
-    bar inline "sort by recently updated branches by new commit (newest from down)"
+    bar inline "find: sort by recently updated branches by new commit (top is newest) findkey: ${opt:-'*'}"
     # echo "shows the branches downloaded when git fetch equivalent command was executed"
     # clog "run 'git pull'" "to fetch all latest remote branches"
     #set -o noglob
     #[ -z "${opt}" ] && filter="" || filter="--list *${opt}*"
     #showRUN git branch -rvv --sort=committerdate ${filter} | more -60
     #set +o noglob
-    showRUNQ git branch -rvv --sort=committerdate --list ${opt} | more -60
+    showRUNQ git branch -rvv --sort=-committerdate --list ${opt} | more -60
 }
 
 
@@ -1196,12 +1212,16 @@ function gittbranch(){
 
     case $cmd in
        help) cat <<- EOF
-				usage) gitt branch info                         #show current branch info
-				usage) gitt branch list <''|name-filter>        #show remote tag/branches
-				usage) gitt branch create|new <name>            #create new branch with exact-name
-				usage) gitt branch delete|remove <name>         #delete branch with exact-name
-				usage) gitt branch compare <branch1> <branch2>  #compare branch A to branch B
-				usage) gitt branch compare <branch1>            #compare branch A to current
+				usage) gitt branch info                         # show current branch info
+				usage) gitt branch list <''|name-filter>        # show remote recent 20 tag/branches
+                   ex) gitt branch list *my*                    # find branches including 'my'
+				usage) gitt branch create|new <name>            # create new branch with exact-name, with confirm
+				usage) gitt branch delete|remove <name>         # delete branch with exact-name, with confirm
+				   ex) gitt branch create my_temp_branch        # create my_temp_branch, with confirm 'y'
+				usage) gitt branch compare <branch1> <branch2>  # compare branch A to branch B
+				usage) gitt branch compare <branch1>            # compare branch A to current
+                
+				  ref) gitt diff                                # see detail diff command
 EOF
     ;; create|new)  if [ -z "${name}" ]; then err "branch name must be input" && return 1;fi
                 showRUNQ y git push ${GITT_REMOTE} HEAD:refs/heads/${name}
