@@ -108,18 +108,21 @@ function getCurrentIP(){
     done
 }
 
-function code(){
+function ende_code(){
 ## ---------------------------------------------------------------------------
 # en/decoding as variable: code env <keyname> <key>; code dev <keyname>
 # en/decoding as file: code enf <keyfile> <key>; code def <keyfile>
+local temp
     case $1 in
-       help) info "variable is live during session, file is live permanent"
+        help) info "variable is live during session, file is live permanent"
              echo "en/decoding as variable: code env <keyname> <key>; code dev <keyname>"
              echo "en/decoding as file    : code enf <keyfile> <key>; code def <keyfile>"
-      ;;env) export ENCODE_$2=$( echo $3 | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey )
-      ;;dev) echo "${ENCODE_$2}" | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 
-      ;;enf) echo $( echo $3 | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey ) > $HOME/.key_$2
-      ;;def) cat $HOME/.key_$2 | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 
+       ;;env) declare -g "ENCODE_$2=$( echo $3 | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey )"
+       ;;dev) temp=ENCODE_$2; echo ${!temp}| openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 2> /dev/null
+      ;;list) declare -p |grep ENCODE 
+      
+       ;;enf) echo $( echo $3 | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey ) > $HOME/.key_$2
+       ;;def) cat $HOME/.key_$2 | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 
     esac
 }
 
