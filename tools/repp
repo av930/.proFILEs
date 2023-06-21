@@ -102,8 +102,8 @@ function getserver() {
             ;;      path)    echo "${_item}"| awk -F[./:] '{print $4}'                           # na
             ;;       url)    echo "${_item}"| awk -F[./:] '{print $1"."$2"."$3"/"$4}'            # vgit.lge.com/na
             ;;    remote)    echo "${_item}"| awk -F[./:] '{print $1"_"$4}'                      # vgit_na
-            ;;     debug)    echo "${_item}"                                                     # vgit.lge.com/na:29420   
-            ;;         *)    echo "${search_key}"                                                     # vgit.lge.com/na:29420   
+            ;;     debug)    echo "${_item}"                                                     # vgit.lge.com/na:29420
+            ;;         *)    echo "${search_key}"                                                     # vgit.lge.com/na:29420
             esac
             return 0
         fi
@@ -829,7 +829,7 @@ EOF
     local temp_p=$(expr "${REPP_URL}" : ".*[0-9]/\(.*\)\..*")
     [ -z "$4" ] && info "use default branch: ${GITT_BRANCH:-${REPP_BRANCH}}"        ;branch=${4:-${GITT_BRANCH:-${REPP_BRANCH}}}
     [ -z "$3" ] && info "use default git project: ${GITT_PROJECT:-${REPP_PROJECT}}" ;gitproject=${3:-${GITT_PROJECT:-${REPP_PROJECT}}}
-    [ -z "$2" ] && info "use default account: $USER"                                ;user=${2:-$USER}    
+    [ -z "$2" ] && info "use default account: $USER"                                ;user=${2:-$USER}
     [ -z "$1" ] && info "use default server: ${GITT_REMOTE:-${REPP_REMOTE}}"        ;oriserver=${1:-${GITT_REMOTE:-${REPP_REMOTE}}}
     server=$( getserver ${oriserver} subdomain ); port=$(getserver ${oriserver} port)
 
@@ -1389,7 +1389,7 @@ function revvcheck_initvar(){
 ## ---------------------------------------------------------------------------
     local key_id key server=$1
     #default initial gerrit API key is na (vgit_na).
-    
+
     key_id=$(getserver ${server:-na} sub)
     key=$(ende_code dev ${key_id})
 
@@ -1478,7 +1478,7 @@ function revvinfo(){
 # $4 branch
     local server=$(getserver ${1:-na} http)
     local key=$(ende_code dev $1)
-    local usercmd=${2-${ACCOUNT}}    
+    local usercmd=${2-${ACCOUNT}}
     local gitproject=${3//'/'/'%2F'}
     #local branch=$4
 
@@ -1505,52 +1505,67 @@ function revvaccount(){
     local cmd="$1"
     local server=$(getserver ${2:-na} http)
     local key=$(ende_code dev $(getserver $2 sub))
-    local usergroup=${3:-$USER}
+    local source=${3:-$USER}
+    local target=$4
+    local extra=$5
+    local file=$(mktemp)
 
-    
+
     #local branch=$4
 
     case ${cmd} in
-    user)
-            bar inline "check if account is existed & get account info "
-            curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${usergroup}
+        user)   bar inline "check if account is existed & get account info "
+                curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${source} |sed '1d'| jq '.'
+                bar inline "list group name which account belongs to"
+                curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/${source}/groups |sed '1d'| jq -cC '.[]|{name, created_on}' | more -60
 
-            bar inline "list group name which account belongs to"
-            curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/${usergroup}/groups |sed '1d'| jq -cC '.[]|{name, created_on}' | more -60
-            
+    ;;sshkey)   bar outline "get registered SSH-key for account [${source}] in server [$server]"
+                curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/${source}/sshkeys |sed '1d'| jq -cC '.[]|{ssh_public_key, comment}'
 
-    ;;group)
-			## find group which has string <group-name>     
-            bar inline "find group by name"
-            curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/?m=${usergroup} |sed '1d'| jq -c '.[]|{owner, name, created_on, url}'
+    ;;group)    bar inline "find group by name"
+                curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/?m=${source} |sed '1d'| jq '.'
+                bar inline "list sub-group by ${source} group"
+                curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${source}/groups/ |sed '1d'| jq -c '.[]|{name, created_on}'
+                bar inline "show group member by ${source} group to its decendents"
+                curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${source}/members?recursive |sed '1d'| jq -cC '.[]|{name, email}'  | more -60
 
-			## list sub-group in <group-name>
-            bar inline "list sub-group by ${usergroup} group"
-            curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${usergroup}/groups/ |sed '1d'| jq -c '.[]|{name, created_on}'
+    ;;groupadd) bar outline "add member to group"
+                curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${source}/members/${target} -X PUT
 
-			## show group member for <group-name>
-            bar inline "show group member by ${usergroup} group to its decendents"
-            curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${usergroup}/members?recursive |sed '1d'| jq -cC '.[]|{name, email}'  | more -60
-    ;;usergroup)            
-			## check account is existed in <group-name>     
-            curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${usergroup}/members|grep ${usercmd}
-    ;;addmember)
-            ## add account to group                        
-            bar outline "add member to group"
-            curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/<group-name>/members/${usergroup} -X PUT
-    ;;delmember)
-			## remote accout from group                    
-            bar outline "delete member from group"
-            curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/<group-name>/members/${usergroup} -X DELETE
-    ;;getsshkey)
-			## get ssh-key for specific account             
-            bar outline "get registered SSH-key for account [${usergroup}] in server [$server]"
-            curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/${usergroup}/sshkeys
-    ;;   help|*)   echo [${cmd}]
-                   cat <<-EOF
-			usage) revv account help                                    #show account info from gerrit server
-			usage) revv account command                                 #show gerrit POST command
-			usage) revv account cmd joongkeun.kim na  mustang/tm/src    #show gerrit POST command with parameter
+    ;;groupdel) bar outline "delete member from group"
+                curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${source}/members/${target} -X DELETE
+
+    ;;groupmem) bar outline "find member from group"
+                curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${source}/members|grep ${target}
+
+    ;;project)  bar inline "find project and show project url"
+                curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/?m=${source} |sed '1d' > $file
+                clog "matching project: "  $(cat $file| jq -c 'keys[]')
+                cat $file| jq --arg jq_var ${VGIT} -c '"link: http://" + $jq_var + .[].web_links[].url'
+                bar inline "search child-project inherit from project ${source}, plz wait..."
+                curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/children/?recursive| sed '1d'| jq  -cC '.[].name' | more -60
+                printf "\n\n"
+                dlog "[guide] To see project config (run cmd):" "curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} | sed '1d'| jq  -C '.[]'"
+                dlog "[guide] To crate/delete project (visit):" "${server}/admin/repos/${source}"
+
+    ;;branch)   bar inline "find branches by name"
+                curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/?m=${target} | sed '1d'| jq  -cC '.[]|{ref,revision}' | more -60
+    ;;branchadd) bar inline "create branch with base revision"
+                if [ -z "${extra}" ]; then read -p "input base branch which new branch is created from: ";fi
+                curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -H "Content-Type: application/json" --data '{"revision": "${extra:-${reply}}"}'  -X PUT
+
+    ;;branchdel) bar inline "delete branch by name"
+                curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -X DELETE
+
+    ;;   help|*)  echo "check your cmd [${cmd}]"; cat <<-EOF
+			usage) revv user na joongkeun.kim                                 #show account info from gerrit server
+			usage) revv sshkey na joongkeun.kim                               #show gerrit POST command
+			usage) revv group na sa515m_reviewer                              #show gerrit POST command
+			usage) revv groupadd na sa515m_reviewer joongkeun.kim             #show gerrit POST command
+			usage) revv groupdel na sa515m_reviewer joongkeun.kim             #show gerrit POST command
+			usage) revv groupmem na sa515m_reviewer joongkeun.kim             #show gerrit POST command
+
+
 EOF
     esac
 }
@@ -1585,6 +1600,7 @@ EOF
 			## check if <user> account is existed           ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${usercmd}| more
 			## list group <user> belongs to                 ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/${usercmd}/groups |sed '1d'| jq  '.[].name'| sort |more
 			## find group which has string <group-name>     ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/?m=<group-name>
+
 			## show group member for <group-name>           ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/<group-name>/members?recursive
 			## list sub-group in <group-name>               ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/<group-name>/groups/
 			## add account to group                         ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/<group-name>/members/${usercmd} -X PUT
@@ -1675,7 +1691,7 @@ EOF
 ## below functions allow parameter "*, ?, +, ..." with non-globbing option
 #__noglob() { $@; set +o noglob ;}
 #must enable globbing within fuction at the begining.
-alias revv='set -o noglob; revv' 
+alias revv='set -o noglob; revv'
 alias gitt='set -o noglob; gitt'
 alias repp='set -o noglob; repp'
 
@@ -1700,22 +1716,20 @@ local ret=0
 
 case "$1" in
          server)    echo "check connection by SSH, not HTTP"
-       ;;     *)    revvcheck_initvar "${@:2}"  
+       ;;     *)    revvcheck_initvar "${@:2}"
                     [ "$?" -ne 0 ] && return 1
 esac
 
 case "$1" in
      ##$1:cmd        ${@:2}:parameters
           help)      reppmenu help "${MENU[@]}"
+    ;;     '')       reppmenu revv "${MENU[@]}"
     ;;     cmd)      revvcmd "${@:2}"
     ;;  server)      revvserver "${@:2}"
     ;; connect)      revvcheck_server "${@:2}"
     ;;    info)      revvinfo  "${@:2}"
     ;;   debug)      revvdebug "${@:2}"
-    ;;    user)      revvaccount "${@:1}"    
-    ;;   group)      revvaccount "${@:1}"
-    ;;    ''|*)      reppmenu revv "${MENU[@]}"
-    
+    ;;       *)      revvaccount "${@:1}"
 esac
 return $ret
 }
