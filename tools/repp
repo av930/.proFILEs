@@ -84,28 +84,26 @@ function getserver() {
 ## ---------------------------------------------------------------------------
 ## format: getserver [29420|na|vgit|lamp|review] [port|http|sub|domain|subdomain|path|url|remote|debug]
 ## exception: vgitxxx lampxxx will return only postfix after delimter _
-## return: debug(vgit.lge.com/na:29420) http(http://vgit.lge.com/na), port(29420)
-##         sub(vgit), domain(lge.com), subdomain(vgit.lge.com)
-##         path(na), url(vgit.lge.com/na), remote(vgit_na)
 
     local search_key="$1"
     local return_type="$2"
     case $search_key in
-    vgit*|lamp*)   echo "${search_key#*_}"; return 0;
+    vgit*|lamp*)   echo "${search_key#*_}"; return 0;                                            #remove prefix vgit_ or lamp_ and return remain.
     esac
 
     for _item in ${GERRIT[@]};do
         if [[ ${_item##*/} =~ "$search_key" ]]; then
-            case $return_type in
-                    http)    echo "${_item}"| awk -F[./:] '{print "http://"$1"."$2"."$3"/"$4}'
-            ;;      port)    echo "${_item}"| awk -F[./:] '{print $5}'
-            ;;       sub)    echo "${_item}"| awk -F[./:] '{print $1}'
-            ;;    domain)    echo "${_item}"| awk -F[./:] '{print $2"."$3}'
-            ;; subdomain)    echo "${_item}"| awk -F[./:] '{print $1"."$2"."$3}'
-            ;;      path)    echo "${_item}"| awk -F[./:] '{print $4}'
-            ;;       url)    echo "${_item}"| awk -F[./:] '{print $1"."$2"."$3"/"$4}'
-            ;;    remote)    echo "${_item}"| awk -F[./:] '{print $1"_"$4}'
-            ;;   debug|*)    echo "${_item}"
+            case $return_type in                                                                 # return value
+                    http)    echo "${_item}"| awk -F[./:] '{print "http://"$1"."$2"."$3"/"$4}'   # http://vgit.lge.com/na
+            ;;      port)    echo "${_item}"| awk -F[./:] '{print $5}'                           # 29420
+            ;;       sub)    echo "${_item}"| awk -F[./:] '{print $1}'                           # vgit
+            ;;    domain)    echo "${_item}"| awk -F[./:] '{print $2"."$3}'                      # lge.com
+            ;; subdomain)    echo "${_item}"| awk -F[./:] '{print $1"."$2"."$3}'                 # vgit.lge.com
+            ;;      path)    echo "${_item}"| awk -F[./:] '{print $4}'                           # na
+            ;;       url)    echo "${_item}"| awk -F[./:] '{print $1"."$2"."$3"/"$4}'            # vgit.lge.com/na
+            ;;    remote)    echo "${_item}"| awk -F[./:] '{print $1"_"$4}'                      # vgit_na
+            ;;     debug)    echo "${_item}"                                                     # vgit.lge.com/na:29420   
+            ;;         *)    echo "${search_key}"                                                     # vgit.lge.com/na:29420   
             esac
             return 0
         fi
@@ -743,9 +741,8 @@ function reppcheck_server(){
 ## ---------------------------------------------------------------------------
 # check if server can access code-review server by SSH protocol
 # SSH protocol is used in local server to get source from code-review sever
-
-    local user=$1
-    local server=$2
+    local server=$1
+    local user=$2
     local port=$3
     local gitproject=$4
     local branch=$5
@@ -781,13 +778,28 @@ function reppcheck_server(){
 
     bar inline "step3.3-localserver: [remote] check if I can access the branch from local-server (default: master)"
     clog solution "check branch name path is correct and can access"
-    showRUN ssh $user@$server -p $port gerrit ls-projects --prefix ${gitproject} -b ${branch}
+    #ssh $user@$server -p $port gerrit ls-projects --prefix ${gitproject} -b ${branch}
     ret=$(ssh $user@$server -p $port gerrit ls-projects --prefix ${gitproject} -b ${branch})
     [ -n "$ret" ] &&  echo "branch existed and accessed [${branch}]" || err "check git branch is existed or permission allowed [${branch}]"
     #rm -f ${file_error}
 }
 
 
+
+#revvforall joongkeun.kim na tsu_25.5my_release
+function revvforall(){
+## ---------------------------------------------------------------------------
+# check if server can access code-review server by SSH protocol
+# SSH protocol is used in local server to get source from code-review sever
+
+    local user=$1
+    local server=$(getserver $2)
+    local branch=$3
+    local gitproject=$4
+
+    #repo forall -c 'ssh $1@$2 -p $3 gerrit ls-projects --prefix ${REPO_PROJECT} -b ${REPO_RREV}'  $user $server $port
+    repo forall -c 'ssh $1@$2 -p $3 gerrit ls-projects --prefix ${5:-${REPO_PROJECT}} -b ${4:-${REPO_RREV}}'  $user $(getserver $server subdomain) $(getserver $server port) ${gitproject} ${branch}
+}
 
 function reppconnect(){
 ## ---------------------------------------------------------------------------
@@ -817,9 +829,10 @@ EOF
     local temp_p=$(expr "${REPP_URL}" : ".*[0-9]/\(.*\)\..*")
     [ -z "$4" ] && info "use default branch: ${GITT_BRANCH:-${REPP_BRANCH}}"        ;branch=${4:-${GITT_BRANCH:-${REPP_BRANCH}}}
     [ -z "$3" ] && info "use default git project: ${GITT_PROJECT:-${REPP_PROJECT}}" ;gitproject=${3:-${GITT_PROJECT:-${REPP_PROJECT}}}
-    [ -z "$2" ] && info "use default server: ${GITT_REMOTE:-${REPP_REMOTE}}"        ;oriserver=${2:-${GITT_REMOTE:-${REPP_REMOTE}}}
+    [ -z "$2" ] && info "use default account: $USER"                                ;user=${2:-$USER}    
+    [ -z "$1" ] && info "use default server: ${GITT_REMOTE:-${REPP_REMOTE}}"        ;oriserver=${1:-${GITT_REMOTE:-${REPP_REMOTE}}}
     server=$( getserver ${oriserver} subdomain ); port=$(getserver ${oriserver} port)
-    [ -z "$1" ] && info "use default account: $USER"                                ;user=${1:-$USER}
+
 
     dlog [$user][$server][$gitproject][$branch]
 
@@ -837,10 +850,10 @@ EOF
     else echo "server $server over port $port is not listened, please contact server manager"; fi
 
 
-    under "step2: check gerrit permission from WEB(HTTP)\n"
-    showRUN revvcheck_server ${user} ${oriserver} ${gitproject} ${branch}
-    under "step3: check gerrit connection from SERVER(SSH)\n"
-    showRUN reppcheck_server ${user} ${server} ${port} ${gitproject} ${branch}
+    under "step2: check gerrit permission from WEB(HTTP)as admin[${ACCOUNT}]\n"
+    showRUN revvcheck_server ${oriserver} ${user} ${gitproject} ${branch}
+    under "step3: check gerrit connection from SERVER(SSH) as user[${user}]\n"
+    showRUN reppcheck_server ${server} ${user} ${port} ${gitproject} ${branch}
 }
 
 
@@ -885,6 +898,7 @@ function reppfind_repodir(){
 
 function reppcheck_initvar(){
 ## ---------------------------------------------------------------------------
+# hierarchy: reppcheck_initvar> gittcheck_initvar> revvcheck_initvar
 # pre-check
 # $1 command
     ## find & move manifest dir
@@ -1373,19 +1387,21 @@ EOF
 ## revv ======================================================================================================================
 function revvcheck_initvar(){
 ## ---------------------------------------------------------------------------
-    local server=$1
+    local key_id key server=$1
     #default initial gerrit API key is na (vgit_na).
-    local key_id=$(getserver ${server:-na} sub)
-    local key=$(ende_code dev ${key_id})
+    
+    key_id=$(getserver ${server:-na} sub)
+    key=$(ende_code dev ${key_id})
+
 
     if (( 40 > ${#key} )); then
-        err "please check gerrit http key value in .key_${key_id}";
+        err "please check gerrit http key value in [.key_${key_id}]";
         info "you can generate .key_XXX : code enf ${key_id} <check_key_from_gerrit_account>"
         key=$(ende_code def ${key_id})
         ende_code env ${key_id} ${key}
     fi
 
-    if ! revvcheck_server ${ACCOUNT} ${server:-na} checkapi; then
+    if ! revvcheck_server ${server:-na} ${ACCOUNT} checkapi; then
         err "please check correct account&key is saved in .key_${key_id} in $HOME dir"
         return 1
     fi
@@ -1397,13 +1413,14 @@ function revvcheck_initvar(){
 function revvcheck_server(){
 ## ---------------------------------------------------------------------------
 # check gerrit is permitted for input user on git project > branch
+# usage) revv connect na joongkeun.kim tiger/tools tiger_release
 # $1: target user
 # $2: target review system
-# $3: gitproject (if it is 'checkapi', it check only API validation
+# $3: gitproject (if it is 'checkapi', it check only API validation)
 # $4: branch
 
-    local user=$1
-    local server=$2
+    local server=$1
+    local user=$2
     local oriproject=$3 ;
     local gitproject=${oriproject//'/'/'%2F'}
     local branch=$4
@@ -1421,22 +1438,21 @@ function revvcheck_server(){
     bar inline "step2.1-gerritserver: [remote] check if gerrit server is active by $ACCOUNT"
     clog solution "check gerrit service is online from web"
     )
-    ret=$(curl -s -u ${ACCOUNT}:${key} ${server}/a/config/server/version)
+    ret=$(curl -s -u ${ACCOUNT}:${key} ${server}/a/config/server/version )
     case ${ret} in
-    *[2-9].[0-9].[0-9]*)   echo "ok. version is [${ret}]";;
+    *[2-9].[0-9].[0-9]*)   echo "ok. version is verified " > /dev/null;;
     *)                     err "gerrit is not working, please check"; return 1;;
     esac
 
-    [ "${oriproject}" != "checkapi" ] && (
+    [ "${oriproject}" = "checkapi" ] && return 0
+
     bar inline "step2.2-gerritserver: [remote] check if gerrit is accessed by ${user} (default: input>current>vgit-na)"
     clog solution "check gerrit current account in gerrit system"
-    )
     if [ -z "${oriproject}" ];then info "usage) repp connect testaccount na tiger/tools tiger_release" && return 1;fi
     if [[ "$oriproject" == *.git* ]]; then err ".git postfix must be removed in [$oriproject]"; fi
     ret=$(curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${user})
     [[ "$ret" =~ "_account_id" ]] &&  echo "gerrit account existed [${user}]" || err "create gerrit account [${user}] by login"
 
-    [ "${oriproject}" = "checkapi" ] && return 0
 
     bar inline "step2.3-gerritserver: [remote] check if git project is accessed by ${user} (default: input>current>manifests)"
     clog solution "check git name path is correct and can access"
@@ -1460,9 +1476,9 @@ function revvinfo(){
 # $2 server
 # $3 gitproject
 # $4 branch
-    local usercmd=${1-${ACCOUNT}}
-    local server=$(getserver ${2:-na} http)
-    local key=$(ende_code dev $2)
+    local server=$(getserver ${1:-na} http)
+    local key=$(ende_code dev $1)
+    local usercmd=${2-${ACCOUNT}}    
     local gitproject=${3//'/'/'%2F'}
     #local branch=$4
 
@@ -1477,6 +1493,70 @@ EOF
 }
 
 
+
+function revvaccount(){
+## ---------------------------------------------------------------------------
+
+# read information from gerrit
+# $1 account
+# $2 server
+# $3 gitproject
+# $4 branch
+    local cmd="$1"
+    local server=$(getserver ${2:-na} http)
+    local key=$(ende_code dev $(getserver $2 sub))
+    local usergroup=${3:-$USER}
+
+    
+    #local branch=$4
+
+    case ${cmd} in
+    user)
+            bar inline "check if account is existed & get account info "
+            curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${usergroup}
+
+            bar inline "list group name which account belongs to"
+            curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/${usergroup}/groups |sed '1d'| jq -cC '.[]|{name, created_on}' | more -60
+            
+
+    ;;group)
+			## find group which has string <group-name>     
+            bar inline "find group by name"
+            curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/?m=${usergroup} |sed '1d'| jq -c '.[]|{owner, name, created_on, url}'
+
+			## list sub-group in <group-name>
+            bar inline "list sub-group by ${usergroup} group"
+            curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${usergroup}/groups/ |sed '1d'| jq -c '.[]|{name, created_on}'
+
+			## show group member for <group-name>
+            bar inline "show group member by ${usergroup} group to its decendents"
+            curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${usergroup}/members?recursive |sed '1d'| jq -cC '.[]|{name, email}'  | more -60
+    ;;usergroup)            
+			## check account is existed in <group-name>     
+            curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${usergroup}/members|grep ${usercmd}
+    ;;addmember)
+            ## add account to group                        
+            bar outline "add member to group"
+            curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/<group-name>/members/${usergroup} -X PUT
+    ;;delmember)
+			## remote accout from group                    
+            bar outline "delete member from group"
+            curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/<group-name>/members/${usergroup} -X DELETE
+    ;;getsshkey)
+			## get ssh-key for specific account             
+            bar outline "get registered SSH-key for account [${usergroup}] in server [$server]"
+            curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/${usergroup}/sshkeys
+    ;;   help|*)   echo [${cmd}]
+                   cat <<-EOF
+			usage) revv account help                                    #show account info from gerrit server
+			usage) revv account command                                 #show gerrit POST command
+			usage) revv account cmd joongkeun.kim na  mustang/tm/src    #show gerrit POST command with parameter
+EOF
+    esac
+}
+
+
+
 function revvcmd(){
 ## ---------------------------------------------------------------------------
 # read information from gerrit
@@ -1484,9 +1564,9 @@ function revvcmd(){
 # $2 server
 # $3 gitproject
 # $4 branch
-    local usercmd=${1-${ACCOUNT}}
-    local server=$(getserver ${2:-na} http)
-    local key=$(ende_code dev $(getserver $2 sub))
+    local server=$(getserver ${1:-na} http)
+    local key=$(ende_code dev $(getserver $1 sub))
+    local usercmd=${2-${ACCOUNT}}
     local gitproject=${3//'/'/'%2F'}
     #local branch=$4
 
@@ -1548,8 +1628,8 @@ function revvserver(){
 # $1 server-url
 # $2 port-number
     local server_port=${REPP_URL#*@}
-    local user=${1:-${USER}}
-    local server=${2:-${server_port%:*}}
+    local server=${1:-${server_port%:*}}
+    local user=${2:-${USER}}
     local port=${3:-$(echo ${server_port} | grep -oP '(?<=:)[0-9]+(?=/)')}
 
     if [ -z "${server}" ] || [ -z "${port}" ] ; then info "usage) revv server vgit.lge.com 29999"; return 1;fi
@@ -1564,21 +1644,50 @@ function revvserver(){
 
 
 
+function revvdebug(){
+## ---------------------------------------------------------------------------
+
+# read information from gerrit
+# $1 account
+# $2 server
+# $3 gitproject
+# $4 branch
+    local server=$(getserver ${1:-na} http)
+    local key=$(ende_code dev $2)
+    local cmd=${2-${ACCOUNT}}
+    local gitproject=${3//'/'/'%2F'}
+    #local branch=$4
+
+    case ${usercmd} in
+       help)    cat <<-EOF
+				usage) revv info                                   #show gerrit POST command
+EOF
+    ;; create|*new*)  showRUNQ echo "tempfunc"
+    ;; list) echo tempfunc
+    ;; *) echo "default functionality"
+    ;; esac
+}
+
+
+
+
 ##==========================================================================================================================
-## below function allow parameter "*, ?, +, ..." without globbing option
-__noglob() { $@; set +o noglob ;}
-alias revv='set -o noglob; __noglob revv'
-alias gitt='set -o noglob; __noglob gitt'
-alias repp='set -o noglob; __noglob repp'
+## below functions allow parameter "*, ?, +, ..." with non-globbing option
+#__noglob() { $@; set +o noglob ;}
+#must enable globbing within fuction at the begining.
+alias revv='set -o noglob; revv' 
+alias gitt='set -o noglob; gitt'
+alias repp='set -o noglob; repp'
 
 ##==========================================================================================================================
 function revv(){
 ## ---------------------------------------------------------------------------
 # main handler for this scriptre
 # $1: command
-# $2: account
-# $3: server
+# $2: server
+# $3: account
 
+set +o noglob
 local MENU=(
 "   info: shows repository info such as manifest path, repo cmd, tree of manifests, etc"
 "    cmd: list useful command from gerrit"
@@ -1591,19 +1700,22 @@ local ret=0
 
 case "$1" in
          server)    echo "check connection by SSH, not HTTP"
-       ;;     *)    revvcheck_initvar "${@:3}"  
+       ;;     *)    revvcheck_initvar "${@:2}"  
                     [ "$?" -ne 0 ] && return 1
 esac
 
 case "$1" in
      ##$1:cmd        ${@:2}:parameters
-         help)      reppmenu help "${MENU[@]}"
-    ;;    cmd)      revvcmd "${@:2}"
-    ;; server)      revvserver "${@:2}"
-    ;;connect)      revvcheck_server "${@:2}"
-    ;;   info)      revvinfo  "${@:2}"
-    ;;  debug)      revvdebug "${@:2}"
-    ;;   ''|*)      reppmenu revv "${MENU[@]}"
+          help)      reppmenu help "${MENU[@]}"
+    ;;     cmd)      revvcmd "${@:2}"
+    ;;  server)      revvserver "${@:2}"
+    ;; connect)      revvcheck_server "${@:2}"
+    ;;    info)      revvinfo  "${@:2}"
+    ;;   debug)      revvdebug "${@:2}"
+    ;;    user)      revvaccount "${@:1}"    
+    ;;   group)      revvaccount "${@:1}"
+    ;;    ''|*)      reppmenu revv "${MENU[@]}"
+    
 esac
 return $ret
 }
@@ -1615,6 +1727,7 @@ function gitt(){
 ## ---------------------------------------------------------------------------
 # main handler for this scriptre
 # $1 command
+set +o noglob
 local MENU=(
 "   info: shows git path, gerrit info/url/remote, push command, commit info, sync time"
 "   show: shows git (default 15) commits history, file change list"
@@ -1662,6 +1775,7 @@ function repp(){
 ## ---------------------------------------------------------------------------
 # main handler for this scriptre
 # $1 command
+set +o noglob
 local MENU=(
 "   info: shows repository info such as manifest path, repo cmd, tree of manifests, etc"
 "   show: shows uncommitted changes, top -1 commits, md5 sum for all repository"
