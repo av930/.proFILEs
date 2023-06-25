@@ -161,9 +161,9 @@ function reppmani(){
      ''|help)   cat <<- EOF
 				usage) repp mani info
 				usage) repp mani gen <outfile>
-                ex) repp mani gen current.xml                          #default out: ${REPPFILE_XML}
+				   ex) repp mani gen current.xml                          #default out: ${REPPFILE_XML}
 				usage) repp mani change <groups|upstream|dest-branch|etc> <str> <filter>
-				ex) repp mani change remote vgit_new vgit_as           #vgit_new->vgit_as in remote field
+				   ex) repp mani change remote vgit_new vgit_as           #vgit_new->vgit_as in remote field
 EOF
     ;;  info)   ##get global variable and repo init command.
                 reppget_repcmd info
@@ -1552,23 +1552,53 @@ function revvaccount(){
                 curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/?m=${target} | sed '1d'| jq  -cC '.[]|{ref,revision}' | more -60
     ;;branchadd) bar inline "create branch with base revision"
                 if [ -z "${extra}" ]; then read -p "input base branch which new branch is created from: ";fi
-                curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -H "Content-Type: application/json" --data '{"revision": "${extra:-${reply}}"}'  -X PUT
+                curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -H "Content-Type: application/json" --data "{"revision": "${extra:-${REPLY}}"}"  -X PUT
 
     ;;branchdel) bar inline "delete branch by name"
                 curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -X DELETE
 
     ;;   help|*)  echo "check your cmd [${cmd}]"; cat <<-EOF
-			usage) revv user na joongkeun.kim                                 #show account info from gerrit server
-			usage) revv sshkey na joongkeun.kim                               #show gerrit POST command
-			usage) revv group na sa515m_reviewer                              #show gerrit POST command
-			usage) revv groupadd na sa515m_reviewer joongkeun.kim             #show gerrit POST command
-			usage) revv groupdel na sa515m_reviewer joongkeun.kim             #show gerrit POST command
-			usage) revv groupmem na sa515m_reviewer joongkeun.kim             #show gerrit POST command
-
-
+			usage) revv user   na joongkeun.kim                               # check account is existed and its groups
+			usage) revv sshkey na joongkeun.kim                               # get registered SSH-KEY
+			usage) revv group    na sa515m_reviewer                           # group existance and list sub-groups & all members
+			usage) revv groupadd na sa515m_reviewer joongkeun.kim             # add member to group
+			usage) revv groupdel na sa515m_reviewer joongkeun.kim             # delete member from group
+			usage) revv groupmem na sa515m_reviewer joongkeun.kim             # check member is in group and its sub-groups
+			usage) revv project  na mustang/tm/src                            # find project with project-name
+			usage) revv project  na vendor/qct/sa515m/_lge_only               # find project and its child projects
+			usage) revv branch    na mustang/tm/src tsu_25.5my_release        # find branch with branch-name
+			usage) revv branchadd na mustang/tm/src tsu_25.5my_release_new    # create branch
+			usage) revv branchdel na mustang/tm/src tsu_25.5my_release_new    # remove branch
 EOF
     esac
 }
+
+
+
+function revvrepo(){
+## ---------------------------------------------------------------------------
+
+# read information from gerrit
+# $1 account
+# $2 server
+# $3 gitproject
+# $4 branch
+    local cmd="$1"
+    local server=$(getserver ${2:-na} http)
+    local key=$(ende_code dev $(getserver $2 sub))
+    local source=${3:-$USER}
+    local target=$4
+    local extra=$5
+    local file=$(mktemp)
+
+    repo forall -c bash -c 'curl -s -u vc.integrator:8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog \
+       http://vgit.lge.com/devops_test/a/projects/${REPO_PROJECT//"/"/"%2F"}/branches/?m=${REPO_RREV} \
+       | sed "1d"| jq  -cC ".[]|{ref,revision}"'
+    #repo forall -c bash -c 'curl -s -u vc.integrator:8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog \ 
+    #    http://vgit.lge.com/devops_test/a/projects/${REPO_PROJECT//"/"/"%2F"}/branches/${REPO_RREV}_test -H "Content-Type: application/json" --data "{"revision": "master"}"  -X PUT'
+     
+}
+
 
 
 
