@@ -1,4 +1,7 @@
 #### repo template
+## usage
+# repo forall -vecj4 bash -c 'reppscript.sh'
+
 ## repo forall -c 'cmd.sh'                                      #   basic usage:  REPO variable is available
 ## repo forall -c bash -c 'cmd.sh'                              # advanced usage: SHELL variable is available
 ## repo forall . -c 'cmd.sh'                                    # for only current project
