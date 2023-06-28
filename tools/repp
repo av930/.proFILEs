@@ -184,6 +184,11 @@ EOF
 
                 bar inline "recently changed history [git log 10]"
                 showRUN git log -10 --name-status --abbrev=6 --date=format:"%Y-%m-%d %H:%M" --pretty=format:"%C(yellow)%ad %C(red)%h %C(green)%s%C(reset)"
+                
+                bar inline "file name & only modified file, not add/delete files (press 'q' to stop)"
+                info "you can find add/delete git projects here recent 12 weeks"
+                showRUNQ "git log -p --color=always --pretty=oneline --diff-filter=M --since=12-weeks  |more -60"
+
     ;;   gen)   bar inline "current manifest.xml regnerated with option"
                 clog "-r" "generate revision"
                 if (( "$(reppversion ver)" > 230 )); then
@@ -958,7 +963,7 @@ function gitt_initvar(){
     fi
     ##git config --get-regexp remote.$GITT_REMOTE |sort|grep -Ee "(projectname|review|url)"
     temp=$(git config --get-regexp remote.*.projectname|cut -d' ' -f2)
-    if [ "${temp}" = "${GITT_PROJECT}" ]; then return 0; fi
+    if [ -n "${GITT_PROJECT}" ] && [ "${temp}" = "${GITT_PROJECT}" ]; then return 0; fi
 
     ##readarray -t GITT_REMOTE < <(git remote -v |cut -f1|uniq)
     GITT_REMOTE=$(git remote|head -1)
@@ -1086,9 +1091,12 @@ function gittshow(){
     echo "filter: --since(=after), --before(=until)"
     echo "date  : 6 hour, 2-day, 2-week, 1-month, 1-year"
     clog "ex:" "--since=2-weeks, --since=04:24, --before=6-hours, --after=2022-11-10 --before=2022-11-20-23"
-    read -p "input add option [enter(default):--pretty="short" --name-only | input option with default]"
+    read -p "input add option [default:--pretty="short" --name-only with your input option]"
 
-    git log --pretty="short" --name-only ${reply} |more -60
+    bar inline "file name only (press 'q' to stop)"
+    git log --color=always --pretty="short" --name-only ${reply} |more -60
+    
+    clog "to see only modified file, not add/delete files:" "git log -p --color=always --pretty=oneline --diff-filter=M ${reply}"
 }
 
 
@@ -1840,7 +1848,7 @@ case "$1" in
     ;; '')                                                      reppmenu repp "${MENU[@]}"
     ;; info)        reppcheck_initvar repp print_n;             reppinfo  "${@:2}"
     ;; show)        reppcheck_initvar repp print_y;             reppshow "${@:2}"
-    ;; go)          reppcheck_initvar repp print_n;             reppgo "${@:2}"
+    ;; go)          reppcheck_initvar reppgitt print_n;         reppgo "${@:2}"
     ;; commit)      reppcheck_initvar repp print_y;             reppcommit "${@:2}"
     ;; find|list)   reppcheck_initvar repp print_y;             reppfind "${@:2}"
     ;; branch)      reppcheck_initvar repp print_y;             reppbranch "${@:2}"
@@ -1850,7 +1858,7 @@ case "$1" in
     ;; reset)       reppcheck_initvar repp print_y;             gittreset all
     ;; version)     reppcheck_initvar repp print_y;             reppversion "${@:2}"
     ;; connect)     reppcheck_initvar reppgittrevv print_n;     reppconnect "${@:2}"
-    ;; debug)       reppcheck_initvar repp print_n;             reppdebug "${@:2}"
+    ;; debug)       reppcheck_initvar reppgittrevv print_y;     reppdebug "${@:2}"
     ;; *)           bar outline "result of native repo"
                     repo "${@}"
 esac
@@ -1919,7 +1927,8 @@ function reppdebug(){
 
         bar inline "[all repo] print repo variable"
         dlog                '${REPO_I}/${REPO_COUNT}, ${REPO_LREV}, ${REPO_REMOTE}, ${REPO_RREV}, ${REPO_PROJECT}, ${REPO_PATH}, ${REPO_OUTERPATH}, ${REPO_INNERPATH}'
-        repo forall -c 'echo ${REPO_I}/${REPO_COUNT}, ${REPO_LREV}, ${REPO_REMOTE}, ${REPO_RREV}, ${REPO_PROJECT}, ${REPO_PATH}, ${REPO_OUTERPATH}, ${REPO_INNERPATH}' | more -60
+        #repo forall -c 'echo ${REPO_I}/${REPO_COUNT}, ${REPO_LREV}, ${REPO_REMOTE}, ${REPO_RREV}, ${REPO_PROJECT}, ${REPO_PATH}, ${REPO_OUTERPATH}, ${REPO_INNERPATH}' | more -60
+        repo forall -j1 -c 'printf "%-9.9s|%.6s|%.7s|%-22.22s|%-74.74s|%.80s\n" "${REPO_I}/${REPO_COUNT}" "${REPO_LREV}" "${REPO_REMOTE}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"' | more -60
 EOL
 )
     ##run echo
@@ -1941,7 +1950,8 @@ function gittdebug(){
         done
 
         bar inline "[${GITT_PROJECT}] print REPO variable using repo"
-        showRUN repo forall . -c 'echo ${REPO_COUNT}, ${REPO_LREV}, ${REPO_REMOTE}, ${REPO_RREV}, ${REPO_PROJECT}, ${REPO_PATH}, ${REPO_OUTERPATH}, ${REPO_INNERPATH}'
+        showRUN repo forall . -c 'echo ${REPO_I}/${REPO_COUNT}, ${REPO_LREV}, ${REPO_REMOTE}, ${REPO_RREV}, ${REPO_PROJECT}, ${REPO_PATH}, ${REPO_OUTERPATH}, ${REPO_INNERPATH}'
+
 EOL
 )
     ##run echo
