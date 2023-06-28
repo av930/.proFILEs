@@ -85,10 +85,10 @@ function getserver() {
 ## format: getserver [29420|na|vgit|lamp|review] [port|http|sub|domain|subdomain|path|url|remote|debug]
 ## exception: vgitxxx lampxxx will return only postfix after delimter _
 
-    local search_key="$1"
-    local return_type="$2"
+    local search_key=$1
+    local return_type=$2
     case $search_key in
-    vgit*|lamp*)   echo "${search_key#*_}"; return 0;                                            #remove prefix vgit_ or lamp_ and return remain.
+    vgit_*|lamp_*)   search_key="${search_key#*_}";                                              #remove prefix vgit_ or lamp_ and return remain.
     esac
 
     for _item in ${GERRIT[@]};do
@@ -103,7 +103,7 @@ function getserver() {
             ;;       url)    echo "${_item}"| awk -F[./:] '{print $1"."$2"."$3"/"$4}'            # vgit.lge.com/na
             ;;    remote)    echo "${_item}"| awk -F[./:] '{print $1"_"$4}'                      # vgit_na
             ;;     debug)    echo "${_item}"                                                     # vgit.lge.com/na:29420
-            ;;         *)    echo "${search_key}"                                                     # vgit.lge.com/na:29420
+            ;;         *)    echo "${search_key} not processed"                                  # vgit.lge.com/na:29420
             esac
             return 0
         fi
@@ -366,7 +366,6 @@ function gittgo() {
 # return git root path or return near git path
     local cmd="$1"
 
-    reppcheck_initvar print_n
     case $cmd in
         help) cat <<- EOF
 				usage) gitt go root         # go repo root dir
@@ -782,14 +781,17 @@ function reppcheck_server(){
     ret=$(ssh $user@$server -p $port gerrit ls-projects --prefix ${gitproject} -b ${branch})
     [ -n "$ret" ] &&  echo "branch existed and accessed [${branch}]" || err "check git branch is existed or permission allowed [${branch}]"
     #rm -f ${file_error}
+    
+    read -p "check accessibility for all repository  [enter:continue| ctrl+c:exit]: "
+    repo forall -c 'ssh $1@$2 -p $3 gerrit ls-projects --prefix ${4:-${REPO_PROJECT}} -b ${5:-${REPO_RREV}}'  $user $(getserver $server subdomain) $(getserver $server port) ${gitproject} ${branch}
 }
 
 
 
 #revvforall joongkeun.kim na tsu_25.5my_release
-function revvforall(){
+function reppforall(){
 ## ---------------------------------------------------------------------------
-# check if server can access code-review server by SSH protocol
+# check if an account in server can access code-review server by SSH protocol
 # SSH protocol is used in local server to get source from code-review sever
 
     local user=$1
@@ -800,6 +802,8 @@ function revvforall(){
     #repo forall -c 'ssh $1@$2 -p $3 gerrit ls-projects --prefix ${REPO_PROJECT} -b ${REPO_RREV}'  $user $server $port
     repo forall -c 'ssh $1@$2 -p $3 gerrit ls-projects --prefix ${5:-${REPO_PROJECT}} -b ${4:-${REPO_RREV}}'  $user $(getserver $server subdomain) $(getserver $server port) ${gitproject} ${branch}
 }
+
+
 
 function reppconnect(){
 ## ---------------------------------------------------------------------------
@@ -896,32 +900,30 @@ function reppfind_repodir(){
 
 
 
-function reppcheck_initvar(){
+function repp_initvar(){
 ## ---------------------------------------------------------------------------
-# hierarchy: reppcheck_initvar> gittcheck_initvar> revvcheck_initvar
-# pre-check
-# $1 command
-    ## find & move manifest dir
-    local ret=1
-    local print=$1
+# find input-path up and down,
 
+    local print=$1
+    local ret=1
     ## move to repo root
     reppfind_repodir .repo/manifests 5 print_n
     ## set variable REPP if manifest dir exists
     if [ -d "${REPP_PATH}" ];then
         pushd ${REPP_PATH}
-        gittcheck_initvar
         REPP_REMOTE=$(getserver $(git remote -v |grep fetch | grep -oP '(?<=:)[0-9]+(?=/)') remote)
-        REPP_PROJECT=$(git remote -v |grep fetch | sed -E 's#.*[0-9]+(.*).git.*$#\1#')
-        REPP_BRANCH=${GITT_BRANCH}
-        REPP_REVIEW=${GITT_REVIEW}
-        REPP_URL=${GITT_URL}
+        #REPP_PROJECT=$(git remote -v |grep fetch | sed -E 's#.*[0-9]+(.*).git.*$#\1#')
+        REPP_PROJECT=$(git config --get-regexp remote.*.url  |head -1|cut -d' ' -f2)
+        REPP_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')  #GITT_BRANCH
+        REPP_REVIEW=$(git config --get-regexp remote.*.review|cut -d' ' -f2|head -1)        #GITT_REVIEW
+        REPP_URL=$(git config --get-regexp remote.${GITT_REMOTE}.url|cut -d' ' -f2|head -1) #GITT_URL
 
         REPP_ROOT=${REPP_PATH%/.repo*}
         #REPP_URL=$(git remote -v |grep fetch |awk '{print $2}')
         #REPP_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
         REPP_REPOURL=$(cat ../repo/.git/config |grep url|sed 's/.*= \(.*\)/\1/')
-        REPP_MIRROR=$(cat ../manifests.git/config |grep reference|sed 's/.*= \(.*\)/\1/')
+        #REPP_MIRROR=$(cat ../manifests.git/config |grep reference|sed 's/.*= \(.*\)/\1/')
+        REPP_MIRROR=$(git config --get-regexp repo.reference |head -1|cut -d' ' -f2)
         REPP_COUNT=$($REPP_PATH/../repo/repo list |wc -l)
 
         popd
@@ -937,29 +939,29 @@ function reppcheck_initvar(){
         bar inline "WARNING"
         err "you are not in repo project, please check !";
     fi
-
-    gittcheck_initvar
-    return $ret
 }
 
-
-
-## gitt ======================================================================================================================
-function gittcheck_initvar(){
+function gitt_initvar(){
 ## ---------------------------------------------------------------------------
-    if ! gittcheck_isgitproject; then
-        if [ "$1" = "print_y" ]; then
+# find input-path up and down,
+
+    local print=$1
+    local ret=1
+    local temp
+
+    if [ "${print}" = "print_y" ]; then
+        if ! gittcheck_isgitproject; then 
             bar inline "WARNING"
             err "you are not in git project, please check !";
+            ret=1                
         fi
-        return 1;
     fi
+    ##git config --get-regexp remote.$GITT_REMOTE |sort|grep -Ee "(projectname|review|url)"
+    temp=$(git config --get-regexp remote.*.projectname|cut -d' ' -f2)
+    if [ "${temp}" = "${GITT_PROJECT}" ]; then return 0; fi
 
     ##readarray -t GITT_REMOTE < <(git remote -v |cut -f1|uniq)
     GITT_REMOTE=$(git remote|head -1)
-
-    ##git config --get-regexp remote.$GITT_REMOTE |sort|grep -Ee "(projectname|review|url)"
-    GITT_PROJECT=$(git config --get-regexp remote.*.projectname|cut -d' ' -f2)
 
     #GITT_BRANCH=$(git branch -ar |grep -e '->' |sed -E 's#.*[/|>](.*)$#\1#')
     GITT_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
@@ -967,7 +969,43 @@ function gittcheck_initvar(){
     GITT_REVIEW=$(git config --get-regexp remote.*.review|cut -d' ' -f2|head -1)
     GITT_URL=$(git config --get-regexp remote.${GITT_REMOTE}.url|cut -d' ' -f2|head -1)
     GITT_PATH=$(git rev-parse --show-toplevel)
-    if [ "$1" = "print_y" ]; then echo "${GITT_PATH}"; fi
+    if [ "${print}" = "print_y" ]; then echo "${GITT_PATH}"; fi
+}
+
+function revv_initvar(){
+    #default initial gerrit API key is na (vgit_na).
+
+    key_id=$(getserver ${GITT_REMOTE:-${REPP_REMOTE}} sub)
+    key=$(ende_code dev ${key_id})
+
+    if (( 40 > ${#key} )); then
+        err "please check gerrit http key value in [~/.key_${key_id}]";
+        info "you can generate .key_XXX : code enf ${key_id} <check_key_from_gerrit_account>"
+        key=$(ende_code def ${key_id})
+        ende_code env ${key_id} ${key}
+        info "now key is reloaded from [~/.key_${key_id}] automatically"
+    fi
+
+    if ! revvcheck_server ${server:-na} ${ACCOUNT} checkapi; then
+        err "please check correct account&key is saved in ~/.key_${key_id} in $HOME dir"
+        return 1
+    fi
+}
+
+
+function reppcheck_initvar(){
+## ---------------------------------------------------------------------------
+# find repo, gitt, review variable
+
+    local cmd=$1
+    local print=$2
+
+    ## --------------------------------------------------------
+    if [[ "${cmd}" =~ "repp" ]]; then repp_initvar $print; fi
+    ## --------------------------------------------------------
+    if [[ "${cmd}" =~ "gitt" ]]; then gitt_initvar $print; fi 
+    ## --------------------------------------------------------
+    if [[ "${cmd}" =~ "revv" ]]; then revv_initvar $print; fi
 }
 
 
@@ -1385,31 +1423,6 @@ EOF
 
 
 ## revv ======================================================================================================================
-function revvcheck_initvar(){
-## ---------------------------------------------------------------------------
-    local key_id key server=$1
-    #default initial gerrit API key is na (vgit_na).
-
-    key_id=$(getserver ${server:-na} sub)
-    key=$(ende_code dev ${key_id})
-
-
-    if (( 40 > ${#key} )); then
-        err "please check gerrit http key value in [.key_${key_id}]";
-        info "you can generate .key_XXX : code enf ${key_id} <check_key_from_gerrit_account>"
-        key=$(ende_code def ${key_id})
-        ende_code env ${key_id} ${key}
-    fi
-
-    if ! revvcheck_server ${server:-na} ${ACCOUNT} checkapi; then
-        err "please check correct account&key is saved in .key_${key_id} in $HOME dir"
-        return 1
-    fi
-    if gittcheck_isgitproject; then gittcheck_initvar; fi
-}
-
-
-
 function revvcheck_server(){
 ## ---------------------------------------------------------------------------
 # check gerrit is permitted for input user on git project > branch
@@ -1609,8 +1622,8 @@ function revvcmd(){
 # $2 server
 # $3 gitproject
 # $4 branch
-    local server=$(getserver ${1:-na} http)
-    local key=$(ende_code dev $(getserver $1 sub))
+    local server=$(getserver ${1:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
+    local key=$(ende_code dev $(getserver ${GITT_REMOTE:-${REPP_REMOTE}} sub))
     local usercmd=${2-${ACCOUNT}}
     local gitproject=${3//'/'/'%2F'}
     #local branch=$4
@@ -1743,23 +1756,16 @@ local MENU=(
 )
 
 local ret=0
-
-case "$1" in
-         server)    echo "check connection by SSH, not HTTP"
-       ;;     *)    revvcheck_initvar "${@:2}"
-                    [ "$?" -ne 0 ] && return 1
-esac
-
 case "$1" in
      ##$1:cmd        ${@:2}:parameters
-          help)      reppmenu help "${MENU[@]}"
-    ;;     '')       reppmenu revv "${MENU[@]}"
-    ;;     cmd)      revvcmd "${@:2}"
-    ;;  server)      revvserver "${@:2}"
-    ;; connect)      revvcheck_server "${@:2}"
-    ;;    info)      revvinfo  "${@:2}"
-    ;;   debug)      revvdebug "${@:2}"
-    ;;       *)      revvaccount "${@:1}"
+          help)                                                 reppmenu help "${MENU[@]}"
+    ;;     '')                                                  reppmenu revv "${MENU[@]}"
+    ;;     cmd)      reppcheck_initvar reppgittrevv;            revvcmd "${@:2}"
+    ;;  server)      reppcheck_initvar gittrevv;                revvserver "${@:2}"
+    ;; connect)      reppcheck_initvar gittrevv;                revvcheck_server "${@:2}"
+    ;;    info)      reppcheck_initvar gittrevv;                revvinfo  "${@:2}"
+    ;;   debug)      reppcheck_initvar gittrevv;                revvdebug "${@:2}"
+    ;;       *)                                                 revvaccount "${@:1}"
 esac
 return $ret
 }
@@ -1784,28 +1790,19 @@ local MENU=(
 "  debug: show GITT & REPO variable"
 )
 local ret=0
-
-case "$1" in
-            help)   gitthelp "${@:2}"
-       ;;init|go)   :
-       ;;      *)   gittcheck_initvar print_n
-                    [ "$?" -ne 0 ] && return 1
-esac
-
-
 case "$1" in
     ##$1:below ${@:2}:parameters
-          help)     reppmenu help "${MENU[@]}"
-    ;;      '')     reppmenu gitt "${MENU[@]}"
-    ;;    info)     gittinfo
-    ;;    show)     gittshow "${@:2}"
-    ;;      go)     gittgo "${@:2}"
-    ;;  commit)     gittcommit "${@:2}"
-    ;;  branch)     gittbranch "${@:2}"
-    ;;    find)     gittfind "${@:2}"
-    ;;    diff)     gittdiff "${@:2}"
-    ;;   reset)     gittreset "${@:2}"
-    ;;   debug)     gittdebug "${@:2}"
+          help)                                                 reppmenu help "${MENU[@]}"
+    ;;      '')                                                 reppmenu gitt "${MENU[@]}"
+    ;;    info)     reppcheck_initvar gitt print_n;             gittinfo
+    ;;    show)     reppcheck_initvar gitt print_n;             gittshow "${@:2}"
+    ;;      go)                                                 gittgo "${@:2}"
+    ;;  commit)     reppcheck_initvar gitt print_n;             gittcommit "${@:2}"
+    ;;  branch)     reppcheck_initvar gitt print_n;             gittbranch "${@:2}"
+    ;;    find)     reppcheck_initvar gitt print_n;             gittfind "${@:2}"
+    ;;    diff)     reppcheck_initvar gitt print_n;             gittdiff "${@:2}"
+    ;;   reset)     reppcheck_initvar gitt print_n;             gittreset "${@:2}"
+    ;;   debug)     reppcheck_initvar gitt print_n;             gittdebug "${@:2}"
     ;;       *)     bar outline "call native git"
                     git "${@}";;
 esac
@@ -1836,35 +1833,24 @@ local MENU=(
 "  debug: show variable REPO, REPP, REPPFILE, GITT variable used in script"
 )
 
-
 local ret=0
-
 case "$1" in
-            help)   "echo repp help"
-       ;;init)      :
-       ;;server|connect|gerrit|go|'')
-                    reppcheck_initvar print_n
-       ;;   *)      reppcheck_initvar print_y
-                    [ "$?" -ne 0 ] && return 1
-esac
-
-case "$1" in
-     ##$1:cmd        ${@:2}:parameters
-       help)        reppmenu help "${MENU[@]}"
-    ;; '')          reppmenu repp "${MENU[@]}"
-    ;; info)        reppinfo  "${@:2}"
-    ;; show)        reppshow "${@:2}"
-    ;; go)          reppgo "${@:2}"
-    ;; commit)      reppcommit "${@:2}"
-    ;; find|list)   reppfind "${@:2}"
-    ;; branch)      reppbranch "${@:2}"
-    ;; mani)        reppmani "${@:2}"
-    ;; init)        reppinit "${@:2}"
-    ;; sync)        reppsync "${@:2}"
-    ;; reset)       gittreset all
-    ;; version)     reppversion "${@:2}"
-    ;; connect)     reppconnect "${@:2}"
-    ;; debug)       reppdebug "${@:2}"
+     ##$1:cmd       check if validation                          ${@:2}:parameters
+       help)                                                    reppmenu help "${MENU[@]}"
+    ;; '')                                                      reppmenu repp "${MENU[@]}"
+    ;; info)        reppcheck_initvar repp print_n;             reppinfo  "${@:2}"
+    ;; show)        reppcheck_initvar repp print_y;             reppshow "${@:2}"
+    ;; go)          reppcheck_initvar repp print_n;             reppgo "${@:2}"
+    ;; commit)      reppcheck_initvar repp print_y;             reppcommit "${@:2}"
+    ;; find|list)   reppcheck_initvar repp print_y;             reppfind "${@:2}"
+    ;; branch)      reppcheck_initvar repp print_y;             reppbranch "${@:2}"
+    ;; mani)        reppcheck_initvar repp print_n;             reppmani "${@:2}"
+    ;; init)        reppcheck_initvar repp print_n;             reppinit "${@:2}"
+    ;; sync)        reppcheck_initvar repp print_n;             reppsync "${@:2}"
+    ;; reset)       reppcheck_initvar repp print_y;             gittreset all
+    ;; version)     reppcheck_initvar repp print_y;             reppversion "${@:2}"
+    ;; connect)     reppcheck_initvar reppgittrevv print_n;     reppconnect "${@:2}"
+    ;; debug)       reppcheck_initvar repp print_n;             reppdebug "${@:2}"
     ;; *)           bar outline "result of native repo"
                     repo "${@}"
 esac
@@ -1918,10 +1904,6 @@ function reppdebug(){
 #reppdebug & gittdebug
 #repo forall -c 'echo ${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}'
 
-    if ! gittcheck_isgitproject; then pushd ${REPP_PATH}; fi
-    gittcheck_initvar print_n ;
-    popd
-
     source <(cat <<\EOL
         bar inline "GITT_VARIABLE && REPP_VARIABLE for all repository"
         for var in \
@@ -1936,8 +1918,8 @@ function reppdebug(){
         showRUN repo forall . -c 'echo ${REPO_COUNT}, ${REPO_LREV}, ${REPO_REMOTE}, ${REPO_RREV}, ${REPO_PROJECT}, ${REPO_PATH}, ${REPO_OUTERPATH}, ${REPO_INNERPATH}'
 
         bar inline "[all repo] print repo variable"
-        dlog                '${REPO_COUNT}, ${REPO_LREV}, ${REPO_REMOTE}, ${REPO_RREV}, ${REPO_PROJECT}, ${REPO_PATH}, ${REPO_OUTERPATH}, ${REPO_INNERPATH}'
-        repo forall -c 'echo ${REPO_COUNT}, ${REPO_LREV}, ${REPO_REMOTE}, ${REPO_RREV}, ${REPO_PROJECT}, ${REPO_PATH}, ${REPO_OUTERPATH}, ${REPO_INNERPATH}' | more -60
+        dlog                '${REPO_I}/${REPO_COUNT}, ${REPO_LREV}, ${REPO_REMOTE}, ${REPO_RREV}, ${REPO_PROJECT}, ${REPO_PATH}, ${REPO_OUTERPATH}, ${REPO_INNERPATH}'
+        repo forall -c 'echo ${REPO_I}/${REPO_COUNT}, ${REPO_LREV}, ${REPO_REMOTE}, ${REPO_RREV}, ${REPO_PROJECT}, ${REPO_PATH}, ${REPO_OUTERPATH}, ${REPO_INNERPATH}' | more -60
 EOL
 )
     ##run echo
