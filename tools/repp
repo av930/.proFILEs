@@ -199,7 +199,7 @@ EOF
                 read -p "input option :" opt
                 showRUN repo manifest ${opt} -o ${item:-${REPPFILE_XML}}
     ;;change)   under "please run one of these 'repp mani change' commands to generate cmd to change manifest easily\n"
-                info "repp mani change <revision|name|path|remote|upstream|dest-branch|groups|dest|src|etc> <change-string> <filter>\n"
+                clog "usage)" "repp mani change <revision|name|path|remote|upstream|dest-branch|groups|dest|src|etc> <change-string> <filter>"
 
                 bar inline "repp mani change revision migration_today"
                 clog "change field<revision> to value<migration_today>" "generate 3 type <cmd>"
@@ -215,12 +215,14 @@ CHANGE
 				  infilter : cat ${REPPFILE_XML} | sed -E 's#${item}="([^"]*${filter}[^"]*)"#${item}="${str}"#'
 				 prefilter : cat ${REPPFILE_XML} | sed -E 's#${item}="([^"]*${filter}[^"]*)"#${item}="${str}\1"#'
 				postfilter : cat ${REPPFILE_XML} | sed -E 's#${item}="([^"]*${filter}[^"]*)"#${item}="\1${str}"#'
-
 CHANGE
-				clog "verifiy :" "cat \${REPPFILE_XML} | <cmd> | grep --color=auto ${str}"
-				clog "preview :" "icdiff <( cat \${REPPFILE_XML} ) <( <cmd> )"
+				clog "\n   verifiy :" "cat \${REPPFILE_XML} | <cmd> | grep --color=auto ${str}"
+				clog "   preview :" "icdiff <( cat \${REPPFILE_XML} ) <( <cmd> )\n"
+                cat <<- CHANGE
+				      flow :  repp mani change remote vgit_new vgit_as
+				      flow :  icdiff <( cat ${REPPFILE_XML} ) <( cat repp.xml | sed -E 's#remote="([^"]*vgit_as[^"]*)"#remote="\1vgit_new"#' )
+CHANGE
     ;; esac
-
 }
 
 
@@ -345,23 +347,23 @@ function reppgo() {
 
     case $cmd in
         help) cat <<- EOF
-				usage) repp go root         # go repo root dir
+				usage) repp go              # go repo root dir
+				usage) repp go root         # same to above
 				usage) repp go mani         # go manifest dir
 				usage) repp go git          # go current git root dir
-				usage) repp go              # show menu to select similar-depth repo project
+				usage) repp go repo         # show menu to select similar-depth repo project
 EOF
                 return 1
-      ;;root)     cd "${REPP_ROOT}"     && return 0
-      ;;mani)     cd "${REPP_PATH}"     && return 0
-      ;;git)      cd "${GITT_PATH}"     && return 0
+      ;;repo)   
+                local INPUT=( $(find ${REPP_ROOT}/.. -maxdepth 4 -name ".repo" 2> /dev/null |head -60))
+                if [ -n "${INPUT}" ];
+                then run_menu "${INPUT[@]}";  cd "${menu_selected}/.."
+                else INPUT=( $(find ${HOME} -maxdepth 4 -name ".repo" 2> /dev/null |head -60))
+                     run_menu "${INPUT[@]}";  cd "${menu_selected}/.."
+                fi
+      ;;  '')    gittgo root
+      ;;   *)    gittgo $cmd
     esac
-
-    local INPUT=( $(find ${REPP_ROOT}/.. -maxdepth 4 -name ".repo" 2> /dev/null |head -60))
-    if [ -n "${INPUT}" ];
-    then run_menu "${INPUT[@]}";  cd "${menu_selected}/.."
-    else INPUT=( $(find ${HOME} -maxdepth 4 -name ".repo" 2> /dev/null |head -60))
-         run_menu "${INPUT[@]}";  cd "${menu_selected}/.."
-    fi
 }
 
 
@@ -649,15 +651,30 @@ function reppsync(){
 ## ---------------------------------------------------------------------------
 # run command, get return code and print guide
 # ex) reppsync
-    local njobs=$1
+    local cmd=$1
     local opt="${@:2}"
+    local preopt njobs
+    
+    case $cmd in
+        help) cat <<- EOF
+			usage) repp sync                # sync with default option
+			usage) repp sync debug          # for debugging with --trace
+			usage) repp sync <option>       # default option) --no-tags --no-clone-bundle --fail-fast                        
+			   ex) repp sync --force-sync   # go current git root dir
+			   ex) gitt go build            # show git path including 'build' and move to select
+EOF
+        ;; debug)  info "you can use permission check with 'repp connect' command"
+                   preopt="--trace" ; njobs=1   
+        ;; *[[:digit:]] ) ##same to '*[0-9])'
+                   echo aaaaa
+                   njobs=${cmd}
+        ;;    '')  
+            read -p "Please input job number to repo sync [enter:auto| number:ex)16| ctrl+c:exit]: " njobs;
+            if [ -z $njobs ]; then  njobs=${NJOBS}; fi        
+        ;;    -*)  opt="${cmd} ${opt}"
+    esac 
 
-    if [ -z "$njobs" ]; then
-        read -p "Please input job number to repo sync [enter:auto| number:ex)16| ctrl+c:exit]: " njobs;
-        if [ -z $njobs ]; then  njobs=${NJOBS}; fi
-    fi
-
-    showRUN repo sync --no-tags --no-clone-bundle --fail-fast -cj${njobs:-16} ${opt}
+    showRUN repo ${preopt} sync --no-tags --no-clone-bundle --fail-fast -cj${njobs:-16} ${opt}
 
     #"$@" 2> >(tee -a ${file_error})
     "$@" > >(tee -a ${file_error})
@@ -668,6 +685,29 @@ function reppsync(){
      *) echo Unknown Error;;
     esac
 }
+
+
+
+function reppreset(){
+## ---------------------------------------------------------------------------
+# reset git repositories
+# $1 target
+
+    local cmd=$1
+    case ${cmd} in
+            help)   cat <<-EOF
+				usage) repp reset          # reset all repository to original revision
+				usage) repp reset check    # show reset result (details: repp show)
+
+				 info) gitt reset          # provide detail control for one repository
+EOF
+        ;;     '')   repo forall -cj${NJOBS} 'git reset --hard ; git clean -xdf'
+                    info "finish reset all repositories"
+        ;;check|*)   showRUN repo status -vqj${NJOBS}
+                    info "only show errors"    
+    esac
+}
+
 
 
 
@@ -787,8 +827,14 @@ function reppcheck_server(){
     [ -n "$ret" ] &&  echo "branch existed and accessed [${branch}]" || err "check git branch is existed or permission allowed [${branch}]"
     #rm -f ${file_error}
     
+    under "you can check 'READ' accessibility for all branch & repository\n"
     read -p "check accessibility for all repository  [enter:continue| ctrl+c:exit]: "
-    repo forall -c 'ssh $1@$2 -p $3 gerrit ls-projects --prefix ${4:-${REPO_PROJECT}} -b ${5:-${REPO_RREV}}'  $user $(getserver $server subdomain) $(getserver $server port) ${gitproject} ${branch}
+    repo forall -c bash -c '
+    GERRIT=( "vgit_na:29420" "vgit_eu:29430" "vgit_as:29440" "vgit_adas:29550" "vgit_devops_test:29999" "lamp_review:29418" )
+    for _item in ${GERRIT[@]};do
+        [ ${_item%:*} = "${REPO_REMOTE}" ] && printf "[%4.4s] " "${REPO_I}" && ssh $REPO__${USER}@$0 -p ${_item#*:} gerrit ls-projects --prefix ${REPO_PROJECT} -b ${REPO_RREV} --limit 1
+    done
+    ' $(getserver ${oriserver} subdomain) #vgit.lge.com
 }
 
 
@@ -843,7 +889,8 @@ EOF
     server=$( getserver ${oriserver} subdomain ); port=$(getserver ${oriserver} port)
 
 
-    dlog [$user][$server][$gitproject][$branch]
+    dlog [$user][$oriserver][$server][$gitproject][$branch]
+    clog "should be this format:" "[testaccount][$oriserver][$server][$gitproject][$branch]"
 
     under "step1: check basic server environments\n"
     #local port=$(echo ${server_port} | grep -oP '(?<=:)[0-9]+(?=/)')
@@ -961,12 +1008,15 @@ function gitt_initvar(){
             ret=1                
         fi
     fi
-    ##git config --get-regexp remote.$GITT_REMOTE |sort|grep -Ee "(projectname|review|url)"
-    temp=$(git config --get-regexp remote.*.projectname|cut -d' ' -f2)
-    if [ -n "${GITT_PROJECT}" ] && [ "${temp}" = "${GITT_PROJECT}" ]; then return 0; fi
-
     ##readarray -t GITT_REMOTE < <(git remote -v |cut -f1|uniq)
     GITT_REMOTE=$(git remote|head -1)
+    
+    #git config --get-regexp remote.$GITT_REMOTE |sort|grep -Ee "(projectname|url)"
+    #git config --get-regexp remote.*.projectname|cut -d' ' -f2
+    temp=$(git config --get-regexp remote.* |grep -Ee "(projectname|url)" |head -1|grep -Po '\w/\K.\w+[^?]+')
+    if [ -n "${GITT_PROJECT}" ] && [ "${temp}" = "${GITT_PROJECT}" ]; then return 0; fi
+    GITT_PROJECT=${temp}
+
 
     #GITT_BRANCH=$(git branch -ar |grep -e '->' |sed -E 's#.*[/|>](.*)$#\1#')
     GITT_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
@@ -1008,7 +1058,9 @@ function reppcheck_initvar(){
     ## --------------------------------------------------------
     if [[ "${cmd}" =~ "repp" ]]; then repp_initvar $print; fi
     ## --------------------------------------------------------
-    if [[ "${cmd}" =~ "gitt" ]]; then gitt_initvar $print; fi 
+    if [[ "${cmd}" =~ "gitt" ]]; then 
+        if gittcheck_isgitproject; then gitt_initvar $print; fi 
+    fi
     ## --------------------------------------------------------
     if [[ "${cmd}" =~ "revv" ]]; then revv_initvar $print; fi
 }
@@ -1096,7 +1148,7 @@ function gittshow(){
     bar inline "file name only (press 'q' to stop)"
     git log --color=always --pretty="short" --name-only ${reply} |more -60
     
-    clog "to see only modified file, not add/delete files:" "git log -p --color=always --pretty=oneline --diff-filter=M ${reply}"
+    clog "to see only modified file & contents, not add/delete files:" "git log -p --color=always --pretty=oneline --diff-filter=M ${reply}"
 }
 
 
@@ -1236,13 +1288,13 @@ function gittbranch_list(){
 
     read -p "'git fetch' is needed to get recent branch details [enter:continue| ctrl+c:break] :"
     git fetch
-    bar inline "info: remote tag recent 20 by date"
+    bar inline "info: remote tag recent 20 by date (bottom is newest)"
     echo "get all branches and sort by date recent its tag"
     showRUNQ "git for-each-ref --color=always --sort=creatordate refs/tags \
     --format='%(color:yellow)%(committerdate:short) %(color:red)%(objectname:short) %(color:green)%(refname:short) %(color:blue)%(authorname)%(color:reset) %(contents:subject)' | tail -20"
 
 
-    bar inline "info: remote branch recent 20 by date"
+    bar inline "info: remote branch recent 20 by date (bottom is newest)"
     showRUNQ "git for-each-ref --color=always --sort=committerdate refs/remotes \
     --format='%(color:yellow)%(committerdate:short) %(color:red)%(objectname:short) %(color:green)%(refname:short) %(color:blue)%(authorname)%(color:reset) %(contents:subject)' | tail -20"
 
@@ -1257,7 +1309,7 @@ function gittbranch_list(){
     # clog "[always latest]" "read from remote live"
     # showRUN git ls-remote -h ${GITT_REMOTE} refs/heads/${opt} | more -60
 
-    bar inline "find: sort by recently updated branches by new commit (top is newest) findkey: ${opt:-'*'}"
+    bar inline "find: sort by recently updated branches by new commit findkey: ${opt:-'*'} (top is newest)"
     # echo "shows the branches downloaded when git fetch equivalent command was executed"
     # clog "run 'git pull'" "to fetch all latest remote branches"
     #set -o noglob
@@ -1289,8 +1341,10 @@ function gittbranch(){
 				 info) gitt diff                                # see gitt diff to compare branch
 EOF
     ;; create|new)  if [ -z "${name}" ]; then err "branch name must be input" && return 1;fi
+                bar inline "create branch: new branch will be created from current HEAD"
                 showRUNQ y git push ${GITT_REMOTE} HEAD:refs/heads/${name}
     ;; delete|remove)  if [ -z "${name}" ]; then err "branch name must be input" && return 1;fi
+                bar inline "delete branch: branch [${name}] will be removed from REMOTE"
                 showRUNQ y git push ${GITT_REMOTE} --delete ${name}
     ;; info) gittbranch_info
     ;; list) gittbranch_list "${name}"
@@ -1406,9 +1460,7 @@ function gittreset(){
 
     local cmd=$1
     case ${cmd} in
-        all)   repo forall -cj${NJOBS} 'git reset --hard ; git clean -xdf'
-                echo "reset all repositories"
-    ;; clear)   showRUNQ y git reset --hard && showRUN git clean -xdf
+        clear)   showRUNQ y git reset --hard && showRUN git clean -xdf
     ;; help|*)   cat <<-EOF
 				usage) gitt reset clear #remove all changes and reset with comfirm 'y'
 				usage) gitt reset       #show detail reset commands
@@ -1418,9 +1470,9 @@ function gittreset(){
 				2) git reset <rev> <option>
 				   current : workspace index repository | description
 				   -----------------------------------------------------------------------------------------------------
-				    --soft : workspace index <<<<       | keep commit & file, retry from 'git push'
-				    --mixed: workspace <<<<             | keep only  file, retry from 'git add' (default)
-				    --hard : <<<<                       | remove all, retry from scratch
+				    --soft : workspace index <<<<       | keep commit & file, could retry from 'git push'
+				    --mixed: workspace <<<<             | keep only  file, could retry from 'git add' (default)
+				    --hard : <<<<                       | remove all, need to retry from scratch
 				3) retry from each step
 				flow) git log> git reset c3cef36787        > add modification> git add -A> git commit        > git push
 				flow) git log> git reset c3cef36787 --soft > add modification> git add -A> git commit --amend> git push
@@ -1515,7 +1567,7 @@ EOF
 
 
 
-function revvaccount(){
+function revvcontrol(){
 ## ---------------------------------------------------------------------------
 
 # read information from gerrit
@@ -1573,10 +1625,10 @@ function revvaccount(){
                 curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/?m=${target} | sed '1d'| jq  -cC '.[]|{ref,revision}' | more -60
     ;;branchadd) bar inline "create branch with base revision"
                 if [ -z "${extra}" ]; then read -p "input base branch which new branch is created from: ";fi
-                curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -H "Content-Type: application/json" --data "{"revision": "${extra:-${REPLY}}"}"  -X PUT
+                showRUNQ y curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -H "Content-Type: application/json" --data "{"revision": "${extra:-${REPLY}}"}"  -X PUT
 
     ;;branchdel) bar inline "delete branch by name"
-                curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -X DELETE
+                showRUNQ y curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -X DELETE
 
     ;;   help|*)  echo "check your cmd [${cmd}]"; cat <<-EOF
 			usage) revv user   na joongkeun.kim                               # check account is existed and its groups
@@ -1630,17 +1682,22 @@ function revvcmd(){
 # $2 server
 # $3 gitproject
 # $4 branch
-    local server=$(getserver ${1:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
+    local cmd=$1
+    local server=$(getserver ${cmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
     local key=$(ende_code dev $(getserver ${GITT_REMOTE:-${REPP_REMOTE}} sub))
-    local usercmd=${2-${ACCOUNT}}
-    local gitproject=${3//'/'/'%2F'}
+    local usercmd=${2-${USER}}
+    local oriproject=${3:-${GITT_PROJECT:-${REPP_PROJECT}}}
+    local gitproject=${oriproject//'/'/'%2F'}
     #local branch=$4
 
-    case ${usercmd} in
+    case ${cmd} in
        help)    cat <<-EOF
-				usage) revv gerrit help                                    #show account info from gerrit server
-				usage) revv gerrit command                                 #show gerrit POST command
-				usage) revv gerrit cmd joongkeun.kim na  mustang/tm/src    #show gerrit POST command with parameter
+				usage) revv cmd help                                    #show account info from gerrit server
+				usage) revv cmd <server> <account> <gitproject>         #make gerrit POST command
+				   ex) revv cmd eu joongkeun.kim mustang/tm/src         #make gerrit POST command with parameter
+				   ex) revv cmd eu joongkeun.kim                           
+				   ex) revv cmd eu 
+				   ex) revv cmd  
 EOF
             bar outline "info gerritserver: show gerrit account"
             showRUN curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${usercmd} |more
@@ -1773,7 +1830,7 @@ case "$1" in
     ;; connect)      reppcheck_initvar gittrevv;                revvcheck_server "${@:2}"
     ;;    info)      reppcheck_initvar gittrevv;                revvinfo  "${@:2}"
     ;;   debug)      reppcheck_initvar gittrevv;                revvdebug "${@:2}"
-    ;;       *)                                                 revvaccount "${@:1}"
+    ;;       *)                                                 revvcontrol "${@:1}"
 esac
 return $ret
 }
@@ -1804,7 +1861,7 @@ case "$1" in
     ;;      '')                                                 reppmenu gitt "${MENU[@]}"
     ;;    info)     reppcheck_initvar gitt print_n;             gittinfo
     ;;    show)     reppcheck_initvar gitt print_n;             gittshow "${@:2}"
-    ;;      go)                                                 gittgo "${@:2}"
+    ;;      go)     reppcheck_initvar gitt print_n;             gittgo "${@:2}"
     ;;  commit)     reppcheck_initvar gitt print_n;             gittcommit "${@:2}"
     ;;  branch)     reppcheck_initvar gitt print_n;             gittbranch "${@:2}"
     ;;    find)     reppcheck_initvar gitt print_n;             gittfind "${@:2}"
@@ -1855,7 +1912,7 @@ case "$1" in
     ;; mani)        reppcheck_initvar repp print_n;             reppmani "${@:2}"
     ;; init)        reppcheck_initvar repp print_n;             reppinit "${@:2}"
     ;; sync)        reppcheck_initvar repp print_n;             reppsync "${@:2}"
-    ;; reset)       reppcheck_initvar repp print_y;             gittreset all
+    ;; reset)       reppcheck_initvar repp print_y;             reppreset "${@:2}"
     ;; version)     reppcheck_initvar repp print_y;             reppversion "${@:2}"
     ;; connect)     reppcheck_initvar reppgittrevv print_n;     reppconnect "${@:2}"
     ;; debug)       reppcheck_initvar reppgittrevv print_y;     reppdebug "${@:2}"
@@ -1928,7 +1985,7 @@ function reppdebug(){
         bar inline "[all repo] print repo variable"
         dlog                '${REPO_I}/${REPO_COUNT}, ${REPO_LREV}, ${REPO_REMOTE}, ${REPO_RREV}, ${REPO_PROJECT}, ${REPO_PATH}, ${REPO_OUTERPATH}, ${REPO_INNERPATH}'
         #repo forall -c 'echo ${REPO_I}/${REPO_COUNT}, ${REPO_LREV}, ${REPO_REMOTE}, ${REPO_RREV}, ${REPO_PROJECT}, ${REPO_PATH}, ${REPO_OUTERPATH}, ${REPO_INNERPATH}' | more -60
-        repo forall -j1 -c 'printf "%-9.9s|%.6s|%.7s|%-22.22s|%-74.74s|%.80s\n" "${REPO_I}/${REPO_COUNT}" "${REPO_LREV}" "${REPO_REMOTE}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"' | more -60
+        repo forall -j1 -c 'printf "%9.9s|%.6s|%.7s|%-22.22s|%-74.74s|%.80s\n" "${REPO_I}/${REPO_COUNT}" "${REPO_LREV}" "${REPO_REMOTE}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"' | more -60
 EOL
 )
     ##run echo
