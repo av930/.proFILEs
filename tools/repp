@@ -1673,26 +1673,7 @@ function revvforall(){
     local server=$(getserver ${2:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
     local key=$(ende_code dev $(getserver ${2:-${GITT_REMOTE:-${REPP_REMOTE}}} sub))
     local target=$3
-    local file=$(mktemp)
-
-    :<< COMMENT 
-    repo forall -c bash -c 'curl -s -u vc.integrator:8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog \
-       http://vgit.lge.com/devops_test/a/projects/${REPO_PROJECT//"/"/"%2F"}/branches/?m=${REPO_RREV} \
-       | sed "1d"| jq  -cC ".[]|{ref,revision}"'
-    #repo forall -c bash -c 'curl -s -u vc.integrator:8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog \ 
-    #    http://vgit.lge.com/devops_test/a/projects/${REPO_PROJECT//"/"/"%2F"}/branches/${REPO_RREV}_test -H "Content-Type: application/json" --data "{"revision": "master"}"  -X PUT'
-    
-    repo forall -c bash -c 
-    GERRIT=( "vgit_na" "vgit_eu" "vgit_as" "vgit_adas" "vgit_devops_test" "lamp_review" )
-    for _item in ${GERRIT[@]};do
-        [ ${_item%:*} = "${REPO_REMOTE}" ] && ssh $REPO__${USER}@$0 -p ${_item#*:} gerrit ls-projects --prefix ${REPO_PROJECT} -b ${REPO_RREV} --limit 1
-    done
-     
-
-curl -s -u $REPO__$USER:${1} ${2}/a/projects/${3}/branches/${4} |tail -n +2 | jq  -cC ".|{ref,revision}"
-|tail -n +2 | jq  -cC ".|{ref,revision}"
-COMMENT
-    #dlog "[${cmd}] [${key}] [${server}] [${source//'/'/'%2F'}] [${target}] [${extra}]"
+    #dlog "[${cmd}] [${key}] [${server}] [${target}]"
     
     repo forall -c bash -c '
     case ${0} in
