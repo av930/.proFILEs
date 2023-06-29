@@ -827,7 +827,7 @@ function reppcheck_server(){
     [ -n "$ret" ] &&  echo "branch existed and accessed [${branch}]" || err "check git branch is existed or permission allowed [${branch}]"
     #rm -f ${file_error}
     
-    under "you can check 'READ' accessibility for all branch & repository\n"
+    under "you can check 'READ' accessibility for all branch & repository (wait 30s)\n"
     read -p "check accessibility for all repository  [enter:continue| ctrl+c:exit]: "
     repo forall -c bash -c '
     GERRIT=( "vgit_na:29420" "vgit_eu:29430" "vgit_as:29440" "vgit_adas:29550" "vgit_devops_test:29999" "lamp_review:29418" )
@@ -1543,7 +1543,6 @@ function revvcheck_server(){
 
 function revvinfo(){
 ## ---------------------------------------------------------------------------
-
 # read information from gerrit
 # $1 account
 # $2 server
@@ -1575,9 +1574,10 @@ function revvcontrol(){
 # $2 server
 # $3 gitproject
 # $4 branch
-    local cmd="$1"
-    local server=$(getserver ${2:-na} http)
-    local key=$(ende_code dev $(getserver $2 sub))
+    local cmd=$1
+    local subcmd=$2
+    local server=$(getserver ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
+    local key=$(ende_code dev $(getserver ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub))    
     local source=${3:-$USER}
     local target=$4
     local extra=$5
@@ -1586,51 +1586,10 @@ function revvcontrol(){
 
     #local branch=$4
 
-    case ${cmd} in
-        user)   bar inline "check if account is existed & get account info "
-                curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${source} |sed '1d'| jq '.'
-                bar inline "list group name which account belongs to"
-                curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/${source}/groups |sed '1d'| jq -cC '.[]|{name, created_on}' | more -60
-
-    ;;sshkey)   bar outline "get registered SSH-key for account [${source}] in server [$server]"
-                curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/${source}/sshkeys |sed '1d'| jq -cC '.[]|{ssh_public_key, comment}'
-
-    ;;group)    bar inline "find group by name"
-                curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/?m=${source} |sed '1d'| jq '.'
-                bar inline "list sub-group by ${source} group"
-                curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${source}/groups/ |sed '1d'| jq -c '.[]|{name, created_on}'
-                bar inline "show group member by ${source} group to its decendents"
-                curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${source}/members?recursive |sed '1d'| jq -cC '.[]|{name, email}'  | more -60
-
-    ;;groupadd) bar outline "add member to group"
-                curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${source}/members/${target} -X PUT
-
-    ;;groupdel) bar outline "delete member from group"
-                curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${source}/members/${target} -X DELETE
-
-    ;;groupmem) bar outline "find member from group"
-                curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${source}/members|grep ${target}
-
-    ;;project)  bar inline "find project and show project url"
-                curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/?m=${source} |sed '1d' > $file
-                clog "matching project: "  $(cat $file| jq -c 'keys[]')
-                cat $file| jq --arg jq_var ${VGIT} -c '"link: http://" + $jq_var + .[].web_links[].url'
-                bar inline "search child-project inherit from project ${source}, plz wait..."
-                curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/children/?recursive| sed '1d'| jq  -cC '.[].name' | more -60
-                printf "\n\n"
-                dlog "[guide] To see project config (run cmd):" "curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} | sed '1d'| jq  -C '.[]'"
-                dlog "[guide] To crate/delete project (visit):" "${server}/admin/repos/${source}"
-
-    ;;branch)   bar inline "find branches by name"
-                curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/?m=${target} | sed '1d'| jq  -cC '.[]|{ref,revision}' | more -60
-    ;;branchadd) bar inline "create branch with base revision"
-                if [ -z "${extra}" ]; then read -p "input base branch which new branch is created from: ";fi
-                showRUNQ y curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -H "Content-Type: application/json" --data "{"revision": "${extra:-${REPLY}}"}"  -X PUT
-
-    ;;branchdel) bar inline "delete branch by name"
-                showRUNQ y curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -X DELETE
-
-    ;;   help|*)  echo "check your cmd [${cmd}]"; cat <<-EOF
+    local SEP='~'
+    case ${cmd}${SEP}${subcmd} in
+           *~help)  
+            echo "check your cmd [${cmd}]"; cat <<-EOF
 			usage) revv user   na joongkeun.kim                               # check account is existed and its groups
 			usage) revv sshkey na joongkeun.kim                               # get registered SSH-KEY
 			usage) revv group    na sa515m_reviewer                           # group existance and list sub-groups & all members
@@ -1643,36 +1602,109 @@ function revvcontrol(){
 			usage) revv branchadd na mustang/tm/src tsu_25.5my_release_new    # create branch
 			usage) revv branchdel na mustang/tm/src tsu_25.5my_release_new    # remove branch
 EOF
+    ;;      user~*)   
+            bar inline "check if account is existed & get account info "
+            curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${source} |sed '1d'| jq '.'
+            bar inline "list group name which account belongs to"
+            curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/${source}/groups |sed '1d'| jq -cC '.[]|{name, created_on}' | more -60
+
+    ;;    sshkey~*)   
+            bar outline "get registered SSH-key for account [${source}] in server [$server]"
+            curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/${source}/sshkeys |sed '1d'| jq -cC '.[]|{ssh_public_key, comment}'
+
+    ;;     group~*)    
+            bar inline "find group by name"
+            curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/?m=${source} |sed '1d'| jq '.'
+            bar inline "list sub-group by ${source} group"
+            curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${source}/groups/ |sed '1d'| jq -c '.[]|{name, created_on}'
+            bar inline "show group member by ${source} group to its decendents"
+            curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${source}/members?recursive |sed '1d'| jq -cC '.[]|{name, email}'  | more -60
+
+    ;;  groupadd~*) 
+            bar outline "add member to group"
+            curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${source}/members/${target} -X PUT
+
+    ;;  groupdel~*) 
+            bar outline "delete member from group"
+            curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${source}/members/${target} -X DELETE
+
+    ;; groupmem~*) 
+            bar outline "find member from group"
+            curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${source}/members|grep ${target}
+
+    ;;  project~*)  
+            bar inline "find project and show project url"
+            curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/?m=${source} |sed '1d' > $file
+            clog "matching project: "  $(cat $file| jq -c 'keys[]')
+            cat $file| jq --arg jq_var ${VGIT} -c '"link: http://" + $jq_var + .[].web_links[].url'
+            bar inline "search child-project inherit from project ${source}, plz wait..."
+            curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/children/?recursive| sed '1d'| jq  -cC '.[].name' | more -60
+            printf "\n\n"
+            dlog "[guide] To see project config (run cmd):" "curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} | sed '1d'| jq  -C '.[]'"
+            dlog "[guide] To crate/delete project (visit):" "${server}/admin/repos/${source}"
+
+    ;;   branch~*)   
+            bar inline "find branches by name"
+            curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/?m=${target} | sed '1d'| jq  -cC '.[]|{ref,revision}' | more -60
+    ;;branchadd~*) 
+            bar inline "create branch with base revision"
+            if [ -z "${extra}" ]; then read -p "input base branch which new branch is created from: ";fi
+            showRUNQ y curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -H "Content-Type: application/json" --data "{"revision": "${extra:-${REPLY}}"}"  -X PUT
+
+    ;;branchdel~*) 
+            bar inline "delete branch by name"
+            showRUNQ y curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -X DELETE
     esac
 }
 
 
 
-function revvrepo(){
+function revvforall(){
 ## ---------------------------------------------------------------------------
-
-# read information from gerrit
+# repoforall for revv
+# ex) revv forall branch vgit_na              #check branch ${REPO_RREV}
+# ex) revv forall branchadd vgit_na _temp     #check branch ${REPO_RREV}_temp
+# ex) revv forall branchdel vgit_na _temp     #check branch ${REPO_RREV}_temp
 # $1 account
 # $2 server
 # $3 gitproject
 # $4 branch
     local cmd="$1"
-    local server=$(getserver ${2:-na} http)
-    local key=$(ende_code dev $(getserver $2 sub))
-    local source=${3:-$USER}
-    local target=$4
-    local extra=$5
+    local server=$(getserver ${2:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
+    local key=$(ende_code dev $(getserver ${2:-${GITT_REMOTE:-${REPP_REMOTE}}} sub))
+    local target=$3
     local file=$(mktemp)
 
+    :<< COMMENT 
     repo forall -c bash -c 'curl -s -u vc.integrator:8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog \
        http://vgit.lge.com/devops_test/a/projects/${REPO_PROJECT//"/"/"%2F"}/branches/?m=${REPO_RREV} \
        | sed "1d"| jq  -cC ".[]|{ref,revision}"'
     #repo forall -c bash -c 'curl -s -u vc.integrator:8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog \ 
     #    http://vgit.lge.com/devops_test/a/projects/${REPO_PROJECT//"/"/"%2F"}/branches/${REPO_RREV}_test -H "Content-Type: application/json" --data "{"revision": "master"}"  -X PUT'
+    
+    repo forall -c bash -c 
+    GERRIT=( "vgit_na" "vgit_eu" "vgit_as" "vgit_adas" "vgit_devops_test" "lamp_review" )
+    for _item in ${GERRIT[@]};do
+        [ ${_item%:*} = "${REPO_REMOTE}" ] && ssh $REPO__${USER}@$0 -p ${_item#*:} gerrit ls-projects --prefix ${REPO_PROJECT} -b ${REPO_RREV} --limit 1
+    done
      
+
+curl -s -u $REPO__$USER:${1} ${2}/a/projects/${3}/branches/${4} |tail -n +2 | jq  -cC ".|{ref,revision}"
+|tail -n +2 | jq  -cC ".|{ref,revision}"
+COMMENT
+    #dlog "[${cmd}] [${key}] [${server}] [${source//'/'/'%2F'}] [${target}] [${extra}]"
+    
+    repo forall -c bash -c '
+    case ${0} in
+         branch) curl -s -u $REPO__$USER:${1} http://vgit.lge.com/${REPO_REMOTE#*_}/a/projects/${REPO_PROJECT//'/'/'%2F'}/branches/${REPO_RREV}${2} \
+                   | tail -n +2 | jq  -cC ".|{ref,revision}"
+    ;;branchadd) curl -s -u $REPO__$USER:${1} http://vgit.lge.com/${REPO_REMOTE#*_}/a/projects/${REPO_PROJECT//'/'/'%2F'}/branches/${REPO_RREV}${2} -X PUT \
+                   -H "Content-Type: application/json" --data "{"revision": "${REPO_RREV}"}" 
+    ;;branchdel) curl -s -u $REPO__$USER:${1} http://vgit.lge.com/${REPO_REMOTE#*_}/a/projects/${REPO_PROJECT//'/'/'%2F'}/branches/${REPO_RREV}${2} -X DELETE
+    ;;        *) echo "not processed"
+    esac
+    ' ${cmd} ${key} ${target} 
 }
-
-
 
 
 function revvcmd(){
@@ -1813,11 +1845,22 @@ function revv(){
 
 set +o noglob
 local MENU=(
-"   info: shows repository info such as manifest path, repo cmd, tree of manifests, etc"
-"    cmd: list useful command from gerrit"
-"connect: check if input account can access branch in gitproject on server"
-" server: check delay from server or confirm the server status"
-"  debug: show variable REPO, REPP, REPPFILE, GITT variable used in script"
+"     info: shows repository info such as manifest path, repo cmd, tree of manifests, etc"
+"      cmd: list useful command from gerrit"
+"  connect: check if input account can access branch in gitproject on server"
+"   server: check delay from server or confirm the server status"
+"    debug: show variable REPO, REPP, REPPFILE, GITT variable used in script"
+"   forall: repoforal for revv branch commands"
+"     user: check if account is existed & get account info "
+"   sshkey: get registered SSH-key for an account in server "
+"    group: find group by name"
+" groupadd: add member to group"
+" groupdel: delete member from group"
+" groupmem: find member from group"
+"  project: find project and show project url"
+"   branch: find branches by name"
+"branchadd: create branch with base revision"
+"branchdel: delete branch by name"
 )
 
 local ret=0
@@ -1830,7 +1873,8 @@ case "$1" in
     ;; connect)      reppcheck_initvar gittrevv;                revvcheck_server "${@:2}"
     ;;    info)      reppcheck_initvar gittrevv;                revvinfo  "${@:2}"
     ;;   debug)      reppcheck_initvar gittrevv;                revvdebug "${@:2}"
-    ;;       *)                                                 revvcontrol "${@:1}"
+    ;;  forall)      reppcheck_initvar reppgittrevv;            revvforall "${@:2}"
+    ;;       *)      reppcheck_initvar gittrevv;                revvcontrol "${@:1}"
 esac
 return $ret
 }
