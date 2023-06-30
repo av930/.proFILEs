@@ -1,71 +1,98 @@
-#### repo template
+#### revv script template
 ## usage
-# repo forall -vecj4 bash -c 'revvscript.sh'
+# repo forall -evc bash 'revvscript.sh' branch 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog master debug
+# repo forall -evc bash 'revvscript.sh' branchlist 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog \* debug 
+# revv
 
-## repo forall -c 'cmd.sh'                                      #   basic usage:  REPO variable is available
-## repo forall -c bash -c 'cmd.sh'                              # advanced usage: SHELL variable is available
-## repo forall . -c 'cmd.sh'                                    # for only current project
-## repo forall mustang/tm/src honda/linux/build_tsu -c 'cmd.sh' # for serveral project
-## repo forall $(cat fromfilelist.txt)  -c 'cmd.sh'             # for serveral project from file
-## repo forall -r poky/*  -c 'cmd.sh'                           # for git projects matched regexp
-## repo forall -i poky/*  -c 'cmd.sh'                           # for git projects not matched regexp
-## repo forall -g hlos  -c 'cmd.sh'                             # for git projects included in specific group
-: ' ##comment block
-option -j:jobs, -e:stop if error happen, --ignore-missing:, --interactive:
+## repo forall . -c bash 'cmd.sh'                                    # for current git only SHELL variable is available
+## repo forall mustang/tm/src honda/linux/build_tsu -c bash 'cmd.sh' # for serveral project
+## repo forall $(cat fromfilelist.txt)  -c 'cmd.sh'                  # for serveral project from file
+## repo forall -r poky/* -c bash 'cmd.sh'                            # for git projects matched regexp
+## repo forall -i poky/* -c bash 'cmd.sh'                            # for git projects not matched regexp
+## repo forall -g hlos -c bash 'cmd.sh'                              # for git projects included in specific group
+: ' ##options && variable
+option -j:jobs, -e:stop if error happen, --ignore-missing:?, --interactive:?
        -p:print gitproject, -v:verbose, -q:only show errors
 
-repo variables
-${REPO_I} ${REPO_COUNT}, ${REPO_LREV}, ${REPO_REMOTE}, ${REPO_RREV}, ${REPO_PROJECT}, ${REPO_PATH}, ${REPO_INNERPATH}"
+repo variables $REPO__$VARIABLE, ${REPO_I} ${REPO_COUNT}
+        ${REPO_LREV}, ${REPO_REMOTE}, ${REPO_RREV}, ${REPO_PROJECT}, ${REPO_PATH}, ${REPO_INNERPATH}
 '
 
-## HEADING 
-BAR="~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-YELLOW='\e[1;33m'; NCOL='\e[0m';
-#err()    { printf "${RED}ERROR: ${NCOL} %b\\n"   ;}
-#dlog()   { printf "\n${BAR}\n%b\\n" "${YELLOW}$1 ${NCOL} ${@:2}" ;}
-printf "${BAR}\n${YELLOW}%-10.10b${NCOL} %-12.12b|%-26.26b|%-76.76b\n" \
-       "[${REPO_I}/${REPO_COUNT}]" "${REPO_REMOTE}" "${REPO_RREV}" "${REPO_PROJECT}"
+## USER input or define variable
+cmd=$1
+key=$2
+target_branch=${3/\*/}
+base_branch=$4
+dflag="${@: -1}"
+tempf=$(mktemp)
+
+
+## for degbugging
+## DEBUG=[ false | "printf ${RED}%s${NCOL}\n" ]
+DEBUG=false
+if [ ${dflag} = "debug" ]; then DEBUG="printf ${RED}%s${NCOL}\n"; fi
+
+#no need to close by set +x, repo forall is executed in all sub shell
+showRUN(){ [ "${DEBUG}" = "false" ] || set -x; "$@" ; } 
+clog()   { printf "${GREEN}$1 ${NCOL} ${@:2}"  ;}
+
+## default variable & functions
+NCOL='\e[0m'; YELLOW='\e[1;33m'; RED='\e[1;31m'; GREEN='\e[1;32m';
+BAR="~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+JSON_IDFY=")]}'"
+
+#### main body 
+## title for git project
+printf "${BAR}\n${YELLOW}%-10.10b${NCOL} %-12.12b | %-84.84b | %s\n" \
+       "[${REPO_I}/${REPO_COUNT}]" "remote:${REPO_REMOTE}" "project:${REPO_PROJECT}" #"branch:${REPO_RREV}" 
        
 
-TARGET=${REPO_RREV}_precs1_migration_220214
-
-
-## exception handler by git project
-case ${REPO_PROJECT} in
-    vendor/manifest                                 |\
-    __found_error                                   ) echo "this case must never happen" && exit 1 
-    
-    ;;  
-    vendor/qct/sa515m/sa515m_wlan_rome/cnss_proc    |\
-    __skip_project                                  ) echo "skip projcet" && exit 0
-    
-    ;;  
-    mustang/tm/src                                  |\
-    honda/linux/build_tsu                           |\
-    __except_project                                ) echo "exception handler" 
-        echo git fetch ${REPO_REMOTE} ${TARGET}
-        echo git checkout ${REPO_REMOTE}/${TARGET}
-        exit 0    
+## preprocess
+case ${REPO_REMOTE} in
+     __found_error) $DEBUG "case1: error"  && exit 1 
+    ;; __skip_case) $DEBUG "case2: skip" && exit 0
+    ;;      devops) $DEBUG "case3: preprocess" 
+                    url=http://vgit.lge.com/${REPO_REMOTE}_test
 esac;
-## goto main
 
+case $cmd in
+         branch|branchadd|branchdel) :
+    ;;                   branchlist) target_branch="?m=${target_branch}"
+    ;;    branchaddpre|branchaddpre) target_branch="${target_branch}${REPO_RREV}"
+    ;;  branchaddpost|branchdelpost) target_branch="${REPO_RREV}${target_branch}"
+esac
+$DEBUG "target_branch: ${target_branch}" 
 
+run_command="curl -s -u $REPO__$USER:${key} ${url}/a/projects/${REPO_PROJECT//'/'/'%2F'}/branches/${target_branch} -o ${tempf}"
 ## main handler by git branch
 case ${REPO_RREV} in
-    __select_source                                 ) echo "select source branch ${REPO_RREV}, stay here" 
+    __branch_A                                      |\
+    __select_source                                 ) $DEBUG "caseA: ${REPO_RREV}" 
     
     ;;  
-    tsu_25.5my_release                              |\
-    __select_target                                 ) echo "select target branch ${REPO_RREV}, checkout" 
-        echo git fetch ${REPO_REMOTE} ${TARGET}
-        echo git checkout ${REPO_REMOTE}/${TARGET}
+    __branch_B                                      |\
+    __select_merge                                  ) $DEBUG "caseB: ${REPO_RREV}" 
         
     ;;  
-    tiger_desktop_release                           |\
-    __select_merge                                  ) echo "select branch merge ${REPO_RREV}, merge" 
-        echo git fetch ${REPO_REMOTE} ${TARGET}
-        echo git merge --no-edit ${REPO_REMOTE}/${TARGET}
-        
-    ;;  
-    __select_other | *                              ) : echo "done"
+    __select_other | *                              ) $DEBUG "caseC: ${REPO_RREV}" 
+        case $cmd in
+                  branch|branchlist) 
+                    showRUN ${run_command} 
+        ;;     branchadd|branchaddpre|branchaddpost) 
+                    showRUN ${run_command} -X PUT -H "Content-Type: application/json" --data "{"revision": "${REPO_RREV}"}" 
+        ;;     branchdel|branchdelpre|branchdelpost) 
+                    showRUN ${run_command} -X DELETE
+        ;;  debug|* ) 
+            $DEBUG "positional params: [$0][$1][$2][$3][${@:4}}]"
+            $DEBUG "variable check   : [$target_branch][$url][$2][$3][${@:4}}]"
+        esac
+        if [ "$(cat ${tempf} | head -1)" = "${JSON_IDFY}" ]; then 
+            if [ "$(cat ${tempf} | sed -n '2p')" = "[]" ]; then clog "executed" "result is nothing"; cat ${tempf} | tail -n +3
+            elif [ "$(cat ${tempf} | sed -n '2p')" = "{" ]; then cat "${tempf}" | sed "1d" | jq  -cC ".|{ref,revision}" 
+            else cat "${tempf}" | sed '1d'| jq  -cC '.[]|{ref,revision}'
+            fi
+        elif [ -z "$(cat ${tempf} | head -1)" ]; then clog "warn" "you must check the result by hand !!"
+        else cat "${tempf}"
+        fi
 esac;
+#        ;;    branchlist) showRUN curl -s -u $REPO__$USER:${key} ${url}/a/projects/${REPO_PROJECT//'/'/'%2F'}/branches/?m=${target_branch} -o ${tempf}

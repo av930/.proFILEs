@@ -126,7 +126,7 @@ local temp_var
             if (( 40 < ${#temp_var} )); then
                 echo ${temp_var}| openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 2> /dev/null
             else
-                err "check variable ENCODE_$2" > /dev/stderr && return 1
+                info "cannot read from ENCODE_$2" > /dev/stderr && return 1
             fi
        ;;list|debug)  #list up keycode for debugging
             declare -p |grep ENCODE 
