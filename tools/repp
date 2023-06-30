@@ -42,7 +42,8 @@ source <(cat <<\EOF
 
     ## NEEDTO: sudo apt-get install icdiff
     #git config --global alias.diffi "difftool --extcmd 'icdiff'"
-    git config --global alias.diffi '!_gitdiff() { git difftool --extcmd "icdiff $@"; }; _gitdiff' --replace-all
+     git config --global alias.diffi "!_gitdiff() { git difftool --extcmd 'icdiff'; }; _gitdiff"
+    #git config --global alias.diffi '!_gitdiff() { git difftool --extcmd "icdiff $@"; }; _gitdiff' --replace-all
     #git config --global alias.clear !_gitclear() { git reset --hard $1; git clean -xdf; }; _gitclear
 EOF
 )
@@ -80,6 +81,26 @@ EOF
 
 
 
+function ret_server() {
+## ---------------------------------------------------------------------------
+## search target from source and return 
+    local target=$1
+    local source="${@:2}"
+    case $target in                                                                       # return value
+            http)    echo "${source}"| awk -F[./:] '{print "http://"$1"."$2"."$3"/"$4}'   # http://vgit.lge.com/na
+    ;;      port)    echo "${source}"| awk -F[./:] '{print $5}'                           # 29420
+    ;;       sub)    echo "${source}"| awk -F[./:] '{print $1}'                           # vgit
+    ;;    domain)    echo "${source}"| awk -F[./:] '{print $2"."$3}'                      # lge.com
+    ;; subdomain)    echo "${source}"| awk -F[./:] '{print $1"."$2"."$3}'                 # vgit.lge.com
+    ;;      path)    echo "${source}"| awk -F[./:] '{print $4}'                           # na
+    ;;       url)    echo "${source}"| awk -F[./:] '{print $1"."$2"."$3"/"$4}'            # vgit.lge.com/na
+    ;;    remote)    echo "${source}"| awk -F[./:] '{print $1"_"$4}'                      # vgit_na
+    ;;     debug)    echo "${source}"                                                     # vgit.lge.com/na:29420
+    ;;         *)    echo "not processed"                                                 # vgit.lge.com/na:29420
+    esac
+}
+
+
 function getserver() {
 ## ---------------------------------------------------------------------------
 ## format: getserver [29420|na|vgit|lamp|review] [port|http|sub|domain|subdomain|path|url|remote|debug]
@@ -88,26 +109,17 @@ function getserver() {
     local search_key=$1
     local return_type=$2
     case $search_key in
-    vgit_*|lamp_*)   search_key="${search_key#*_}";                                              #remove prefix vgit_ or lamp_ and return remain.
+    vgit_*|lamp_*)   search_key="${search_key#*_}";                                      #remove prefix vgit_ or lamp_ and return remain.
     esac
 
     for _item in ${GERRIT[@]};do
         if [[ ${_item##*/} =~ "$search_key" ]]; then
-            case $return_type in                                                                 # return value
-                    http)    echo "${_item}"| awk -F[./:] '{print "http://"$1"."$2"."$3"/"$4}'   # http://vgit.lge.com/na
-            ;;      port)    echo "${_item}"| awk -F[./:] '{print $5}'                           # 29420
-            ;;       sub)    echo "${_item}"| awk -F[./:] '{print $1}'                           # vgit
-            ;;    domain)    echo "${_item}"| awk -F[./:] '{print $2"."$3}'                      # lge.com
-            ;; subdomain)    echo "${_item}"| awk -F[./:] '{print $1"."$2"."$3}'                 # vgit.lge.com
-            ;;      path)    echo "${_item}"| awk -F[./:] '{print $4}'                           # na
-            ;;       url)    echo "${_item}"| awk -F[./:] '{print $1"."$2"."$3"/"$4}'            # vgit.lge.com/na
-            ;;    remote)    echo "${_item}"| awk -F[./:] '{print $1"_"$4}'                      # vgit_na
-            ;;     debug)    echo "${_item}"                                                     # vgit.lge.com/na:29420
-            ;;         *)    echo "${search_key} not processed"                                  # vgit.lge.com/na:29420
-            esac
+            ret_server $return_type ${_item}
             return 0
         fi
     done
+    #default server, if not [[ ${_item##*/} =~ "$search_key" ]]
+    ret_server $return_type ${GERRIT[4]}
 }
 
 
@@ -513,7 +525,7 @@ EOF
 
                 bar inline "check exact ${name} remote branche is existed for all gits"
                 #showRUNQ y repo forall -c 'printf "%30s| %-70s\n" ${REPO_REMOTE} ${REPO_PROJECT} $(git ls-remote -h ${REPO_REMOTE} refs/heads/$1)' ${name}
-                showRUN repo --color=always forall -c 'printf "\t\t >>>> [%30s] %-60s\n" ${REPO_REMOTE} ${REPO_PROJECT}; git ls-remote -h ${REPO_REMOTE} refs/heads/${1}' ${name:-'*'} |more
+                showRUN repo forall -c 'printf "\t\t >>>> [%10s] ${YELLOW}%-60s${NCOL}\n" ${REPO_REMOTE} ${REPO_PROJECT}; git ls-remote -h ${REPO_REMOTE} refs/heads/${1}' ${name:-'*'} |more
     ;;  create|new)
                 under "please run one of these 'git push' commands to create branch in remote\n"
                 info "<branch name> will be passing to 'git push' cmd in position of parameter \${1}"
@@ -839,7 +851,7 @@ function reppcheck_server(){
 
 
 
-#revvforall joongkeun.kim na tsu_25.5my_release
+#reppforall joongkeun.kim na tsu_25.5my_release
 function reppforall(){
 ## ---------------------------------------------------------------------------
 # check if an account in server can access code-review server by SSH protocol
@@ -1034,11 +1046,11 @@ function revv_initvar(){
     key=$(ende_code dev ${key_id})
 
     if (( 40 > ${#key} )); then
-        err "please check gerrit http key value in [~/.key_${key_id}]";
-        info "you can generate .key_XXX : code enf ${key_id} <check_key_from_gerrit_account>"
+        warn "if problem continue, check gerrit http key value in [~/.key_${key_id}] \n
+        you can generate .key_XXX : code enf ${key_id} <check_key_from_gerrit_account>"
         key=$(ende_code def ${key_id})
         ende_code env ${key_id} ${key}
-        info "now key is reloaded from [~/.key_${key_id}] automatically"
+        info "Now key is reloaded from [~/.key_${key_id}] automatically"
     fi
 
     if ! revvcheck_server ${server:-na} ${ACCOUNT} checkapi; then
@@ -1669,22 +1681,29 @@ function revvforall(){
 # $2 server
 # $3 gitproject
 # $4 branch
-    local cmd="$1"
-    local server=$(getserver ${2:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
-    local key=$(ende_code dev $(getserver ${2:-${GITT_REMOTE:-${REPP_REMOTE}}} sub))
-    local target=$3
-    #dlog "[${cmd}] [${key}] [${server}] [${target}]"
+    local cmd=$1
+    local target_branch=$2
+    local base_branch=$3
+    local dflag="${@: -1}"
+    local key=$(ende_code dev $(getserver ${GITT_REMOTE:-${REPP_REMOTE}} sub))
+    #dlog "[${cmd}] [${server}] [${key}] [${postfix}]"
     
-    repo forall -c bash -c '
-    case ${0} in
-         branch) curl -s -u $REPO__$USER:${1} http://vgit.lge.com/${REPO_REMOTE#*_}/a/projects/${REPO_PROJECT//'/'/'%2F'}/branches/${REPO_RREV}${2} \
-                   | tail -n +2 | jq  -cC ".|{ref,revision}"
-    ;;branchadd) curl -s -u $REPO__$USER:${1} http://vgit.lge.com/${REPO_REMOTE#*_}/a/projects/${REPO_PROJECT//'/'/'%2F'}/branches/${REPO_RREV}${2} -X PUT \
-                   -H "Content-Type: application/json" --data "{"revision": "${REPO_RREV}"}" 
-    ;;branchdel) curl -s -u $REPO__$USER:${1} http://vgit.lge.com/${REPO_REMOTE#*_}/a/projects/${REPO_PROJECT//'/'/'%2F'}/branches/${REPO_RREV}${2} -X DELETE
-    ;;        *) echo "not processed"
+    case $dflag in $cmd|$target_branch|$base_branch) dflag= ;; esac
+    case $cmd in
+      branch*) showRUN repo forall -vc bash 'revvscript.sh' $cmd ${key} ${target_branch} ${base_branch} ${dflag}
+    ;;      *) cat <<-EOF
+			usage) revv forall <branch|branchlist|branchadd|branchdel> <target_branch|target_branch <base_branch>|*> <debug|''>
+			   ex) revv forall branch         tsu_25.5my_release debug         # check if branch existed with debug option
+			   ex) revv forall branchlist     '*'                              # list all branches in project
+			   ex) revv forall branchlist     tsu_25.5my                       # list branches matching with '*tsu_25.5my*'
+			   ex) revv forall branchadd      new_branch tsu_25.5my_release    # add new branch from base branch(only add cmd)
+			   ex) revv forall branchaddpre   new                              # add new<current branch> from <current branch>
+			   ex) revv forall branchaddpost  new                              # add <current branch>new from <current branch>
+			   ex) revv forall branchdel      tsu_25.5my_release debug         # remove branch with debug option
+			   ex) revv forall branchdelpre   new                              # remove new<current branch>
+			   ex) revv forall branchdelpost  new                              # remove <current branch>new
+EOF
     esac
-    ' ${cmd} ${key} ${target} 
 }
 
 
@@ -1812,9 +1831,9 @@ EOF
 ## below functions allow parameter "*, ?, +, ..." with non-globbing option
 #__noglob() { $@; set +o noglob ;}
 #must enable globbing within fuction at the begining.
-alias revv='set -o noglob; revv'
-alias gitt='set -o noglob; gitt'
-alias repp='set -o noglob; repp'
+#alias revv='set -o noglob; revv'
+#alias gitt='set -o noglob; gitt'
+#alias repp='set -o noglob; repp'
 
 ##==========================================================================================================================
 function revv(){
@@ -1824,7 +1843,7 @@ function revv(){
 # $2: server
 # $3: account
 
-set +o noglob
+#set +o noglob
 local MENU=(
 "     info: shows repository info such as manifest path, repo cmd, tree of manifests, etc"
 "      cmd: list useful command from gerrit"
@@ -1867,7 +1886,7 @@ function gitt(){
 ## ---------------------------------------------------------------------------
 # main handler for this scriptre
 # $1 command
-set +o noglob
+#set +o noglob
 local MENU=(
 "   info: shows git path, gerrit info/url/remote, push command, commit info, sync time"
 "   show: shows git (default 15) commits history, file change list"
@@ -1906,7 +1925,7 @@ function repp(){
 ## ---------------------------------------------------------------------------
 # main handler for this scriptre
 # $1 command
-set +o noglob
+#set +o noglob
 local MENU=(
 "   info: shows repository info such as manifest path, repo cmd, tree of manifests, etc"
 "   show: shows uncommitted changes, top -1 commits, md5 sum for all repository"
