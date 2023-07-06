@@ -462,19 +462,19 @@ function reppfind(){
 
     case ${cmd} in
         help) cat <<- EOF
-				 info) \${REPPFILE_CSV} is saved. can be opened by excel menu [data> text> select file> file open wizard]
-				                          or can be reformatted by excel menu [data> text to columns> select delimter'|'> finish]
-				usage) repp find                           # show rev,remote,branch,project,path info for all repo
-				usage) repp find <string>                  # list git which has string 'string' in all git info
-				   ex) repp find build                     # list git which has string 'build' in all git info
-				   ex) repp find |grep -v vendor/qct       # list git info not containing 'vendor/qct'
-				   ex) cat \${REPPFILE_CSV}                 # cat output file
-				usage) repp find @rev                      # print rev colume for all repo
-				usage) repp find @remote                   # print project colume for all repo
-				usage) repp find @branch                   # print branch colume for all repo
-				usage) repp find @project                  # print project colume for all repo
-				usage) repp find @path                     # print path colume for all repo
-				   ex) repp find @project |grep meta       # print project colume containing 'meta'
+		 info) \${REPPFILE_CSV} is saved. can be opened by excel menu [data> text> select file> file open wizard]
+		       or can be reformatted by excel menu [data> text to columns> select delimter'|'> finish]
+		usage) repp find                           # show rev,remote,branch,project,path info for all repo
+		usage) repp find <string>                  # list git which has string 'string' in all git info
+		   ex) repp find build                     # list git which has string 'build' in all git info
+		   ex) repp find |grep -v vendor/qct       # list git info not containing 'vendor/qct'
+		   ex) cat \${REPPFILE_CSV}                 # cat output file
+		usage) repp find @rev                      # print rev colume for all repo
+		usage) repp find @remote                   # print project colume for all repo
+		usage) repp find @branch                   # print branch colume for all repo
+		usage) repp find @project                  # print project colume for all repo
+		usage) repp find @path                     # print path colume for all repo
+		   ex) repp find @project |grep meta       # print project colume containing 'meta'
 EOF
     ;; @rev)      echo "<REPO_LREV>";    awk -v FS="|" '{print $1}' ${REPPFILE_CSV}
     ;; @remote)   echo "<REPO_REMOTE>";  awk -v FS="|" '{print $2}' ${REPPFILE_CSV} |sort |uniq
@@ -505,17 +505,17 @@ function reppbranch(){
 
     case ${cmd} in
        ''|help) cat <<- EOF
-				 info) gitt branch info                    # show only current git branch info (local, remote branch and commits)
+		 info) gitt branch info                    # show only current git branch info (local, remote branch and commits)
 
-				usage) repp branch list                    # list all remote branches for all gits
-				   ex) repp branch list *release*          # find *releae* matching branches
-				usage) repp branch create                  # show commands can create branch for all, some gits by pre/in/postfix
-				usage) repp branch remove                  # show commands can revove branch for all, some gits
-				   ex) repp branch create release          # show commands to create 'release' branch
-				usage) repp branch checksum                # print local repo checksum and remote tracking branch checksum
-				usage) repp branch compare                 # compare which git is diff between local and remote tracking branch
-				usage) repp branch compare <remote>        # compare which git is diff among local, remote tracking, a remote branch.
-				   ex) repp branch compare mig_230426      # compare between 3 branches (local, remote, mig_230426 branch)
+		usage) repp branch list                    # list all remote branches for all gits
+		   ex) repp branch list *release*          # find *releae* matching branches
+		usage) repp branch create                  # show commands can create branch for all, some gits by pre/in/postfix
+		usage) repp branch remove                  # show commands can revove branch for all, some gits
+		   ex) repp branch create release          # show commands to create 'release' branch
+		usage) repp branch checksum                # print local repo checksum and remote tracking branch checksum
+		usage) repp branch compare                 # compare which git is diff between local and remote tracking branch
+		usage) repp branch compare <remote>        # compare which git is diff among local, remote tracking, a remote branch.
+		   ex) repp branch compare mig_230426      # compare between 3 branches (local, remote, mig_230426 branch)
 EOF
     ;;  list|find)
                 under "please run one of these 'git ls-remote' commands to check if branch is existed in remote\n"
@@ -1688,9 +1688,11 @@ function revvforall(){
     local key=$(ende_code dev $(getserver ${GITT_REMOTE:-${REPP_REMOTE}} sub))
     #dlog "[${cmd}] [${server}] [${key}] [${postfix}]"
     
-    case $dflag in $cmd|$target_branch|$base_branch) dflag= ;; esac
+    case $dflag in $cmd|$target_branch|$base_branch) err "check usage: revv forall help" && return 1;; esac
     case $cmd in
-      branch*) showRUN repo forall -vc bash 'revvscript.sh' $cmd ${key} ${target_branch} ${base_branch} ${dflag}
+      branch*) 
+            if [[ "${dflag}" =~ "debug" ]]; then repo forall -evc bash 'revvscript.sh' $cmd ${key} ${target_branch} ${base_branch} printdebug; fi
+            showRUNQ y repo forall -vc bash 'revvscript.sh' $cmd ${key} ${target_branch} ${base_branch} ${dflag}
     ;;      *) cat <<-EOF
 			usage) revv forall <branch|branchlist|branchadd|branchdel> <target_branch|target_branch <base_branch>|*> <debug|''>
 			   ex) revv forall branch         tsu_25.5my_release debug         # check if branch existed with debug option
