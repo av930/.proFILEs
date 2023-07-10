@@ -175,7 +175,8 @@ function reppmani(){
 				usage) repp mani gen <outfile>
 				   ex) repp mani gen current.xml                          #default out: ${REPPFILE_XML}
 				usage) repp mani change <groups|upstream|dest-branch|etc> <str> <filter>
-				   ex) repp mani change remote vgit_new vgit_as           #vgit_new->vgit_as in remote field
+				   ex) repp mani change remote vgit_new                   #change to vgit_new in all remote field
+				   ex) repp mani change remote vgit_new vgit_as           #change to vgit_new only from vgit_as in remote field 
 EOF
     ;;  info)   ##get global variable and repo init command.
                 reppget_repcmd info
@@ -298,6 +299,11 @@ function reppinfo(){
     reppshow_manifesttree ${manifest:-${REPPFILE_MANI}} 0
     info "to see specific xml, run 'repp info <xml>'"
 
+    bar inline "remotes & review sites"
+    for (( i=0; i < ${#REPP_REMOTELIST[@]}; i++ )); do 
+        printf "remote: %s,\t\t" "${REPP_REMOTELIST[$i]}"
+        printf "review: %s\n" "${REPP_REVIEWLIST[$i]}"
+    done
     ##show count of repository
     ### block infomation
     bar inline "misc information for this repositories"
@@ -502,7 +508,6 @@ function reppbranch(){
     local cmd=$1
     local name=$2
 
-
     case ${cmd} in
        ''|help) cat <<- EOF
 		 info) gitt branch info                    # show only current git branch info (local, remote branch and commits)
@@ -525,7 +530,10 @@ EOF
 
                 bar inline "check exact ${name} remote branche is existed for all gits"
                 #showRUNQ y repo forall -c 'printf "%30s| %-70s\n" ${REPO_REMOTE} ${REPO_PROJECT} $(git ls-remote -h ${REPO_REMOTE} refs/heads/$1)' ${name}
-                showRUN repo forall -c 'printf "\t\t >>>> [%10s] ${YELLOW}%-60s${NCOL}\n" ${REPO_REMOTE} ${REPO_PROJECT}; git ls-remote -h ${REPO_REMOTE} refs/heads/${1}' ${name:-'*'} |more
+                #test case all) repp branch list, repp branch list '*', repp branch list '*mas*',  exact) repp branch list m/master, repp branch list 'm/master'
+                set -o noglob
+                showRUN repo forall -c 'printf "\t\t >>>> [%10s] ${YELLOW}%-60s${NCOL}\n" ${REPO_REMOTE} ${REPO_PROJECT}; git ls-remote -h ${REPO_REMOTE} refs/heads/${1}' ${name:-*} 
+                set +o noglob
     ;;  create|new)
                 under "please run one of these 'git push' commands to create branch in remote\n"
                 info "<branch name> will be passing to 'git push' cmd in position of parameter \${1}"
@@ -980,7 +988,7 @@ function repp_initvar(){
         REPP_PROJECT=$(git config --get-regexp remote.*.url  |head -1|cut -d' ' -f2)
         REPP_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')  #GITT_BRANCH
         REPP_REVIEW=$(git config --get-regexp remote.*.review|cut -d' ' -f2|head -1)        #GITT_REVIEW
-        REPP_URL=$(git config --get-regexp remote.${GITT_REMOTE}.url|cut -d' ' -f2|head -1) #GITT_URL
+        REPP_URL=$(git config --get-regexp remote.$(git remote|head -1).url|cut -d' ' -f2|head -1) #GITT_URL
 
         REPP_ROOT=${REPP_PATH%/.repo*}
         #REPP_URL=$(git remote -v |grep fetch |awk '{print $2}')
@@ -989,7 +997,9 @@ function repp_initvar(){
         #REPP_MIRROR=$(cat ../manifests.git/config |grep reference|sed 's/.*= \(.*\)/\1/')
         REPP_MIRROR=$(git config --get-regexp repo.reference |head -1|cut -d' ' -f2)
         REPP_COUNT=$($REPP_PATH/../repo/repo list |wc -l)
-
+        
+        REPP_REMOTELIST=( $(repo manifest |grep review | sed -E 's#.*name="([^"]*[^"]*)".*#\1#') )
+        REPP_REVIEWLIST=( $(repo manifest |grep review | sed -E 's#.*review="([^"]*[^"]*)".*#\1#') )
         popd
         ret=0
     fi
@@ -1048,9 +1058,6 @@ function revv_initvar(){
     if (( 40 > ${#key} )); then
         warn "if problem continue, check gerrit http key value in [~/.key_${key_id}] \n
         you can generate .key_XXX : code enf ${key_id} <check_key_from_gerrit_account>"
-        key=$(ende_code def ${key_id})
-        ende_code env ${key_id} ${key}
-        info "Now key is reloaded from [~/.key_${key_id}] automatically"
     fi
 
     if ! revvcheck_server ${server:-na} ${ACCOUNT} checkapi; then
@@ -1234,7 +1241,7 @@ function gittcommit(){
     local opt="${@:2}"
     case $cmd in
        auto)    msg=$(date +"%y%m%d:%H%M")
-                git commit -m "${msg}: ${opt:-test}"
+                git commit -m "${msg}: ${opt:-test}"
                 git show --stat --oneline HEAD
                 clog "[run]" "git push $GITT_REMOTE HEAD:refs/heads/${GITT_BRANCH}"
     ;; reset)   gittreset help
@@ -1358,8 +1365,12 @@ EOF
     ;; delete|remove)  if [ -z "${name}" ]; then err "branch name must be input" && return 1;fi
                 bar inline "delete branch: branch [${name}] will be removed from REMOTE"
                 showRUNQ y git push ${GITT_REMOTE} --delete ${name}
-    ;; info) gittbranch_info
-    ;; list) gittbranch_list "${name}"
+    ;; info)    gittbranch_info
+    ;; list)    #test case all) gitt branch list, gitt branch list '*', gitt branch list '*mas*',  exact) gitt branch list m/master, gitt branch list 'm/master'
+                #gittbranch_list \'"${name:-*}"\'
+                set -o noglob
+                gittbranch_list "${name:-*}"
+                set +o noglob
     ;; *) gittbranch help
     ;; esac
 }
@@ -1379,6 +1390,7 @@ function gittfind(){
 				usage) gitt find <string>                       #find <string> in committer, message, code-diff
 				   ex) gitt find docker dock                    #find string 'docker' in file 'dock'
 EOF
+             exit 0;
     ;; *)   bar outline "search in commit with regexp(${keyword}) in files(${area:-file list or path})"
     esac
 
@@ -1681,27 +1693,41 @@ function revvforall(){
 # $2 server
 # $3 gitproject
 # $4 branch
+###### *는 쓰지말자. 대신 명시적으로 써야 한다. @all, @curr 등으로 사용하자 
     local cmd=$1
-    local target_branch=$2
-    local base_branch=$3
+    local target=$2 #no need * for all file in gerrit, remove
+    local source=$3
+
     local dflag="${@: -1}"
     local key=$(ende_code dev $(getserver ${GITT_REMOTE:-${REPP_REMOTE}} sub))
-    #dlog "[${cmd}] [${server}] [${key}] [${postfix}]"
-    
-    case $dflag in $cmd|$target_branch|$base_branch) err "check usage: revv forall help" && return 1;; esac
+   
+    #no need to pass * for all file in gerrit, so remove
+    if [[ ${target} =~ \* ]]; then revv forall help; return 1; fi 
+    ' :
+    case ${dflag} in
+        ${target}) [ "${dflag}" != "debug" ] && dflag= 
+               ;; ${cmd}) [ "${dflag}" != "help" ] && err "check usage: revv forall help ." ; return 1 
+             ;;  *debug*) :
+                    ;; *) err "check usage: revv forall help !" ; return 1 
+    esac
+    '    
     case $cmd in
       branch*) 
-            if [[ "${dflag}" =~ "debug" ]]; then repo forall -evc bash 'revvscript.sh' $cmd ${key} ${target_branch} ${base_branch} printdebug; fi
-            showRUNQ y repo forall -vc bash 'revvscript.sh' $cmd ${key} ${target_branch} ${base_branch} ${dflag}
+            if [[ "${dflag}" =~ "debug" ]]; then repo forall -evcj4 bash 'revvscript.sh' $cmd ${key} ${target} ${source} printdebug; fi
+            set -o noglob
+            #test case all) revv forall branchlist, gitt branch list '*', revv forall branchlist '*mas*'
+            showRUNQ y repo forall -vcj4 bash 'revvscript.sh' $cmd ${key} ${target} ${source} ${dflag}
+            set +o noglob
     ;;      *) cat <<-EOF
 			usage) revv forall <branch|branchlist|branchadd|branchdel> <target_branch|target_branch <base_branch>|*> <debug|''>
+             info) @branch: current branch, @remote: current remote, @project: current project
 			   ex) revv forall branch         tsu_25.5my_release debug         # check if branch existed with debug option
 			   ex) revv forall branchlist     '*'                              # list all branches in project
 			   ex) revv forall branchlist     tsu_25.5my                       # list branches matching with '*tsu_25.5my*'
 			   ex) revv forall branchadd      new_branch tsu_25.5my_release    # add new branch from base branch(only add cmd)
 			   ex) revv forall branchaddpre   new                              # add new<current branch> from <current branch>
 			   ex) revv forall branchaddpost  new                              # add <current branch>new from <current branch>
-			   ex) revv forall branchdel      tsu_25.5my_release debug         # remove branch with debug option
+			   ex) revv forall branchdel      tsu_25.5my_release printdebug    # only print cmd without running remove cmd
 			   ex) revv forall branchdelpre   new                              # remove new<current branch>
 			   ex) revv forall branchdelpost  new                              # remove <current branch>new
 EOF
@@ -2024,7 +2050,12 @@ function reppdebug(){
         do
            dlog "$var\t" $(eval echo $var)
         done
-
+        
+        for (( i=0; i < ${#REPP_REMOTELIST[@]}; i++ )); do 
+            dlog "\${REPP_REMOTELIST[$i]}\t\t"   "${REPP_REMOTELIST[$i]}"
+            dlog "\${REPP_REVIEWLIST[$i]}\t\t"   "${REPP_REVIEWLIST[$i]}"
+        done
+        
         bar inline "[${GITT_PROJECT}] print repo variable"
         showRUN repo forall . -c 'echo ${REPO_COUNT}, ${REPO_LREV}, ${REPO_REMOTE}, ${REPO_RREV}, ${REPO_PROJECT}, ${REPO_PATH}, ${REPO_OUTERPATH}, ${REPO_INNERPATH}'
 
@@ -2092,6 +2123,8 @@ esac
 ##============================================================================
 GITT_REMOTE= &&GITT_PROJECT= &&GITT_BRANCH= &&GITT_REVIEW= &&GITT_URL= &&GITT_PATH=
 REPP_PATH= &&REPP_ROOT= &&REPP_REMOTE= &&REPP_PROJECT= &&REPP_URL= &&REPP_BRANCH= &&REPP_REPOURL= &&REPP_MIRROR= &&REPP_COUNT= &&REPP_CMD=
+REPP_REMOTELIST=()
+REPP_REVIEWLIST=()
 REPP_PATH_ALL=()
 
 (return 0 2>/dev/null) && sourced=1 || sourced=0
