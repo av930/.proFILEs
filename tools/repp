@@ -175,8 +175,8 @@ function reppmani(){
 				usage) repp mani gen <outfile>
 				   ex) repp mani gen current.xml                          #default out: ${REPPFILE_XML}
 				usage) repp mani change <groups|upstream|dest-branch|etc> <str> <filter>
-				   ex) repp mani change remote vgit_new                   #change to vgit_new in all remote field
-				   ex) repp mani change remote vgit_new vgit_as           #change to vgit_new only from vgit_as in remote field 
+				   ex) repp mani change remote vgit_new                   #change "any string" to "vgit_new" in all remote field
+				   ex) repp mani change remote vgit_new vgit_as           #change only from "vgit_as" to "vgit_new" in remote field 
 EOF
     ;;  info)   ##get global variable and repo init command.
                 reppget_repcmd info
@@ -1697,32 +1697,15 @@ function revvforall(){
     local cmd=$1
     local target=$2 #no need * for all file in gerrit, remove
     local source=$3
-
-    local dflag="${@: -1}"
     local key=$(ende_code dev $(getserver ${GITT_REMOTE:-${REPP_REMOTE}} sub))
-   
-    #no need to pass * for all file in gerrit, so remove
-    if [[ ${target} =~ \* ]]; then revv forall help; return 1; fi 
-    ' :
-    case ${dflag} in
-        ${target}) [ "${dflag}" != "debug" ] && dflag= 
-               ;; ${cmd}) [ "${dflag}" != "help" ] && err "check usage: revv forall help ." ; return 1 
-             ;;  *debug*) :
-                    ;; *) err "check usage: revv forall help !" ; return 1 
-    esac
-    '    
+
     case $cmd in
-      branch*) 
-            if [[ "${dflag}" =~ "debug" ]]; then repo forall -evcj4 bash 'revvscript.sh' $cmd ${key} ${target} ${source} printdebug; fi
-            set -o noglob
-            #test case all) revv forall branchlist, gitt branch list '*', revv forall branchlist '*mas*'
-            showRUNQ y repo forall -vcj4 bash 'revvscript.sh' $cmd ${key} ${target} ${source} ${dflag}
-            set +o noglob
-    ;;      *) cat <<-EOF
+        help) cat <<-EOF
 			usage) revv forall <branch|branchlist|branchadd|branchdel> <target_branch|target_branch <base_branch>|*> <debug|''>
              info) @branch: current branch, @remote: current remote, @project: current project
 			   ex) revv forall branch         tsu_25.5my_release debug         # check if branch existed with debug option
-			   ex) revv forall branchlist     '*'                              # list all branches in project
+			   ex) revv forall branch         @branch                          # check if current branch is existed in gerrit
+			   ex) revv forall branchlist                                      # list all branches in project
 			   ex) revv forall branchlist     tsu_25.5my                       # list branches matching with '*tsu_25.5my*'
 			   ex) revv forall branchadd      new_branch tsu_25.5my_release    # add new branch from base branch(only add cmd)
 			   ex) revv forall branchaddpre   new                              # add new<current branch> from <current branch>
@@ -1730,8 +1713,38 @@ function revvforall(){
 			   ex) revv forall branchdel      tsu_25.5my_release printdebug    # only print cmd without running remove cmd
 			   ex) revv forall branchdelpre   new                              # remove new<current branch>
 			   ex) revv forall branchdelpost  new                              # remove <current branch>new
+               
+			   ex) revv forall branch        master                 			   정확한 이름의 브랜치 존재여부, 디버깅출력
+			   ex) revv forall branch        @cur_branch                 			   현재 branch가 gerrit에 모두 존재하는지 확인
+			   ex) revv forall branchlist    @all_branch                 			   모든 브랜치 나열
+			   ex) revv forall branchlist    '*my*'                      			   my가 포함된 branch list up, *는 무시됨.
+			   ex) revv forall branchlist    tsu_25.5my                  # tsu_25.5my가 들어가는 모든브랜치 나열, branch가 없는 project는 출력안됨
+			   ex) revv forall branchadd     new tsu_25.5my_release      # tsu_25.5my_release 기준으로 new라는 브랜치 생성, src branch가 없으면 생성안됨
+			   ex) revv forall branchaddpre  new_ @cur_branch            # new_<current_branch> 현재 branch에서 new prefix를 붙여 생성
+			   ex) revv forall branchaddpost _new @cur_branch            # <current_branch>_new 현재 branch에서 new postfix를 붙여 생성
+			   ex) revv forall branchaddpost _new tsu_25.5my_release     			   tsu_25.5my_release가 존재하는 경우만 tsu_25.5my_release_new가 생성됨
+			   ex) revv forall branchdel     tsu_25.5my_release debug    			   tsu_25.5my_release가 존재하는 경우만 해당 branch를 삭제
+			   ex) revv forall branchdel     @cur_branch printdebug      			   현재 branch를 삭제, 실제명령은 실행하지 않고 명령어 출력만 함 (proint
+			   ex) revv forall branchdelpre  new_ @cur_branch            			   현재 branch기준으로 new_<current_branch> 라는 branch 삭제
+			   ex) revv forall branchdelpost _new @cur_branch printdebug # <current_branch>_new 삭제하는 명령만 출력
+               
 EOF
+            return 0
+    ;; branch*|Dbranch*|Pbranch*) :
+    ;; *) err "please check usage"
     esac
+   
+    set -o noglob  
+    #test case all) revv forall branchlist, gitt branch list '*', revv forall branchlist '*mas*'    
+    case ${cmd::1} in 
+          D) repo forall -evcj4 bash 'revvscript.sh' $cmd ${key} ${target} ${source} ;; 
+          *) repo forall -vcj4 bash 'revvscript.sh' $cmd ${key} ${target} ${source}
+    esac
+    
+    set +o noglob   
+    
+
+
 }
 
 
