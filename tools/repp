@@ -1702,7 +1702,7 @@ function revvforall(){
     case $cmd in
         help) cat <<-EOF
 			usage) revv forall <branch|branchlist|branchadd|branchdel> <target_branch> <base_branch>
-			 info) Dcmd: run & debug, Pcmd: print without run
+			 info) Dcmd: run 1st command & debug info & exit, Pcmd: print all command without run
 			 info) @branch: current branch, @remote: current remote, @project: current project
 			   ex) revv forall branch        master                      # check if branch(master) exist
 			   ex) revv forall Pbranch       master                      # print command without running
