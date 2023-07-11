@@ -1701,33 +1701,25 @@ function revvforall(){
 
     case $cmd in
         help) cat <<-EOF
-			usage) revv forall <branch|branchlist|branchadd|branchdel> <target_branch|target_branch <base_branch>|*> <debug|''>
-             info) @branch: current branch, @remote: current remote, @project: current project
-			   ex) revv forall branch         tsu_25.5my_release debug         # check if branch existed with debug option
-			   ex) revv forall branch         @branch                          # check if current branch is existed in gerrit
-			   ex) revv forall branchlist                                      # list all branches in project
-			   ex) revv forall branchlist     tsu_25.5my                       # list branches matching with '*tsu_25.5my*'
-			   ex) revv forall branchadd      new_branch tsu_25.5my_release    # add new branch from base branch(only add cmd)
-			   ex) revv forall branchaddpre   new                              # add new<current branch> from <current branch>
-			   ex) revv forall branchaddpost  new                              # add <current branch>new from <current branch>
-			   ex) revv forall branchdel      tsu_25.5my_release printdebug    # only print cmd without running remove cmd
-			   ex) revv forall branchdelpre   new                              # remove new<current branch>
-			   ex) revv forall branchdelpost  new                              # remove <current branch>new
-               
-			   ex) revv forall branch        master                 			   정확한 이름의 브랜치 존재여부, 디버깅출력
-			   ex) revv forall branch        @cur_branch                 			   현재 branch가 gerrit에 모두 존재하는지 확인
-			   ex) revv forall branchlist    @all_branch                 			   모든 브랜치 나열
-			   ex) revv forall branchlist    '*my*'                      			   my가 포함된 branch list up, *는 무시됨.
-			   ex) revv forall branchlist    tsu_25.5my                  # tsu_25.5my가 들어가는 모든브랜치 나열, branch가 없는 project는 출력안됨
-			   ex) revv forall branchadd     new tsu_25.5my_release      # tsu_25.5my_release 기준으로 new라는 브랜치 생성, src branch가 없으면 생성안됨
-			   ex) revv forall branchaddpre  new_ @cur_branch            # new_<current_branch> 현재 branch에서 new prefix를 붙여 생성
-			   ex) revv forall branchaddpost _new @cur_branch            # <current_branch>_new 현재 branch에서 new postfix를 붙여 생성
-			   ex) revv forall branchaddpost _new tsu_25.5my_release     			   tsu_25.5my_release가 존재하는 경우만 tsu_25.5my_release_new가 생성됨
-			   ex) revv forall branchdel     tsu_25.5my_release debug    			   tsu_25.5my_release가 존재하는 경우만 해당 branch를 삭제
-			   ex) revv forall branchdel     @cur_branch printdebug      			   현재 branch를 삭제, 실제명령은 실행하지 않고 명령어 출력만 함 (proint
-			   ex) revv forall branchdelpre  new_ @cur_branch            			   현재 branch기준으로 new_<current_branch> 라는 branch 삭제
-			   ex) revv forall branchdelpost _new @cur_branch printdebug # <current_branch>_new 삭제하는 명령만 출력
-               
+			usage) revv forall <branch|branchlist|branchadd|branchdel> <target_branch> <base_branch>
+			 info) Dcmd: run & debug, Pcmd: print without run
+			 info) @branch: current branch, @remote: current remote, @project: current project
+			   ex) revv forall branch        master                      # check if branch(master) exist
+			   ex) revv forall Pbranch       master                      # print command without running
+			   ex) revv forall Dbranch       master                      # print debug info with running
+			   ex) revv forall branch        @branch                     # check if current branch is existed in remote 
+			   ex) revv forall branchlist                                # print all branches 
+			   ex) revv forall branchlist    '*my*'                      # print all branches including 'my'
+			   ex) revv forall branchlist    mas                         # print all branches including 'mas'
+			   ex) revv forall branchadd     new master                  # create branch 'new' based from 'master'
+			   ex) revv forall branchadd     @branch master              # create branch as written in manifest revision from master
+			   ex) revv forall branchaddpre  new_ @branch                # create branch with name of new_<current_branch> from current
+			   ex) revv forall branchaddpost _new @branch                # create branch with name of <current_branch>_new from current
+			   ex) revv forall branchaddpost _new master                 # create branch 'master_new' from 'master'
+			   ex) revv forall branchdel     master                      # delete branch 'master'
+			   ex) revv forall branchdel     @branch                     # delete current branch (current remote branch)
+			   ex) revv forall branchdelpre  new_ @branch                # delete branch with name of new_<current_branch> from current
+			   ex) revv forall branchdelpost _new @branch                # delete branch with name of <current_branch>_new from current
 EOF
             return 0
     ;; branch*|Dbranch*|Pbranch*) :
