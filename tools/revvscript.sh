@@ -25,19 +25,22 @@
 
 ##revv
 # revv forall branch @branch = repo forall -evc bash 'revvscript.sh' 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog branch @branch
-# revv forall branch        tsu_25.5my_release debug    # 정확한 이름의 브랜치 존재여부, 디버깅출력
-# revv forall branch        @branch                     # 현재 branch가 gerrit에 모두 존재하는지 확인
-# revv forall branchlist    '*'                         # 모든 브랜치 나열
-# revv forall branchlist    '*my*'                      # my가 포함된 branch list up
-# revv forall branchlist    tsu_25.5my                  # tsu_25.5my가 들어가는 모든브랜치 나열, branch가 없는 project는 출력안됨
-# revv forall branchadd     new tsu_25.5my_release      # tsu_25.5my_release 기준으로 new라는 브랜치 생성, src branch가 없으면 생성안됨
-# revv forall branchaddpre  new_ @branch                # new_<current_branch> 현재 branch에서 new prefix를 붙여 생성
-# revv forall branchaddpost _new @branch                # <current_branch>_new 현재 branch에서 new postfix를 붙여 생성
-# revv forall branchaddpost _new tsu_25.5my_release     # tsu_25.5my_release가 존재하는 경우만 tsu_25.5my_release_new가 생성됨
-# revv forall branchdel     tsu_25.5my_release debug    # tsu_25.5my_release가 존재하는 경우만 해당 branch를 삭제
-# revv forall branchdel     @branch printdebug          # 현재 branch를 삭제, 실제명령은 실행하지 않고 명령어 출력만 함 (proint
+# revv forall branch        master                      # 정확한 이름의 브랜치 존재여부
+# revv forall Pbranch       master                      # master branch에 대해 실행명령만 출력, 실제 실행안함
+# revv forall Dbranch       master                      # 첫번째 1개 project에 대해 실제 명령을 실행하고, 디버깅정보 출력
+# revv forall branch        @branch                     # 현재 branch가 gerrit에 모두 존재하는지 확인(remote 존재여부)
+# revv forall branchlist                                # 모든 project에 대해서 모든 브랜치 나열
+# revv forall branchlist    '*my*'                      # my가 포함된 branch list up, *는 무시됨.
+# revv forall branchlist    mas                         # mas가 들어가는 모든브랜치 나열, branch가 없는 project는 출력안됨
+# revv forall branchadd     new master                  # master기준으로 new라는 브랜치 생성, src(master)가 없으면 브랜치 생성안됨
+# revv forall branchadd     @branch master              # master기준으로 manifest revision에 기록된 branch를 생성
+# revv forall branchaddpre  new_ @branch                # new_<current_branch> 현재 branch에서 new prefix붙인 이름으로 생성
+# revv forall branchaddpost _new @branch                # <current_branch>_new 현재 branch에서 new postfix붙인 이름으로 생성
+# revv forall branchaddpost _new master                 # master가 존재하는 경우만 master_new가 생성됨
+# revv forall branchdel     master                      # master가 존재하는 경우만 해당 branch를 삭제
+# revv forall branchdel     @branch                     # 현재 branch 삭제(정확히는 gerrit의 remote branch를 삭제함)
 # revv forall branchdelpre  new_ @branch                # 현재 branch기준으로 new_<current_branch> 라는 branch 삭제
-# revv forall branchdelpost _new @branch printdebug     # <current_branch>_new 삭제하는 명령만 출력
+# revv forall branchdelpost _new @branch                # <current_branch>_new 삭제하는 명령만 출력
 
 
 ###### setting for env
@@ -46,7 +49,6 @@ cmd=$1
 key_http=$2
 target=$3
 source=$4
-dflag="${@: -1}"
 
 ## default variable & functions
 BAR="~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
@@ -55,19 +57,25 @@ JSON_IDFY=")]}'"
 tempf=$(mktemp)
 clog()   { printf "${GREEN}$1 ${NCOL} ${@:2}\n" ;}
 #no need to close by set +x, repo forall is executed in all sub shell
-showRUN(){ 
-    case ${dflag} in
-    printdebug) echo "$@"; exit 1;  ;; #show 1st command & exit    
-    debug) set -x; "$@"             ;; #show command & run
-        *) "$@"                     ;; #just run
-    esac
-} 
-
 
 ## setting for debugging
 ## DEBUG=[ false | "printf ${RED}%s${NCOL}\n" ]
 DEBUG=false
-if [[ ${dflag} =~ "debug" ]]; then DEBUG="printf ${RED}%s${NCOL}\n"; fi
+case ${cmd::1} in 
+    D) dflag=${cmd::1}; cmd=${cmd:1};  DEBUG="printf ${RED}%s${NCOL}\n" ;;  ## debug print & run
+    P) dflag=${cmd::1}; cmd=${cmd:1}                                    ;;  ## only print without run
+esac
+
+
+showRUN(){ 
+    case ${dflag} in
+    P) echo "$@"; exit 0;       ;; #show 1st command & exit    
+    D) set -x; "$@"; exit 1;    ;; #show 1st command & run & exit
+    *) "$@"                     ;; #just run
+    esac
+} 
+
+
 
 ## builtin-variable specific repo
 ## get remote & url 
@@ -92,21 +100,20 @@ CURR_destbranch=${REPO_DEST_BRANCH}
 #### exception handler
 ##case handler for remote
 case ${CURR_remote} in
-     __found_error) $DEBUG "case1: error"  && exit 1 
-    ;; __skip_case) $DEBUG "case2: skip" && exit 0
-    ;;           *) $DEBUG "case3: all"             
+     __add_user_case) $DEBUG "case#: user added"            ; exit 1 #watchout not skipping exit code
+    ;;   __skip_case) $DEBUG "case2: skip"                  ; exit 0
+    ;;             *) $DEBUG "case1: default"
+esac;
+case ${CURR_project} in
+     __add_user_case) $DEBUG "case#: user added"            ; exit 1 
+#   ;; sample_yocto/meta*) $DEBUG "case2: skip"             ; exit 0
+    ;;             *) $DEBUG "case1: default"
 esac;
 
 ## case branch target & source
 case $target in
-    help) $DEBUG "branch input ${target}"
-    ;; *debug*|'')
-            clog "[error]" "you must check parameter"
-            echo "revvscript.sh <cmd> <key_http> <target-branch> [<source-branch> <debug option>]"
-            echo "revv <cmd> <target-branch> [<source-branch> <debug option>]"
-            exit 1; 
-    ;; *\**) 
-            clog "[error]" "gerrit cannot process [*], please refer uasge"; exit 1; 
+    *\**) 
+            target="${target//\*/}"; clog "[warn]" "asterisk * is not permitted in gerrit, so removed"
     ;; @branch)
             target="${CURR_branch}"
 esac
@@ -118,7 +125,7 @@ esac
 case $cmd in
          branch|branchadd|branchdel) :
     ;;                   branchlist) target="?m=${target}"
-    ;;    branchaddpre|branchaddpre) target="${target}${REPO_RREV}"
+    ;;    branchaddpre|branchdelpre) target="${target}${REPO_RREV}"
     ;;  branchaddpost|branchdelpost) target="${REPO_RREV}${target}"
 esac
 
@@ -132,8 +139,8 @@ printf "${BAR}\n${YELLOW}%-10.10b${NCOL} remote:%-12.12b | project:%-84.84b %s\n
 ## debugging value
 $DEBUG "CURR_remote:${CURR_remote}| CURR_url:${CURR_url}| CURR_project:${CURR_project}| CURR_path:${CURR_path}"
 $DEBUG "CURR_branch:${CURR_branch}| CURR_upstream:${REPO_UPSTREAM}| CURR_destbranch:${REPO_DEST_BRANCH}| CURR_nrepos:${CURR_nrepos}"
-$DEBUG "target: ${target} source: ${source}" 
-$DEBUG "positional params: [$0][$1][$2][$3][${@:4}}]"
+$DEBUG "input param: cmd: [$cmd]| target: ${target}| source: ${source}" 
+$DEBUG "positional params: [$0][$1][$2][$3][${@:4}]"
 
 
 run_command="curl -s -u $REPO__$USER:${key_http} ${CURR_url}/a/projects/${REPO_PROJECT//'/'/'%2F'}/branches/${target} -o ${tempf}"
@@ -154,7 +161,7 @@ case ${CURR_branch} in
                   branch|branchlist) 
                     showRUN ${run_command} 
         ;;     branchadd|branchaddpre|branchaddpost) 
-                    showRUN ${run_command} -X PUT -H "Content-Type: application/json" --data "{"revision": "${source:-${CURR_branch}}"}" 
+                    showRUN ${run_command} -X PUT -H "Content-Type: application/json" --data "{"revision": "${source}"}" 
         ;;     branchdel|branchdelpre|branchdelpost) 
                     showRUN ${run_command} -X DELETE
         ;;     *) 
