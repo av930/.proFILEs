@@ -1,8 +1,8 @@
 ###### revv script template
 ## usage
 # repo forall -evc bash 'revvscript.sh' branch 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog master debug
-# repo forall -evc bash 'revvscript.sh' branchlist 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog \* debug 
-# repo forall -evc bash -ex 'revvscript.sh' branchlist 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog \* debug 
+# repo forall -evc bash 'revvscript.sh' branchlist 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog \* debug
+# repo forall -evc bash -ex 'revvscript.sh' branchlist 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog \* debug
 
 ## description
 # repo forall . -c bash 'cmd.sh'                                    # for current git only, make SHELL variable valid
@@ -16,7 +16,7 @@
 # option -j:jobs, -e:stop if error happen, --ignore-missing:?, --interactive:?
 #        -p:print gitproject, -v:verbose, -q:only show errors
 
-## repo variables 
+## repo variables
 # $REPO__$VARIABLE
 # REPO_I, REPO_COUNT
 # REPO_REMOTE, REPO_PROJECT
@@ -56,47 +56,50 @@ NCOL='\e[0m'; YELLOW='\e[1;33m'; RED='\e[1;31m'; GREEN='\e[1;32m';
 JSON_IDFY=")]}'"
 tempf=$(mktemp)
 clog()   { printf "${GREEN}$1 ${NCOL} ${@:2}\n" ;}
+err()    { printf "${RED} $BASH_SOURCE [ERROR] ${NCOL} ${*}"   ;}
 #no need to close by set +x, repo forall is executed in all sub shell
 
 ## setting for debugging
 ## DEBUG=[ false | "printf ${RED}%s${NCOL}\n" ]
 DEBUG=false
-case ${cmd::1} in 
+case ${cmd::1} in
     D) dflag=${cmd::1}; cmd=${cmd:1};  DEBUG="printf ${RED}%s${NCOL}\n" ;;  ## debug print & run
     P) dflag=${cmd::1}; cmd=${cmd:1}                                    ;;  ## only print without run
 esac
 
 
-showRUN(){ 
+showRUN(){
     case ${dflag} in
-    P) echo "$@"; exit 0;       ;; #show 1st command & exit    
+    P) echo "$@"; exit 0;       ;; #show 1st command & exit
     D) set -x; "$@"; exit 1;    ;; #show 1st command & run & exit
     *) "$@"                     ;; #just run
     esac
-} 
+}
 
 
 
 ## builtin-variable specific repo
-## get remote & url 
-t_review=$(repo manifest |grep review)
-a_remote=( $(echo ${t_review} | sed -E 's#.*name="([^"]*[^"]*)".*#\1#') )
-a_review=( $(echo ${t_review} | sed -E 's#.*review="([^"]*[^"]*)".*#\1#') )
-#for (( i=0; i < ${#a_remote[@]}; i++ )); do echo ${a_remote[$i]}~${review[$i]};done
-for (( i=0; i < ${#a_remote[@]}; i++ )); do 
-    if [ "${REPO_REMOTE}" = "${a_remote[$i]}" ]; then CURR_url=${a_review[$i]}; break; fi
-done
+## get remote & url
 CURR_remote=${REPO_REMOTE}
-CURR_project=${REPO_PROJECT} 
+CURR_project=${REPO_PROJECT}
 CURR_branch=${REPO_RREV}
 CURR_path=${REPO_PATH}
 CURR_nrepos=${REPO_COUNT}
 CURR_upstream=${REPO_UPSTREAM}
 CURR_destbranch=${REPO_DEST_BRANCH}
 
+t_review=$(repo manifest |grep review| grep ${CURR_remote})
+a_remote=( $(echo ${t_review} | sed -E 's#.*name="([^"]*[^"]*)".*#\1#') )
+a_review=( $(echo ${t_review} | sed -E 's#.*review="([^"]*[^"]*)".*#\1#') )
+#for (( i=0; i < ${#a_remote[@]}; i++ )); do echo ${a_remote[$i]}~${review[$i]};done
+for (( i=0; i < ${#a_remote[@]}; i++ )); do
+    if [ "${REPO_REMOTE}" = "${a_remote[$i]}" ]; then CURR_url=${a_review[$i]}; break; fi
+done
 
 
-###### main body 
+
+
+###### main body
 #### exception handler
 ##case handler for remote
 case ${CURR_remote} in
@@ -105,20 +108,20 @@ case ${CURR_remote} in
     ;;             *) $DEBUG "case1: default"
 esac;
 case ${CURR_project} in
-     __add_user_case) $DEBUG "case#: user added"            ; exit 1 
+     __add_user_case) $DEBUG "case#: user added"            ; exit 1
 #   ;; sample_yocto/meta*) $DEBUG "case2: skip"             ; exit 0
     ;;             *) $DEBUG "case1: default"
 esac;
 
 ## case branch target & source
 case $target in
-    *\**) 
+    *\**)
             target="${target//\*/}"; clog "[warn]" "asterisk * is not permitted in gerrit, so removed"
     ;; @branch)
             target="${CURR_branch}"
 esac
 case $source in
-    @branch) source="${CURR_branch}" 
+    @branch) source="${CURR_branch}"
 esac
 
 ## command
@@ -127,19 +130,21 @@ case $cmd in
     ;;                   branchlist) target="?m=${target}"
     ;;    branchaddpre|branchdelpre) target="${target}${REPO_RREV}"
     ;;  branchaddpost|branchdelpost) target="${REPO_RREV}${target}"
+    ;;  *) err "command not recongnized, check uasge"; exit 1
+
 esac
 
 
 
 ## print HEAD for each git project
 printf "${BAR}\n${YELLOW}%-10.10b${NCOL} remote:%-12.12b | project:%-84.84b %s\n" \
-       "[${REPO_I}/${REPO_COUNT}]" "${REPO_REMOTE}" "${REPO_PROJECT}" #"| branch:${CURR_branch}" 
+       "[${REPO_I}/${REPO_COUNT}]" "${REPO_REMOTE}" "${REPO_PROJECT}" #"| branch:${CURR_branch}"
 
 
 ## debugging value
 $DEBUG "CURR_remote:${CURR_remote}| CURR_url:${CURR_url}| CURR_project:${CURR_project}| CURR_path:${CURR_path}"
 $DEBUG "CURR_branch:${CURR_branch}| CURR_upstream:${REPO_UPSTREAM}| CURR_destbranch:${REPO_DEST_BRANCH}| CURR_nrepos:${CURR_nrepos}"
-$DEBUG "input param: cmd: [$cmd]| target: ${target}| source: ${source}" 
+$DEBUG "input param: cmd: [$cmd]| target: ${target}| source: ${source}"
 $DEBUG "positional params: [$0][$1][$2][$3][${@:4}]"
 
 
@@ -147,31 +152,31 @@ run_command="curl -s -u $REPO__$USER:${key_http} ${CURR_url}/a/projects/${REPO_P
 ## main handler by git branch
 case ${CURR_branch} in
     __branch_A                                      |\
-    __select_source                                 ) $DEBUG "caseA: " 
-    
-    ;;  
+    __select_source                                 ) $DEBUG "caseA: "
+
+    ;;
     __branch_B                                      |\
-    __select_merge                                  ) $DEBUG "caseB: " 
-        
-    ;;  
-    __select_other | *                              ) $DEBUG "caseC: " 
+    __select_merge                                  ) $DEBUG "caseB: "
+
+    ;;
+    __select_other | *                              ) $DEBUG "caseC: "
 
         set -o noglob #for preventing globbing parameter *
         case $cmd in
-                  branch|branchlist) 
-                    showRUN ${run_command} 
-        ;;     branchadd|branchaddpre|branchaddpost) 
-                    showRUN ${run_command} -X PUT -H "Content-Type: application/json" --data "{"revision": "${source}"}" 
-        ;;     branchdel|branchdelpre|branchdelpost) 
+                  branch|branchlist)
+                    showRUN ${run_command}
+        ;;     branchadd|branchaddpre|branchaddpost)
+                    showRUN ${run_command} -X PUT -H "Content-Type: application/json" --data "{"revision": "${source}"}"
+        ;;     branchdel|branchdelpre|branchdelpost)
                     showRUN ${run_command} -X DELETE
-        ;;     *) 
-                    clog "[error]" "command not recongnized"
+        ;;     *)
+                    err "command not recongnized"
         esac
         set +o noglob
-        
-        if [ "$(cat ${tempf} | head -1)" = "${JSON_IDFY}" ]; then 
+
+        if [ "$(cat ${tempf} | head -1)" = "${JSON_IDFY}" ]; then
             if [ "$(cat ${tempf} | sed -n '2p')" = "[]" ]; then clog "executed" "result is nothing"; cat ${tempf} | tail -n +3
-            elif [ "$(cat ${tempf} | sed -n '2p')" = "{" ]; then cat "${tempf}" | sed "1d" | jq  -cC ".|{ref,revision}" 
+            elif [ "$(cat ${tempf} | sed -n '2p')" = "{" ]; then cat "${tempf}" | sed "1d" | jq  -cC ".|{ref,revision}"
             else cat "${tempf}" | sed '1d'| jq  -cC '.[]|{ref,revision}'
             fi
         elif [ -z "$(cat ${tempf} | head -1)" ]; then clog "warn" "return success, but you must check the result by hand  !"
