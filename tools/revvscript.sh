@@ -54,7 +54,10 @@ source=$4
 BAR="~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 NCOL='\e[0m'; YELLOW='\e[1;33m'; RED='\e[1;31m'; GREEN='\e[1;32m';
 JSON_IDFY=")]}'"
-tempf=$(mktemp)
+tempr=/tmp/revv.ret
+tempf=/tmp/revv.log
+if [ ! -f "${tempf}" ]; then touch "${tempf}"; fi
+
 clog()   { printf "${GREEN}$1 ${NCOL} ${@:2}\n" ;}
 err()    { printf "${RED} $BASH_SOURCE [ERROR] ${NCOL} ${*}"   ;}
 #no need to close by set +x, repo forall is executed in all sub shell
@@ -85,6 +88,7 @@ CURR_project=${REPO_PROJECT}
 CURR_branch=${REPO_RREV}
 CURR_path=${REPO_PATH}
 CURR_nrepos=${REPO_COUNT}
+CURR_n=${REPO_I}
 CURR_upstream=${REPO_UPSTREAM}
 CURR_destbranch=${REPO_DEST_BRANCH}
 
@@ -112,6 +116,12 @@ case ${CURR_project} in
 #   ;; sample_yocto/meta*) $DEBUG "case2: skip"             ; exit 0
     ;;             *) $DEBUG "case1: default"
 esac;
+case ${CURR_branch} in
+     __add_user_case) $DEBUG "case#: user added"            ; exit 1
+#   ;; sa515m_le2.3_release) $DEBUG "case2: skip"           ; exit 0
+    ;;             *) $DEBUG "case1: default"
+esac;
+
 
 ## case branch target & source
 case $target in
@@ -126,10 +136,10 @@ esac
 
 ## command
 case $cmd in
-         branch|branchadd|branchdel) :
-    ;;                   branchlist) target="?m=${target}"
-    ;;    branchaddpre|branchdelpre) target="${target}${REPO_RREV}"
-    ;;  branchaddpost|branchdelpost) target="${REPO_RREV}${target}"
+                    branch|branchadd|branchdel) :
+    ;;                              branchlist) target="?m=${target}"
+    ;;     branchpre|branchaddpre|branchdelpre) target="${target}${REPO_RREV}"
+    ;;  branchpost|branchaddpost|branchdelpost) target="${REPO_RREV}${target}"
     ;;  *) err "command not recongnized, check uasge"; exit 1
 
 esac
@@ -163,23 +173,25 @@ case ${CURR_branch} in
 
         set -o noglob #for preventing globbing parameter *
         case $cmd in
-                  branch|branchlist)
+             branch|branchpre|branchpost|branchlist)
                     showRUN ${run_command}
         ;;     branchadd|branchaddpre|branchaddpost)
                     showRUN ${run_command} -X PUT -H "Content-Type: application/json" --data "{"revision": "${source}"}"
         ;;     branchdel|branchdelpre|branchdelpost)
                     showRUN ${run_command} -X DELETE
         ;;     *)
-                    err "command not recongnized"
+                    err "command not recongnized!"; exit 1
         esac
         set +o noglob
 
         if [ "$(cat ${tempf} | head -1)" = "${JSON_IDFY}" ]; then
-            if [ "$(cat ${tempf} | sed -n '2p')" = "[]" ]; then clog "executed" "result is nothing"; cat ${tempf} | tail -n +3
-            elif [ "$(cat ${tempf} | sed -n '2p')" = "{" ]; then cat "${tempf}" | sed "1d" | jq  -cC ".|{ref,revision}"
-            else cat "${tempf}" | sed '1d'| jq  -cC '.[]|{ref,revision}'
+            if [ "$(cat ${tempf} | sed -n '2p')" = "[]" ]; then clog "executed" "result is nothing"; cat ${tempf} | tail -n +3;  RET=FAIL1
+            elif [ "$(cat ${tempf} | sed -n '2p')" = "{" ]; then cat "${tempf}" | sed "1d" | jq  -cC ".|{ref,revision}"; RET=OKAY1
+            else cat "${tempf}" | sed '1d'| jq  -cC '.[]|{ref,revision}';  RET=OKAY2
             fi
-        elif [ -z "$(cat ${tempf} | head -1)" ]; then clog "warn" "return success, but you must check the result by hand  !"
-        else cat "${tempf}"
+        elif [ -z "$(cat ${tempf} | head -1)" ]; then clog "warn" "return success, but you must check the result by hand  !" ;  RET=OKAY3
+        else cat "${tempf}" ;  RET=FAIL2
         fi
+        #show result summury of each git repository after running a command
+        printf "%4.4s: [%4.4s] %s\n" "${RET}" "${CURR_n}" "${CURR_project}" >> ${tempr}
 esac;
