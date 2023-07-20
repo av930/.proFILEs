@@ -1093,6 +1093,7 @@ function revv_initvar(){
         err "please check correct account&key is saved in ~/.key_${key_id} in $HOME dir"
         ret=1
     fi
+    
     return $ret
 }
 
@@ -1110,6 +1111,7 @@ function reppcheck_initvar(){
     fi
     ## --------------------------------------------------------
     if [[ "${cmd}" =~ "revv" ]]; then   revv_initvar ; [ $? -ne 0 ] && return 1; fi
+    return 0
 }
 
 
@@ -1556,7 +1558,7 @@ function revvcheck_server(){
     local branch=$4
     local key_id=$(getserver ${server} sub)
     local key=$(ende_code dev ${key_id})
-    local ret
+    local status
 
     #local port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)')
     if [ -z "${server}" ];
@@ -1568,8 +1570,8 @@ function revvcheck_server(){
     bar inline "step2.1-gerritserver: [remote] check if gerrit server is active by $ACCOUNT"
     clog solution "check gerrit service is online from web"
     )
-    ret=$(curl -s -u ${ACCOUNT}:${key} ${server}/a/config/server/version )
-    case ${ret} in
+    status=$(curl -s -u ${ACCOUNT}:${key} ${server}/a/config/server/version )
+    case ${status} in
     *[2-9].[0-9].[0-9]*)   echo "ok. version is verified " > /dev/null;;
     *)                     err "gerrit is not working, please check"; return 1;;
     esac
@@ -1579,21 +1581,23 @@ function revvcheck_server(){
     bar inline "step2.2-gerritserver: [remote] check if gerrit is accessed by ${user} (default: input>current>vgit-na)"
     clog solution "check gerrit current account in gerrit system"
     if [ -z "${oriproject}" ];then info "usage) repp connect testaccount na tiger/tools tiger_release" && return 1;fi
-    if [[ "$oriproject" == *.git* ]]; then err ".git postfix must be removed in [$oriproject]"; fi
-    ret=$(curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${user})
-    [[ "$ret" =~ "_account_id" ]] &&  echo "gerrit account existed [${user}]" || err "create gerrit account [${user}] by login"
+    if [[ "$oriproject" == *.git* ]]; then err ".git postfix must be removed in [$oriproject]" && return 1; fi
+    status=$(curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${user})
+    [[ "$status" =~ "_account_id" ]] &&  echo "gerrit account existed [${user}]" || ( err "create gerrit account [${user}] by login" && return 1)
 
 
     bar inline "step2.3-gerritserver: [remote] check if git project is accessed by ${user} (default: input>current>manifests)"
     clog solution "check git name path is correct and can access"
-    ret=$(curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${gitproject})
-    [[ "$ret" =~ "ACTIVE" ]] &&  echo "git existed and accessed [${oriproject}]" || err "check git project path [${oriproject}]"
+    status=$(curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${gitproject})
+    [[ "$status" =~ "ACTIVE" ]] &&  echo "git existed and accessed [${oriproject}]" || ( err "check git project path [${oriproject}]" && return 1)
 
     bar inline "step2.4-gerritserver: [remote] check if branch is accessed by ${user} (default: input>current>master)"
     clog solution "check branch name path is correct and can access"
     [ -z "${branch}" ] && branch="master"
-    ret=$(curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${gitproject}/branches?m=${branch})
-    [[ "$ret" =~ "ref" ]] &&  echo "branch existed and accessed [${branch}]" || err "check git branch is existed or permission allowed [${branch}]"
+    status=$(curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${gitproject}/branches?m=${branch})
+    [[ "$status" =~ "ref" ]] &&  echo "branch existed and accessed [${branch}]" || ( err "check git branch is existed or permission allowed [${branch}]" && return 1)
+    
+    return 0
 }
 
 
