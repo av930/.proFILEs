@@ -83,13 +83,13 @@ export HISTTIMEFORMAT='[%Y-%m-%d_%H] '
 #update history only login
 function update_history(){
     history -a
-    if [ -n "${STY}" ]; then  #mean [ ${TERM} = 'screen' ]
+    if [ -n "${STY}" ] && [ "${path}" != "${PWD}" ] ; then  #mean [ ${TERM} = 'screen' ]
         [ "${PWD}" = "${HOME}" ] \
 		&& printf "\033k%s\033\\" "HOME" \
-		|| printf "\033k%s\033\\" "${PWD##*/}"; 
+		|| printf "\033k%s\033\\" "${PWD##*/}"
+        path=${PWD}
     fi
     #history -c
-    #history -r
 }
 #update_history
 export PROMPT_COMMAND="update_history; $PROMPT_COMMAND"
