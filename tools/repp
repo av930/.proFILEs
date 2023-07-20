@@ -5,7 +5,9 @@
 ## ==========================================================================
 ###---------------------------------------------------------- DEBUG OPTION
 #DEBUG=["echo -e"|:], : means no-operation
-DEBUG=:
+## DEBUG=[ : | "printf ${RED}%s${NCOL}\n" ]
+DEBUG=: #"printf ${RED}%s${NCOL}\n"
+
 PATH_FULL=$(realpath "$BASH_SOURCE")
 PATH_DIR="${PATH_FULL%/*}"
 PATH_FILE="${PATH_FULL##*/}"
@@ -46,7 +48,7 @@ source <(cat <<\EOF
     #git config --global alias.diffi '!_gitdiff() { git difftool --extcmd "icdiff $@"; }; _gitdiff' --replace-all
     #git config --global alias.clear !_gitclear() { git reset --hard $1; git clean -xdf; }; _gitclear
 EOF
-) > /dev/null
+) 2> /dev/null
 
 
 ## oneline function
@@ -405,19 +407,19 @@ function gittgo() {
 				   ex) gitt go build        # show git path including 'build' and move to select
 EOF
                 return 0
-      ;;root)   cd "${REPP_ROOT}"
-                if [ "${current_dir}" = "${PWD}" ]; then warn "path is not changed" && return 1; else return 0; fi
-      ;;mani)   cd "${REPP_PATH}"    
-                if [ "${current_dir}" = "${PWD}" ]; then warn "path is not changed" && return 1; else return 0; fi
-    ;;git|'')   cd "${GITT_PATH}"     
-                if [ "${current_dir}" = "${PWD}" ]; then warn "path is not changed" && return 1; else return 0; fi
+      ;;root)   cd "${REPP_ROOT:-${GITT_PATH}}"; if [ "${current_dir}" = "${PWD}" ]; then warn "path is not changed" && return 1; else return 0; fi
+      ;;mani)   cd "${REPP_PATH}"; if [ "${current_dir}" = "${PWD}" ]; then warn "path is not changed" && return 1; else return 0; fi
+    ;;git|'')   cd "${GITT_PATH}"; if [ "${current_dir}" = "${PWD}" ]; then warn "path is not changed" && return 1; else return 0; fi
     esac
 
+    if ! repp_initvar; then warn "your are not in repo"; return 1; fi 
     if [ ! -f ${REPPFILE_CSV} ]; then reppfind $cmd; fi
-    
+
     local INPUT=( $(awk -v FS="|" '{print $5}' ${REPPFILE_CSV} |grep $cmd| sort) )
-    if [ -n "${INPUT}" ]; 
-    then run_menu "${INPUT[@]}"; cd "${REPP_ROOT}/${menu_selected}"; return 0
+    if [ -n "${INPUT}" ];
+    then 
+        run_menu "${INPUT[@]}"; cd "${REPP_ROOT}/${menu_selected}"; 
+        if [ "${current_dir}" = "${PWD}" ]; then warn "path is not changed" && return 1; else return 0; fi
     else warn "you must find path manaully"; return 1
     fi
 }
@@ -453,12 +455,9 @@ EOF
             ;;
     esac
 
-    echo "repo forall -c \"git log -1 --abbrev=6 --date=format:'%Y-%m-%d %H:%M:%S' --pretty=format:'%ad  %h  [%an] %(describe:abbrev=0) %s%n'\" |sort -r |head -${count:-50}"
-    echo "> $out"
-
     bar outline "repo get recent commit"
     bar inline "date:YMD HMS]       [sha]   [author]      [commit title]                                            [git project                            branch"
-    repo forall -j16 -c 'printf "%-100.100s %-80s \n" "$(git log -1 --abbrev=6 --date=format:"%Y-%m-%d %H:%M:%S" --pretty=format:"%ad  %h  [%an] %s")" "[${REPO_PROJECT}  ${REPO_RREV}]"' |grep -v skip| sort -r |head -${count:-50} > $out
+    repo forall -j16 -c 'printf "%-100.100s %-80s \n" "$(git log -1 --abbrev=6 --date=format:"%Y-%m-%d %H:%M:%S" --pretty=format:"%ad  %h  [%an] %s")" "[${REPO_PROJECT}  ${REPO_RREV}]"' | sort -r |head -${count:-50} > $out
     #repo forall -c "git log -1 --abbrev=6 --date=format:'%Y-%m-%d %H:%M:%S' --pretty=format:'%ad  %h  [%an] %d %s%n'" |sort -r |head -${count:-50} > $out
 
 }
@@ -472,8 +471,9 @@ function reppfind(){
 # usage: reppfind [path|project]
     local cmd="$1"
 
+    
     if [ -f "${REPPFILE_CSV}" ];
-    then info "reuse generated file [\${REPPFILE_CSV}] or remove it";
+    then info "reuse generated file [\${REPPFILE_CSV}] or you can remove and retry this";
     else repo forall -j1 -c 'printf "%.6s|%.7s|%-32.32s|%-74.74s|%.80s \n" "${REPO_LREV}" "${REPO_REMOTE}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"' > ${REPPFILE_CSV}
     fi
 
@@ -493,17 +493,18 @@ function reppfind(){
 		usage) repp find @path                     # print path colume for all repo
 		   ex) repp find @project |grep meta       # print project colume containing 'meta'
 EOF
-    ;; @rev)      echo "<REPO_LREV>";    awk -v FS="|" '{print $1}' ${REPPFILE_CSV}
-    ;; @remote)   echo "<REPO_REMOTE>";  awk -v FS="|" '{print $2}' ${REPPFILE_CSV} |sort |uniq
-    ;; @branch)   echo "<REPO_RREV>";    awk -v FS="|" '{print $3}' ${REPPFILE_CSV} |sort |uniq
-    ;; @project)  echo "<REPO_PROJECT>"; awk -v FS="|" '{print $4}' ${REPPFILE_CSV} |sort
-    ;; @path)     echo "<REPO_PATH>";    awk -v FS="|" '{print $5}' ${REPPFILE_CSV} |sort
+    ;; @rev)      clog "<REPO_LREV>";    awk -v FS="|" '{print $1}' ${REPPFILE_CSV}
+    ;; @remote)   clog "<REPO_REMOTE>";  awk -v FS="|" '{print $2}' ${REPPFILE_CSV} |sort |uniq
+    ;; @branch)   clog "<REPO_RREV>";    awk -v FS="|" '{print $3}' ${REPPFILE_CSV} |sort |uniq
+    ;; @project)  clog "<REPO_PROJECT>"; awk -v FS="|" '{print $4}' ${REPPFILE_CSV} |sort
+    ;; @path)     clog "<REPO_PATH>";    awk -v FS="|" '{print $5}' ${REPPFILE_CSV} |sort
     ;; "")        printf "\e[1;33m%6.6s %7.7s %-32.32s %-74.74s %.80s \e[0m\n" "REPO_LREV" "REPO_REMOTE" "REPO_RREV" "REPO_PROJECT" "REPO_PATH"
                   cat ${REPPFILE_CSV} | tee  >(wc -l)
     ;; *)         printf "\e[1;33m%6.6s %7.7s %-32.32s %-74.74s %.80s \e[0m\n" "REPO_LREV" "REPO_REMOTE" "REPO_RREV" "REPO_PROJECT" "REPO_PATH"
                   cat ${REPPFILE_CSV} | grep -i --color=always ${cmd}
     esac
 
+    printf "\n\n"
     info "\${REPPFILE_CSV} is generated, all repository info is save: ${REPPFILE_CSV}"
     clog "\${REPPFILE_CSV}" "this file can opened by excel menu [data> text> select file> file open wizard], or reformatted by [data>text to columns> select delimter'|'> finish]"
 }
@@ -683,7 +684,7 @@ function reppsync(){
 # run command, get return code and print guide
 # ex) reppsync
     local cmd=$1
-    local opt="${@:2}"
+    local opts="${@:2}"
     local preopt njobs
 
     case $cmd in
@@ -694,18 +695,24 @@ function reppsync(){
 			   ex) repp sync --force-sync   # go current git root dir
 			   ex) gitt go build            # show git path including 'build' and move to select
 EOF
-        ;; debug)  info "you can use permission check with 'repp connect' command"
-                   preopt="--trace" ; njobs=1
-        ;; *[[:digit:]] ) ##same to '*[0-9])'
-                   echo aaaaa
-                   njobs=${cmd}
-        ;;    '')
-            read -p "Please input job number to repo sync [enter:auto| number:ex)16| ctrl+c:exit]: " njobs;
-            if [ -z $njobs ]; then  njobs=${NJOBS}; fi
-        ;;    -*)  opt="${cmd} ${opt}"
+        ;; debug)   info "you can use permission check with 'repp connect' command"
+                    preopt="--trace" ; njobs=1
+        # -[[:digit:]] ) ##same to '*[0-9])'
+        #           njobs=${cmd}
+        #    -*)    opts="${cmd} ${opts}"
+        ;;    *)    
+                    info "default cmd: repo sync --no-tags --no-clone-bundle --fail-fast -cj8"
+                    clog "-m" "event/branch_migration.xml: # use input manifest.xml (to check if manifest work before commit) "
+                    clog "-d" "                            # back to manifest revision"
+                    clog "-f" "                            # force sync with overwriting"
+                    clog "--jobs-network=" "8              # count of network thread [default 1]"
+                    clog "--auto-gc" "                     # with garbage collection [default no]"
+
+                    read -p  $'\n\nPlease input option to repo sync [enter:auto| opts:-qcj4| ctrl+c:exit]: ' opts;
+                    if [ -z $opts ]; then njobs=${NJOBS}; fi        
     esac
 
-    showRUN repo ${preopt} sync --no-tags --no-clone-bundle --fail-fast -cj${njobs:-16} ${opt}
+    showRUN repo ${preopt} sync --no-tags --no-clone-bundle --fail-fast -cj${njobs:-8} ${opts}
 
     #"$@" 2> >(tee -a ${file_error})
     "$@" > >(tee -a ${file_error})
@@ -738,9 +745,9 @@ EOF
                     info "finish reset all repositories"
         ;;project)  info "you can repo sync without conflicting legacy objects"
                     showRUNQ y echo "
-                    ${REPP_ROOT}/.repo/project.list 
-                    ${REPP_ROOT}/.repo/project-objects/ 
-                    ${REPP_ROOT}/.repo/projects/" 
+                    ${REPP_ROOT}/.repo/project.list
+                    ${REPP_ROOT}/.repo/project-objects/
+                    ${REPP_ROOT}/.repo/projects/"
                     rm  -rf ${REPP_ROOT}/.repo/project.list \
                     ${REPP_ROOT}/.repo/project-objects/ \
                     ${REPP_ROOT}/.repo/projects/
@@ -964,12 +971,11 @@ function reppfind_repodir(){
     local T=$PWD
     local target=${1:-.repo}
     local down_depth=${2:-2} #default value:2
-    local print=$3
 
     ## find in sub directory with depth
     readarray -t REPP_PATH_ALL < <(find . -maxdepth ${down_depth} -path "*${target}" |sort)
     case ${#REPP_PATH_ALL[@]} in
-    1)  ## found sub dir
+    1)  ## found one in sub dir
         REPP_PATH=$(readlink -f ${REPP_PATH_ALL[0]})
         ;;
     0)  ## not found, so find in parent directory upto $HOME
@@ -982,10 +988,8 @@ function reppfind_repodir(){
         cd $T
         ;;
     *)  ## found multiple dir in sub dir
-        if [ "$print" = "print_y" ]; then
-            printf "subdir [%s]\n" ${#REPP_PATH_ALL[@]}
-            printf "%s\n" ${REPP_PATH_ALL[@]};
-        fi
+        warn "subdir [%s]\n" ${#REPP_PATH_ALL[@]}
+        warn "%s\n" ${REPP_PATH_ALL[@]};
         REPP_PATH=''
         ;;
     esac
@@ -997,10 +1001,9 @@ function repp_initvar(){
 ## ---------------------------------------------------------------------------
 # find input-path up and down,
 
-    local print=$1
     local ret=1
     ## move to repo root
-    reppfind_repodir .repo/manifests 5 print_n
+    reppfind_repodir .repo/manifests 5 
     ## set variable REPP if manifest dir exists
     if [ -d "${REPP_PATH}" ];then
         pushd ${REPP_PATH}
@@ -1029,28 +1032,26 @@ function repp_initvar(){
     REPPFILE_CSV=${REPP_ROOT}/repp.csv
     REPPFILE_XML=repp.xml
 
-    if [[ $ret -eq 1 && "${print}" = "print_y" ]]; then
-        printf "%s\n" ${REPP_PATH_ALL[@]};
-        bar inline "WARNING"
+    if [[ $ret -eq 1 ]]; then
+        $DEBUG ${REPP_PATH_ALL[@]};
         err "you are not in repo project, please check !";
     fi
+    return $ret
+    
 }
 
 function gitt_initvar(){
 ## ---------------------------------------------------------------------------
 # find input-path up and down,
 
-    local print=$1
-    local ret=1
+    local ret=0
     local temp
 
-    if [ "${print}" = "print_y" ]; then
-        if ! gittcheck_isgitproject; then
-            bar inline "WARNING"
-            err "you are not in git project, please check !";
-            ret=1
-        fi
+    if ! gittcheck_isgitproject; then
+        err "you are not in git project, please check !";
+        ret=1
     fi
+
     ##readarray -t GITT_REMOTE < <(git remote -v |cut -f1|uniq)
     GITT_REMOTE=$(git remote|head -1)
 
@@ -1064,18 +1065,19 @@ function gitt_initvar(){
     #NEEDTO WORK: find more secure way to get current branch revision
     GITT_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
     [ -z "${GITT_BRANCH}" ] && GITT_BRANCH=$(git branch -ar |grep -e '->' |sed -E 's#.*[/|>](.*)$#\1#')
-    [ -z "${GITT_BRANCH}" ] && ( err "check your branch with 'git branch' 
+    [ -z "${GITT_BRANCH}" ] && ( err "check your branch with 'git branch'
     repo start <working branch> --all       # make working branch
     source repp                             # reload repp script"
     )
-    
+
     GITT_REVIEW=$(git config --get-regexp remote.*.review|cut -d' ' -f2|head -1)
     GITT_URL=$(git config --get-regexp remote.${GITT_REMOTE}.url|cut -d' ' -f2|head -1)
     GITT_PATH=$(git rev-parse --show-toplevel)
-    if [ "${print}" = "print_y" ]; then echo "${GITT_PATH}"; fi
+    return $ret
 }
 
 function revv_initvar(){
+    local ret=0
     #default initial gerrit API key is na (vgit_na).
 
     key_id=$(getserver ${GITT_REMOTE:-${REPP_REMOTE}} sub)
@@ -1084,12 +1086,14 @@ function revv_initvar(){
     if (( 40 > ${#key} )); then
         warn "if problem continue, check gerrit http key value in [~/.key_${key_id}] \n
         you can generate .key_XXX : code enf ${key_id} <check_key_from_gerrit_account>"
+        ret=1
     fi
 
     if ! revvcheck_server ${server:-na} ${ACCOUNT} checkapi; then
         err "please check correct account&key is saved in ~/.key_${key_id} in $HOME dir"
-        return 1
+        ret=1
     fi
+    return $ret
 }
 
 
@@ -1098,16 +1102,14 @@ function reppcheck_initvar(){
 # find repo, gitt, review variable
 
     local cmd=$1
-    local print=$2
-
     ## --------------------------------------------------------
-    if [[ "${cmd}" =~ "repp" ]]; then repp_initvar $print; fi
+    if [[ "${cmd}" =~ "repp" ]]; then   repp_initvar ; [ $? -ne 0 ] && return 1;  fi
     ## --------------------------------------------------------
     if [[ "${cmd}" =~ "gitt" ]]; then
-        if gittcheck_isgitproject; then gitt_initvar $print; fi
+        if gittcheck_isgitproject; then gitt_initvar ; [ $? -ne 0 ] && return 1; fi
     fi
     ## --------------------------------------------------------
-    if [[ "${cmd}" =~ "revv" ]]; then revv_initvar $print; fi
+    if [[ "${cmd}" =~ "revv" ]]; then   revv_initvar ; [ $? -ne 0 ] && return 1; fi
 }
 
 
@@ -1416,23 +1418,27 @@ function gittfind(){
 				usage) gitt find <string>                       #find <string> in committer, message, code-diff
 				   ex) gitt find docker dock                    #find string 'docker' in file 'dock'
 EOF
-             exit 0;
+             return 0;
     ;; *)   bar outline "search in commit with regexp(${keyword}) in files(${area:-file list or path})"
     esac
 
     source <(cat <<\EOL
-    under "find only in committer in history\n"
+    under "find string(${keyword}) in committer in history(${area:-all})\n"
     echo "ex) git log --author=".*${keyword}.*" ${area}"
     echo "ex) git log --owner=".*${keyword}.*" ${area}"
     showRUN git log --committer=".*${keyword}.*" ${area}
 
-    under "find only in commit message of history with file-changes\n"
+    under "find string(${keyword}) in commit message of history (${area:-all}) with file-changes\n"
     showRUN git log -i --name-status --grep="${keyword}" ${area}
 
-    under "find in commit diff in history \n"
+    under "find string(${keyword}) in commit diff in file history(${area:-all}) \n"
     echo "ex) git grep -e regexp1 --or -e regexp2"
     echo "ex) git grep -e regexp1 --and -e regexp2"
     showRUN git grep -n "${keyword}" ${area}
+    
+    under "find function(${keyword}) in file history(${area:-all}) \n"
+    read -p "[enter:continue| ctrl+c:break]"
+    showRUN git log -L :${keyword}:${area}
 EOL
 )
 
@@ -1772,8 +1778,8 @@ EOF
                D) showRUN repo forall ${flag_forall} -evcj4 bash 'revvscript.sh' $cmd ${key} ${target} ${source}
           ;;   *) showRUN repo forall ${flag_forall} -vcj4 bash 'revvscript.sh' $cmd ${key} ${target} ${source}
     esac
-    
-    
+
+
     read -p $'\n\nshow result summary: [ctrl+c: exit | enter: continue]? '
     bar inline ""
     cat ${tempr} |grep --color=always FAIL | tee /dev/tty | wc -l
@@ -1943,15 +1949,15 @@ local MENU=(
 local ret=0
 case "$1" in
      ##$1:cmd        ${@:2}:parameters
-          help)                                                 reppmenu help "${MENU[@]}"
-    ;;     '')                                                  reppmenu revv "${MENU[@]}"
-    ;;     cmd)      reppcheck_initvar reppgittrevv;            revvcmd "${@:2}"
-    ;;  server)      reppcheck_initvar gittrevv;                revvserver "${@:2}"
-    ;; connect)      reppcheck_initvar gittrevv;                revvcheck_server "${@:2}"
-    ;;    info)      reppcheck_initvar gittrevv;                revvinfo  "${@:2}"
-    ;;   debug)      reppcheck_initvar gittrevv;                revvdebug "${@:2}"
-    ;;  forall)      reppcheck_initvar reppgittrevv;            revvforall "${@:2}"
-    ;;       *)      reppcheck_initvar gittrevv;                revvcontrol "${@:1}"
+          help)                                            reppmenu help "${MENU[@]}"
+    ;;     '')                                             reppmenu revv "${MENU[@]}"
+    ;;     cmd)      reppcheck_initvar reppgittrevv    &&  revvcmd "${@:2}"
+    ;;  server)      reppcheck_initvar gittrevv        &&  revvserver "${@:2}"
+    ;; connect)      reppcheck_initvar gittrevv        &&  revvcheck_server "${@:2}"
+    ;;    info)      reppcheck_initvar gittrevv        &&  revvinfo  "${@:2}"
+    ;;   debug)      reppcheck_initvar gittrevv        &&  revvdebug "${@:2}"
+    ;;  forall)      reppcheck_initvar reppgittrevv    &&  revvforall "${@:2}"
+    ;;       *)      reppcheck_initvar gittrevv        &&  revvcontrol "${@:1}"
 esac
 return $ret
 }
@@ -1978,22 +1984,22 @@ local MENU=(
 local ret=0
 case "$1" in
     ##$1:below ${@:2}:parameters
-          help)                                                 reppmenu help "${MENU[@]}"
-    ;;      '')                                                 reppmenu gitt "${MENU[@]}"
-    ;;    info)     reppcheck_initvar gitt print_n;             gittinfo
-    ;;    show)     reppcheck_initvar gitt print_n;             gittshow "${@:2}"
-    ;;      go)     reppcheck_initvar gitt print_n;             gittgo "${@:2}"
-    ;;  commit)     reppcheck_initvar gitt print_n;             gittcommit "${@:2}"
-    ;;  branch)     reppcheck_initvar gitt print_n;             gittbranch "${@:2}"
-    ;;    find)     reppcheck_initvar gitt print_n;             gittfind "${@:2}"
-    ;;    diff)     reppcheck_initvar gitt print_n;             gittdiff "${@:2}"
-    ;;   reset)     reppcheck_initvar gitt print_n;             gittreset "${@:2}"
-    ;;   debug)     reppcheck_initvar gitt print_n;             gittdebug "${@:2}"
-    ;;       *)     bar outline "call native git"
-                    git "${@}";;
-esac
-return $ret
-}
+          help)                                     reppmenu help "${MENU[@]}"
+    ;;      '')                                     reppmenu gitt "${MENU[@]}"
+    ;;    info)     reppcheck_initvar gitt      &&  gittinfo
+    ;;    show)     reppcheck_initvar gitt      &&  gittshow "${@:2}"
+    ;;      go)     reppcheck_initvar gitt      &&  gittgo "${@:2}"
+    ;;  commit)     reppcheck_initvar gitt      &&  gittcommit "${@:2}"
+    ;;  branch)     reppcheck_initvar gitt      &&  gittbranch "${@:2}"
+    ;;    find)     reppcheck_initvar gitt      &&  gittfind "${@:2}"
+    ;;    diff)     reppcheck_initvar gitt      &&  gittdiff "${@:2}"
+    ;;   reset)     reppcheck_initvar gitt      &&  gittreset "${@:2}"
+    ;;   debug)     reppcheck_initvar gitt      &&  gittdebug "${@:2}"
+    ;;       *)     bar outline "call native git"       
+                    git "${@}";;                        
+esac                                                    
+return $ret                                             
+}                                                       
 
 
 
@@ -2022,23 +2028,22 @@ local MENU=(
 local ret=0
 case "$1" in
      ##$1:cmd       check if validation                          ${@:2}:parameters
-       help)                                                    reppmenu help "${MENU[@]}"
-    ;; '')                                                      reppmenu repp "${MENU[@]}"
-    ;; info)        reppcheck_initvar repp print_n;             reppinfo  "${@:2}"
-    ;; show)        reppcheck_initvar repp print_y;             reppshow "${@:2}"
-    ;; go)          reppcheck_initvar reppgitt print_n;         reppgo "${@:2}"
-    ;; commit)      reppcheck_initvar repp print_y;             reppcommit "${@:2}"
-    ;; find|list)   reppcheck_initvar repp print_y;             reppfind "${@:2}"
-    ;; branch)      reppcheck_initvar repp print_y;             reppbranch "${@:2}"
-    ;; mani)        reppcheck_initvar repp print_n;             reppmani "${@:2}"
-    ;; init)        reppcheck_initvar repp print_n;             reppinit "${@:2}"
-    ;; sync)        reppcheck_initvar repp print_n;             reppsync "${@:2}"
-    ;; reset)       reppcheck_initvar repp print_y;             reppreset "${@:2}"
-    ;; version)     reppcheck_initvar repp print_y;             reppversion "${@:2}"
-    ;; connect)     reppcheck_initvar reppgittrevv print_n;     reppconnect "${@:2}"
-    ;; debug)       reppcheck_initvar reppgittrevv print_y;     reppdebug "${@:2}"
-    ;; *)           bar outline "result of native repo"
-                    repo "${@}"
+       help)                                                reppmenu help "${MENU[@]}"
+    ;; '')                                                  reppmenu repp "${MENU[@]}"
+    ;; info)        reppcheck_initvar repp              &&  reppinfo  "${@:2}"
+    ;; show)        reppcheck_initvar repp              &&  reppshow "${@:2}"
+    ;; go)          reppcheck_initvar reppgitt          &&  reppgo "${@:2}"
+    ;; commit)      reppcheck_initvar repp              &&  reppcommit "${@:2}"
+    ;; find|list)   reppcheck_initvar repp              &&  reppfind "${@:2}"
+    ;; branch)      reppcheck_initvar repp              &&  reppbranch "${@:2}"
+    ;; mani)        reppcheck_initvar repp              &&  reppmani "${@:2}"
+    ;; init)        reppcheck_initvar repp              &&  reppinit "${@:2}"
+    ;; sync)        reppcheck_initvar repp              &&  reppsync "${@:2}"
+    ;; reset)       reppcheck_initvar repp              &&  reppreset "${@:2}"
+    ;; version)     reppcheck_initvar repp              &&  reppversion "${@:2}"
+    ;; connect)     reppcheck_initvar reppgittrevv      &&  reppconnect "${@:2}"
+    ;; debug)       reppcheck_initvar reppgittrevv      &&  reppdebug "${@:2}"
+    ;; *)           bar outline "result of native repo";    repo "${@}"
 esac
 return $ret
 }

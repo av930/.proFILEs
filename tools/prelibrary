@@ -30,7 +30,7 @@ dlog()   { printf "%b\\n" "${YELLOW}$1 ${NCOL} ${@:2}";}
 clog()   { log "${cyan}$1 ${NCOL} ${@:2}"  ;}
 info()   { log "${GREEN}INFO: ${NCOL} ${*}"  ;}
 warn()   { log "${YELLOW}WARN: ${NCOL} ${*}" ;}
-err()    { log "${RED}ERROR: ${NCOL} ${*}"   ;}
+err()    { log "${RED}ERROR: ${NCOL} ${*}" > /dev/stderr ;}
 
 
 #${2:+[$2] }: if $2 exist, use '[$2] '
