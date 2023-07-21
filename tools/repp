@@ -1034,7 +1034,7 @@ function repp_initvar(){
 
     if [[ $ret -eq 1 ]]; then
         $DEBUG ${REPP_PATH_ALL[@]};
-        err "you are not in repo project, please check !";
+        $DEBUG "you are not in repo project, please check !";
     fi
     return $ret
     
@@ -1044,12 +1044,10 @@ function gitt_initvar(){
 ## ---------------------------------------------------------------------------
 # find input-path up and down,
 
-    local ret=0
     local temp
 
     if ! gittcheck_isgitproject; then
-        err "you are not in git project, please check !";
-        ret=1
+        return 1
     fi
 
     ##readarray -t GITT_REMOTE < <(git remote -v |cut -f1|uniq)
@@ -1058,7 +1056,9 @@ function gitt_initvar(){
     #git config --get-regexp remote.$GITT_REMOTE |sort|grep -Ee "(projectname|url)"
     #git config --get-regexp remote.*.projectname|cut -d' ' -f2
     temp=$(git config --get-regexp remote.* |grep -Ee "(projectname|url)" |head -1|grep -Po '\w/\K.\w+[^?]+')
-    if [ -n "${GITT_PROJECT}" ] && [ "${temp}" = "${GITT_PROJECT}" ]; then return 0; fi
+    if [ -n "${GITT_PROJECT}" ] && [ "${temp}" = "${GITT_PROJECT}" ]; then 
+        return 0; #git path not changed, so break
+    fi
     GITT_PROJECT=${temp}
 
 
@@ -1073,7 +1073,7 @@ function gitt_initvar(){
     GITT_REVIEW=$(git config --get-regexp remote.*.review|cut -d' ' -f2|head -1)
     GITT_URL=$(git config --get-regexp remote.${GITT_REMOTE}.url|cut -d' ' -f2|head -1)
     GITT_PATH=$(git rev-parse --show-toplevel)
-    return $ret
+    return 0
 }
 
 function revv_initvar(){
@@ -1104,13 +1104,17 @@ function reppcheck_initvar(){
 
     local cmd=$1
     ## --------------------------------------------------------
-    if [[ "${cmd}" =~ "repp" ]]; then   repp_initvar ; [ $? -ne 0 ] && return 1;  fi
-    ## --------------------------------------------------------
-    if [[ "${cmd}" =~ "gitt" ]]; then
-        if gittcheck_isgitproject; then gitt_initvar ; [ $? -ne 0 ] && return 1; fi
+    if [[ "${cmd}" =~ "repp" ]]; then   
+        if ! repp_initvar ; then warn "you are not in repo project" && return 1;  fi
     fi
     ## --------------------------------------------------------
-    if [[ "${cmd}" =~ "revv" ]]; then   revv_initvar ; [ $? -ne 0 ] && return 1; fi
+    if [[ "${cmd}" =~ "gitt" ]]; then
+        if ! gitt_initvar ; then warn "you are not in git project" && return 1;  fi
+    fi
+    ## --------------------------------------------------------
+    if [[ "${cmd}" =~ "revv" ]]; then   
+        if ! revv_initvar ; then warn "you don't have a permission, please check" && return 1;  fi
+    fi
     return 0
 }
 
@@ -1337,13 +1341,13 @@ function gittbranch_list(){
 
     read -p "'git fetch' is needed to get recent branch details [enter:continue| ctrl+c:break] :"
     git fetch
-    bar inline "info: remote tag recent 20 by date (bottom is newest)"
+    bar inline "remote tag] recent 20 by date (bottom is newest create tag)"
     echo "get all branches and sort by date recent its tag"
     showRUNQ "git for-each-ref --color=always --sort=creatordate refs/tags \
     --format='%(color:yellow)%(committerdate:short) %(color:red)%(objectname:short) %(color:green)%(refname:short) %(color:blue)%(authorname)%(color:reset) %(contents:subject)' | tail -20"
 
 
-    bar inline "info: remote branch recent 20 by date (bottom is newest)"
+    bar inline "remote branch] recent 20 by date (bottom is newest commit added)"
     showRUNQ "git for-each-ref --color=always --sort=committerdate refs/remotes \
     --format='%(color:yellow)%(committerdate:short) %(color:red)%(objectname:short) %(color:green)%(refname:short) %(color:blue)%(authorname)%(color:reset) %(contents:subject)' | tail -20"
 
@@ -1358,14 +1362,14 @@ function gittbranch_list(){
     # clog "[always latest]" "read from remote live"
     # showRUN git ls-remote -h ${GITT_REMOTE} refs/heads/${opt} | more -60
 
-    bar inline "find: sort by recently updated branches by new commit findkey: ${opt:-'*'} (top is newest)"
+    under "find: sort by recently updated branches by new commit findkey: ${opt:-'*'} (bottom is newest commit added)\n"
     # echo "shows the branches downloaded when git fetch equivalent command was executed"
     # clog "run 'git pull'" "to fetch all latest remote branches"
     #set -o noglob
     #[ -z "${opt}" ] && filter="" || filter="--list *${opt}*"
     #showRUN git branch -rvv --sort=committerdate ${filter} | more -60
     #set +o noglob
-    showRUNQ git branch -rvv --sort=-committerdate --list ${opt} | more -60
+    showRUNQ git branch -rvv --sort=committerdate --list ${opt} | tail -60
 }
 
 
