@@ -415,10 +415,10 @@ EOF
     if ! repp_initvar; then warn "your are not in repo"; return 1; fi 
     if [ ! -f ${REPPFILE_CSV} ]; then reppfind $cmd; fi
 
-    local INPUT=( $(awk -v FS="|" '{print $5}' ${REPPFILE_CSV} |grep $cmd| sort) )
+    local INPUT=( $(cat ${REPPFILE_CSV} |grep ${cmd}| awk -v FS="\|" '{print $5}'| sort) )
     if [ -n "${INPUT}" ];
     then 
-        run_menu "${INPUT[@]}"; cd "${REPP_ROOT}/${menu_selected}"; 
+        run_menu "${INPUT[@]}"; cd "${REPP_ROOT}/${menu_selected##* }"; 
         if [ "${current_dir}" = "${PWD}" ]; then warn "path is not changed" && return 1; else return 0; fi
     else warn "you must find path manaully"; return 1
     fi
@@ -1064,7 +1064,7 @@ function gitt_initvar(){
 
     #NEEDTO WORK: find more secure way to get current branch revision
     GITT_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
-    [ -z "${GITT_BRANCH}" ] && GITT_BRANCH=$(git branch -ar |grep -e '->' |sed -E 's#.*[/|>](.*)$#\1#')
+    [ -z "${GITT_BRANCH}" ] && (warn "'repo start <workingbranch> --all' is recommended" ; GITT_BRANCH=$(git branch -ar |grep -e '->' |sed -E 's#.*[/|>](.*)$#\1#') )
     [ -z "${GITT_BRANCH}" ] && ( err "check your branch with 'git branch'
     repo start <working branch> --all       # make working branch
     source repp                             # reload repp script"
@@ -2040,7 +2040,7 @@ case "$1" in
     ;; '')                                                  reppmenu repp "${MENU[@]}"
     ;; info)        reppcheck_initvar repp              &&  reppinfo  "${@:2}"
     ;; show)        reppcheck_initvar repp              &&  reppshow "${@:2}"
-    ;; go)          reppcheck_initvar reppgitt          &&  reppgo "${@:2}"
+    ;; go)          reppcheck_initvar repp              &&  reppgo "${@:2}"
     ;; commit)      reppcheck_initvar repp              &&  reppcommit "${@:2}"
     ;; find|list)   reppcheck_initvar repp              &&  reppfind "${@:2}"
     ;; branch)      reppcheck_initvar repp              &&  reppbranch "${@:2}"
