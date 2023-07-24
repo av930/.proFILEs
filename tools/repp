@@ -232,6 +232,18 @@ CHANGE
 				      flow :  repp mani change remote vgit_new vgit_as
 				      flow :  icdiff <( cat ${REPPFILE_XML} ) <( cat repp.xml | sed -E 's#remote="([^"]*vgit_as[^"]*)"#remote="\1vgit_new"#' )
 CHANGE
+    ;;  diff)   bar inline "compare 2 different manifests"
+                reppget_repcmd info
+                clog 'ex)' 'repp mani diff event/230426_mig.xml event/230712_upstream.xml'    
+                ## listup xml by date
+                [ -z "${item}" ] && ( git log --since=2-weeks --first-parent --date=format:'%Y-%m-%d (%a) %H:%M:%S' --pretty=format:'%Cgreen%cd%:%tCreset' --name-status| awk 'NF==1{date=$1}NF>1 && !seen[$2]++{print date,$0}' FS=$'\t' )
+                if [ -z "${str}" ]; then 
+                    read -p $'\n\nchoose manifest to compare: ' opt 
+                    clog "\ninput[${opt}]" "will be compared to current manifest [${REPPFILE_MANI}]"
+                    clog "otherwize" "ctrl+c to break, and run 'repp mani diff ${opt} <manifest to compare>'"
+                fi
+                showRUNQ y repo diffmanifests ${item:-${opt}} ${str:-${REPPFILE_MANI}}
+                
     ;; help|*)   cat <<- EOF
 				usage) repp mani info
 				usage) repp mani gen <outfile>
@@ -239,6 +251,9 @@ CHANGE
 				usage) repp mani change <groups|upstream|dest-branch|etc> <str> <filter>
 				   ex) repp mani change remote vgit_new                   #change "any string" to "vgit_new" in all remote field
 				   ex) repp mani change remote vgit_new vgit_as           #change only from "vgit_as" to "vgit_new" in remote field
+				usage) repp mani diff event/compare.xml <current.xml>     #compare 2 different history(commit) by manifests
+				   ex) repp mani diff event/compare.xml                   #compare history event/compare.xml to current.xml
+				   ex) repp mani diff default.xml event/230712_mig.xml    #compare history from 2 different manifests 
 EOF
     ;; esac
 }
@@ -702,7 +717,7 @@ EOF
         #    -*)    opts="${cmd} ${opts}"
         ;;    *)    
                     info "default cmd: repo sync --no-tags --no-clone-bundle --fail-fast -cj8"
-                    clog "-m" "event/branch_migration.xml: # use input manifest.xml (to check if manifest work before commit) "
+                    clog "-m" "event/branch_migration.xml  # use input manifest.xml (to check if manifest work before commit) "
                     clog "-d" "                            # back to manifest revision"
                     clog "-f" "                            # force sync with overwriting"
                     clog "--jobs-network=" "8              # count of network thread [default 1]"
@@ -1192,14 +1207,15 @@ function gittshow(){
     bar inline "git commit history with option (to see all branche, gitt show 15 --all)"
     showRUN git log --decorate --graph -n${depth} --pretty=format:'%Cred%h -%C(yellow)%s %Cgreen(%ci) %C(blue)<%an>%Creset'
 
-    bar inline "git commit diff history"
+    bar inline "git commit history with diff file list"
     echo "filter: --since(=after), --before(=until)"
     echo "date  : 6 hour, 2-day, 2-week, 1-month, 1-year"
     clog "ex:" "--since=2-weeks, --since=04:24, --before=6-hours, --after=2022-11-10 --before=2022-11-20-23"
-    read -p "input add option [default:--pretty="short" --name-only with your input option]"
+    read -p "input add option [default:--pretty="short" --name-only with your input option] "
 
     bar inline "file name only (press 'q' to stop)"
-    git log --color=always --pretty="short" --name-only ${reply} |more -60
+    #git log --color=always --pretty="short" --name-only ${reply} --pretty=format:'%Cred%h -%C(yellow)%s %Cgreen(%ci) %C(blue)<%an>%Creset' |more -60
+    git log --color=always --pretty="short" --name-only ${reply} --pretty=format:'%Cred%H %Cgreen(%ci) %n%C(yellow)%s %C(blue)<%an>%Creset' 
 
     clog "to see only modified file & contents, not add/delete files:" "git log -p --color=always --pretty=oneline --diff-filter=M ${reply}"
 }
@@ -1526,7 +1542,7 @@ function gittreset(){
         clear)   showRUNQ y git reset --hard && showRUN git clean -xdf
     ;; help|*)   cat <<-EOF
 				usage) gitt reset clear #remove all changes and reset with comfirm 'y'
-				usage) gitt reset       #show detail reset commands
+				usage) gitt reset       #show detail reset commands below, run manully.
 
 				info) git reset flow
 				1) git log: check reset point in repository

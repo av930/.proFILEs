@@ -78,7 +78,7 @@ function showRUNQ(){
 # usage: showRUN repo sync -qcj${njobs:-16} --no-tags --no-clone-bundle $1
 	if [ "$1" = y ]; then 
 	    echo "\$ ${@:2}"; 
-		read -p "continue [y:continue|other:break]" 
+		read -p "choose [y:continue| ctrl+c:break] : " 
 		#if [ "$REPLY" == 'y' ]; then "eval ${@:2}" ; fi 
 		if [ "$REPLY" == 'y' ]; then "${@:2}" ; fi 
 	else
