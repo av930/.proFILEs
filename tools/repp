@@ -351,7 +351,6 @@ function reppshow(){
 
     ##run command "repo info"
     bar outline "it takes time to get information..."
-    bar inline "repo status: uncommitted changes list saved to [ ${REPPFILE_STATUS} ]"
     echo "repo status" > ${REPPFILE_STATUS}
 
     ##remove colored output with 1) sed command, 2) --color option
@@ -365,8 +364,9 @@ function reppshow(){
     #bar inline "repo info: git repo/source path /branch rev saved to [ ${REPPFILE_STATUS} ]"
     #echo "repo info" >> ${REPPFILE_STATUS}
     #repo info |sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" >> ${REPPFILE_STATUS}
-    info "\${REPPFILE_STATUS} is generated: ${REPPFILE_STATUS}"
-    clog "\${REPPFILE_STATUS}" "you can use this file to compare other repo."
+    
+    bar inline "repo status: uncommitted changes list saved to [ ${REPPFILE_STATUS} ]"    
+    info "\${REPPFILE_STATUS} you can use this file to check dirty commits left"
 }
 
 
@@ -520,7 +520,7 @@ EOF
     esac
 
     printf "\n\n"
-    info "\${REPPFILE_CSV} is generated, all repository info is save: ${REPPFILE_CSV}"
+    info "Above \${REPPFILE_CSV} is generated, all repository info is save: ${REPPFILE_CSV}"
     clog "\${REPPFILE_CSV}" "this file can opened by excel menu [data> text> select file> file open wizard], or reformatted by [data>text to columns> select delimter'|'> finish]"
 }
 
@@ -756,8 +756,9 @@ function reppreset(){
 				 info) gitt reset          # provide detail control for one repository
 EOF
         ;;   '')    info "repp reset help : for more usage\n"
-                    showRUNQ y repo forall -cj${NJOBS} 'git reset --hard ; git clean -xdf'
-                    info "finish reset all repositories"
+                    showRUNQ y repo forall -cj${NJOBS} 'git reset --hard @{upstream}; git clean -xdf'
+                    #showRUN repo sync -dlvj${NJOBS} --force-remove-dirty
+                    info "\nfinish reset all repositories, and reset FETCH_HEAD"
         ;;project)  info "you can repo sync without conflicting legacy objects"
                     showRUNQ y echo "
                     ${REPP_ROOT}/.repo/project.list
@@ -766,8 +767,8 @@ EOF
                     rm  -rf ${REPP_ROOT}/.repo/project.list \
                     ${REPP_ROOT}/.repo/project-objects/ \
                     ${REPP_ROOT}/.repo/projects/
-        ;;check|*)  showRUN repo status -vqj${NJOBS}
-                    info "only show errors"
+        ;;check|*)  showRUN repo status -vj${NJOBS}
+                    info "\n\n reset to manifest revision and check if uncommited change existed"
     esac
 }
 
