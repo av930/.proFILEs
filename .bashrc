@@ -96,7 +96,7 @@ export PROMPT_COMMAND="update_history; $PROMPT_COMMAND"
 shopt -s cmdhist
 shopt -s lithist
 
-alias his='history 300| tac| more -60'
+alias his='history 300| tail -60'
 alias hisgrep='cat ~/.bash_history | egrep -i --color=auto'
 
 ###############################

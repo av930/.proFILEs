@@ -80,7 +80,7 @@ function showRUNQ(){
 	    echo "\$ ${@:2}"; 
 		read -p "choose [y:continue| ctrl+c:break] : " 
 		#if [ "$REPLY" == 'y' ]; then "eval ${@:2}" ; fi 
-		if [ "$REPLY" == 'y' ]; then "${@:2}" ; fi 
+		if [ "$REPLY" == 'y' ]; then eval "${@:2}" ; fi 
 	else
 		echo "\$ ${@}"; 
 		eval "${@}"
