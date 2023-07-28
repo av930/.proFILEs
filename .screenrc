@@ -57,6 +57,9 @@ altscreen on
 ## increase the scroll buffer
 defscrollback         40000           # default: 100,
 
+## to enable 256-color support in vim on the screen
+term screen-256color
+truecolor on
 
 ## ===============================================================
 ## STATUS BAR & CAPTION
@@ -121,7 +124,6 @@ termcapinfo xterm 'kh=\EOH:kI=\E[2~:kD=\E[3~:kH=\EOF:kP=\E[5~:kN=\E[6~'
 ## special xterm hardstatus: use the window title.
 termcapinfo xterm 'hs:ts=\E]2;:fs=\007:ds=\E]2;screen\007'
 
-## to enable 256-color support in vim on the screen
 ## temporary ban for not working in conemu
 # attrcolor b ".I"
 # termcapinfo xterm 'Co#256:AB=\E[48;5;%dm:AF=\E[38;5;%dm'
