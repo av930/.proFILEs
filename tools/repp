@@ -194,7 +194,7 @@ function reppmani(){
 
                 bar inline "file name & only modified file, not add/delete files (press 'q' to stop)"
                 info "you can find add/delete git projects here recent 12 weeks"
-                showRUNQ "git log -p --color=always --pretty=oneline --diff-filter=M --since=12-weeks  |more -60"
+                showRUNQ "git log -p --color=always --pretty=oneline --diff-filter=M --since=12-weeks  |more -30"
 
     ;;   gen)   bar inline "current manifest.xml [${REPPFILE_MANI}] regnerated with option"
                 echo 'ex) <project groups="qcos" name="common/nad/ntc" path="nad/tsu-src/ntc" remote="devops" revision="master"/>'
@@ -233,16 +233,28 @@ CHANGE
 				      flow :  icdiff <( cat ${REPPFILE_XML} ) <( cat repp.xml | sed -E 's#remote="([^"]*vgit_as[^"]*)"#remote="\1vgit_new"#' )
 CHANGE
     ;;  diff)   bar inline "compare 2 different manifests"
-                reppget_repcmd info
+                reppget_repcmd
+                clog 'ex)' 'repp mani diff <old manifest.xml> <new manifest.xml>'    
                 clog 'ex)' 'repp mani diff event/230426_mig.xml event/230712_upstream.xml'    
                 ## listup xml by date
                 [ -z "${item}" ] && ( git log --since=2-weeks --first-parent --date=format:'%Y-%m-%d (%a) %H:%M:%S' --pretty=format:'%Cgreen%cd%:%tCreset' --name-status| awk 'NF==1{date=$1}NF>1 && !seen[$2]++{print date,$0}' FS=$'\t' )
-                if [ -z "${str}" ]; then 
+                if [ -z "${item}" ]; then 
                     read -p $'\n\nchoose manifest to compare: ' opt 
                     clog "\ninput[${opt}]" "will be compared to current manifest [${REPPFILE_MANI}]"
                     clog "otherwize" "ctrl+c to break, and run 'repp mani diff ${opt} <manifest to compare>'"
                 fi
-                showRUNQ y repo diffmanifests ${item:-${opt}} ${str:-${REPPFILE_MANI}}
+                echo 
+                read -p $'\ninfo: repo sync all branch is needed (without -c option) [enter:continue| ctrl+c:break] '
+                showRUN repo diffmanifests ${item:-${opt}} ${str:-${REPPFILE_MANI}}
+                cat <<-EOL
+		guide)        added projects(NOT compare) : path-added,   project-added   (in ${str} manifest)
+			        removed projects(NOT compare) : path-removed, project-removed (in {item} manifest)
+		          	missing projects(NOT compare) : path-same,    project-changed          
+		       unreachable revisions(NOT compare) : need to 'repo sync' (without -c, fetch all project revision)
+			           skip projects(NOT compare) : path-same, project-same, branch-same (No diff, SKIP)
+			        changed projects( OK compare) : path-same, project-same, branch-changed 
+EOL
+                
                 
     ;; help|*)   cat <<- EOF
 				usage) repp mani info
@@ -756,7 +768,10 @@ function reppreset(){
 				 info) gitt reset          # provide detail control for one repository
 EOF
         ;;   '')    info "repp reset help : for more usage\n"
+                    ## git reset --hard;   #reset to local lastest commit status.
+                    ## git clean -xdf      #remove uncommitted change
                     showRUNQ y repo forall -cj${NJOBS} 'git reset --hard @{upstream}; git clean -xdf'
+                    
                     #showRUN repo sync -dlvj${NJOBS} --force-remove-dirty
                     info "\nfinish reset all repositories, and reset FETCH_HEAD"
         ;;project)  info "you can repo sync without conflicting legacy objects"
@@ -1540,7 +1555,8 @@ function gittreset(){
 
     local cmd=$1
     case ${cmd} in
-        clear)   showRUNQ y git reset --hard && showRUN git clean -xdf
+        clear)   showRUNQ y "git reset --hard @{upstream} && git clean -xdf"
+  
     ;; help|*)   cat <<-EOF
 				usage) gitt reset clear #remove all changes and reset with comfirm 'y'
 				usage) gitt reset       #show detail reset commands below, run manully.
@@ -1672,17 +1688,19 @@ function revvcontrol(){
     case ${cmd}${SEP}${subcmd} in
            *~help)
             echo "check your cmd [${cmd}]"; cat <<-EOF
-			usage) revv user   na joongkeun.kim                               # check account is existed and its groups
-			usage) revv sshkey na joongkeun.kim                               # get registered SSH-KEY
-			usage) revv group    na sa515m_reviewer                           # group existance and list sub-groups & all members
-			usage) revv groupadd na sa515m_reviewer joongkeun.kim             # add member to group
-			usage) revv groupdel na sa515m_reviewer joongkeun.kim             # delete member from group
-			usage) revv groupmem na sa515m_reviewer joongkeun.kim             # check member is in group and its sub-groups
-			usage) revv project  na mustang/tm/src                            # find project with project-name
-			usage) revv project  na vendor/qct/sa515m/_lge_only               # find project and its child projects
-			usage) revv branch    na mustang/tm/src tsu_25.5my_release        # find branch with branch-name
-			usage) revv branchadd na mustang/tm/src tsu_25.5my_release_new    # create branch
-			usage) revv branchdel na mustang/tm/src tsu_25.5my_release_new    # remove branch
+			usage) revv user      na joongkeun.kim                             # check account is existed and its groups
+			   ex) revv user      na joon                                      # check all accounts named joon
+			usage) revv sshkey    na joongkeun.kim                             # get registered SSH-KEY
+			usage) revv group     na sa515m_developer                          # check group existance and list sub-groups & all members            
+			   ex) revv group     na sa515m_                                   # find groups named sa515m_
+			usage) revv groupadd  na sa515m_developer joongkeun.kim            # add member to group
+			usage) revv groupdel  na sa515m_reviewer  joongkeun.kim            # delete member from group
+			usage) revv groupmem  na sa515m_reviewer  joongkeun.kim            # check member is in group and its sub-groups
+			usage) revv project   na mustang/tm/src                            # find project with project-name
+			usage) revv project   na vendor/qct/sa515m/_lge_only               # find project and its child projects
+			usage) revv branch    na mustang/tm/src tsu_25.5my_release         # find branch with branch-name
+			usage) revv branchadd na mustang/tm/src tsu_25.5my_release_new     # create branch
+			usage) revv branchdel na mustang/tm/src tsu_25.5my_release_new     # remove branch
 EOF
     ;;      user~*)
             bar inline "check if account is existed & get account info "
