@@ -237,15 +237,17 @@ CHANGE
                 clog 'ex)' 'repp mani diff <old manifest.xml> <new manifest.xml>'    
                 clog 'ex)' 'repp mani diff event/230426_mig.xml event/230712_upstream.xml'    
                 ## listup xml by date
-                [ -z "${item}" ] && ( git log --since=2-weeks --first-parent --date=format:'%Y-%m-%d (%a) %H:%M:%S' --pretty=format:'%Cgreen%cd%:%tCreset' --name-status| awk 'NF==1{date=$1}NF>1 && !seen[$2]++{print date,$0}' FS=$'\t' )
+                [ -z "${item}" ] && ( git log --since=3-weeks --first-parent --date=format:'%Y-%m-%d (%a) %H:%M:%S' --pretty=format:'%Cgreen%cd [%t]%Creset' --name-status| awk 'NF==1{date=$1}NF>1 && !seen[$2]++{print date,$0}' FS=$'\t' )
                 if [ -z "${item}" ]; then 
                     read -p $'\n\nchoose manifest to compare: ' opt 
-                    clog "\ninput[${opt}]" "will be compared to current manifest [${REPPFILE_MANI}]"
-                    clog "otherwize" "ctrl+c to break, and run 'repp mani diff ${opt} <manifest to compare>'"
+                    clog "\ninput old [${opt}]" "will be compared to current manifest [${REPPFILE_MANI}]"
+                    clog "otherwise" "ctrl+c to break, and run 'repp mani diff ${opt} <manifest to compare>'"
                 fi
                 echo 
                 read -p $'\ninfo: repo sync all branch is needed (without -c option) [enter:continue| ctrl+c:break] '
-                showRUN repo diffmanifests ${item:-${opt}} ${str:-${REPPFILE_MANI}}
+                                                                                                                                                                      repo --no-pager diffmanifests --no-color --raw ${item:-${opt}} ${str:-${REPPFILE_MANI}} --pretty-format='%h| %ci| %an| %s' > repp.diff
+                showRUN repo diffmanifests ${item:-${opt}} ${str:-${REPPFILE_MANI}} --pretty-format='%Cred%h %Cgreen(%ci) %C(blue)<%an>%Creset %s' 
+                
                 cat <<-EOL
 		guide)        added projects(NOT compare) : path-added,   project-added   (in ${str} manifest)
 			        removed projects(NOT compare) : path-removed, project-removed (in {item} manifest)
@@ -254,8 +256,21 @@ CHANGE
 			           skip projects(NOT compare) : path-same, project-same, branch-same (No diff, SKIP)
 			        changed projects( OK compare) : path-same, project-same, branch-changed 
 EOL
-                
-                
+    ;;  diffcheck)
+                bar inline "check result of difference 2 manifests"
+                local cpath cbrold cbrnew cremote cproject ccommitid notfound
+                cat repp.diff | sed -e 's/\x1b\[[0-9;]*m//g'| while read -a line; do
+                    case ${line[0]} in 
+                         C) cpath="${line[1]}"; cbrold="${line[2]}"; cbrnew="${line[3]}"
+                            cremote=$(cat ${REPPFILE_CSV} |grep ${cpath} | cut -d'|' -f2)
+                            cproject=$(cat ${REPPFILE_CSV} |grep ${cpath} | cut -d'|' -f4|xargs)
+                        ;;R) 
+                            ccommitid="${line[1]/|/}"
+                            notfound=$( revv commit $(getserver ${cremote} path) ${ccommitid} | sed '1d'|  jq -cC '.[].branch' | grep "${cbrnew}" )
+                            [ -z "${notfound}" ] && info "[missing commits] ${cremote}> ${cproject}> ${cbrnew}> ${ccommitid}"
+                    esac
+                done
+                                
     ;; help|*)   cat <<- EOF
 				usage) repp mani info
 				usage) repp mani gen <outfile>
@@ -263,9 +278,10 @@ EOL
 				usage) repp mani change <groups|upstream|dest-branch|etc> <str> <filter>
 				   ex) repp mani change remote vgit_new                   #change "any string" to "vgit_new" in all remote field
 				   ex) repp mani change remote vgit_new vgit_as           #change only from "vgit_as" to "vgit_new" in remote field
-				usage) repp mani diff event/compare.xml <current.xml>     #compare 2 different history(commit) by manifests
+				usage) repp mani diff event/old.xml <new.xml>             #compare old manifest to new manifest 
 				   ex) repp mani diff event/compare.xml                   #compare history event/compare.xml to current.xml
 				   ex) repp mani diff default.xml event/230712_mig.xml    #compare history from 2 different manifests 
+				usage) repp mani diffcheck                                #reuse result after 'repp mani diff' and check missed commits 
 EOF
     ;; esac
 }
@@ -1607,7 +1623,7 @@ function revvcheck_server(){
     bar inline "step2.1-gerritserver: [remote] check if gerrit server is active by $ACCOUNT"
     clog solution "check gerrit service is online from web"
     )
-    status=$(curl -s -u ${ACCOUNT}:${key} ${server}/a/config/server/version )
+    status=$(curl -su ${ACCOUNT}:${key} ${server}/a/config/server/version )
     case ${status} in
     *[2-9].[0-9].[0-9]*)   echo "ok. version is verified " > /dev/null;;
     *)                     err "gerrit is not working, please check"; return 1;;
@@ -1619,19 +1635,19 @@ function revvcheck_server(){
     clog solution "check gerrit current account in gerrit system"
     if [ -z "${oriproject}" ];then info "usage) repp connect testaccount na tiger/tools tiger_release" && return 1;fi
     if [[ "$oriproject" == *.git* ]]; then err ".git postfix must be removed in [$oriproject]" && return 1; fi
-    status=$(curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${user})
+    status=$(curl -su ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${user})
     [[ "$status" =~ "_account_id" ]] &&  echo "gerrit account existed [${user}]" || ( err "create gerrit account [${user}] by login" && return 1)
 
 
     bar inline "step2.3-gerritserver: [remote] check if git project is accessed by ${user} (default: input>current>manifests)"
     clog solution "check git name path is correct and can access"
-    status=$(curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${gitproject})
+    status=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject})
     [[ "$status" =~ "ACTIVE" ]] &&  echo "git existed and accessed [${oriproject}]" || ( err "check git project path [${oriproject}]" && return 1)
 
     bar inline "step2.4-gerritserver: [remote] check if branch is accessed by ${user} (default: input>current>master)"
     clog solution "check branch name path is correct and can access"
     [ -z "${branch}" ] && branch="master"
-    status=$(curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${gitproject}/branches?m=${branch})
+    status=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject}/branches?m=${branch})
     [[ "$status" =~ "ref" ]] &&  echo "branch existed and accessed [${branch}]" || ( err "check git branch is existed or permission allowed [${branch}]" && return 1)
     
     return 0
@@ -1701,59 +1717,65 @@ function revvcontrol(){
 			usage) revv branch    na mustang/tm/src tsu_25.5my_release         # find branch with branch-name
 			usage) revv branchadd na mustang/tm/src tsu_25.5my_release_new     # create branch
 			usage) revv branchdel na mustang/tm/src tsu_25.5my_release_new     # remove branch
+			usage) revv commit    na 57a4eeeca914                              # get change_id
 EOF
     ;;      user~*)
             bar inline "check if account is existed & get account info "
-            curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${source} |sed '1d'| jq '.'
+            curl -su ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${source} |sed '1d'| jq '.'
             bar inline "list group name which account belongs to"
-            curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/${source}/groups |sed '1d'| jq -cC '.[]|{name, created_on}' | more -60
+            curl -su ${ACCOUNT}:${key} ${server}/a/accounts/${source}/groups |sed '1d'| jq -cC '.[]|{name, created_on}' | more -60
 
     ;;    sshkey~*)
             bar outline "get registered SSH-key for account [${source}] in server [$server]"
-            curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/${source}/sshkeys |sed '1d'| jq -cC '.[]|{ssh_public_key, comment}'
+            curl -su ${ACCOUNT}:${key} ${server}/a/accounts/${source}/sshkeys |sed '1d'| jq -cC '.[]|{ssh_public_key, comment}'
 
     ;;     group~*)
             bar inline "find group by name"
-            curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/?m=${source} |sed '1d'| jq '.'
+            curl -su ${ACCOUNT}:${key} ${server}/a/groups/?m=${source} |sed '1d'| jq '.'
             bar inline "list sub-group by ${source} group"
-            curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${source}/groups/ |sed '1d'| jq -c '.[]|{name, created_on}'
+            curl -su ${ACCOUNT}:${key} ${server}/a/groups/${source}/groups/ |sed '1d'| jq -c '.[]|{name, created_on}'
             bar inline "show group member by ${source} group to its decendents"
-            curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${source}/members?recursive |sed '1d'| jq -cC '.[]|{name, email}'  | more -60
+            curl -su ${ACCOUNT}:${key} ${server}/a/groups/${source}/members?recursive |sed '1d'| jq -cC '.[]|{name, email}'  | more -60
 
     ;;  groupadd~*)
             bar outline "add member to group"
-            curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${source}/members/${target} -X PUT
+            curl -su ${ACCOUNT}:${key} ${server}/a/groups/${source}/members/${target} -X PUT
 
     ;;  groupdel~*)
             bar outline "delete member from group"
-            curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${source}/members/${target} -X DELETE
+            curl -su ${ACCOUNT}:${key} ${server}/a/groups/${source}/members/${target} -X DELETE
 
     ;; groupmem~*)
             bar outline "find member from group"
-            curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/${source}/members|grep ${target}
+            curl -su ${ACCOUNT}:${key} ${server}/a/groups/${source}/members|grep ${target}
 
     ;;  project~*)
             bar inline "find project and show project url"
-            curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/?m=${source} |sed '1d' > $file
+            curl -su ${ACCOUNT}:${key} ${server}/a/projects/?m=${source} |sed '1d' > $file
             clog "matching project: "  $(cat $file| jq -c 'keys[]')
             cat $file| jq --arg jq_var ${VGIT} -c '"link: http://" + $jq_var + .[].web_links[].url'
             bar inline "search child-project inherit from project ${source}, plz wait..."
-            curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/children/?recursive| sed '1d'| jq  -cC '.[].name' | more -60
+            curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/children/?recursive| sed '1d'| jq  -cC '.[].name' | more -60
             printf "\n\n"
-            dlog "[guide] To see project config (run cmd):" "curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} | sed '1d'| jq  -C '.[]'"
+            dlog "[guide] To see project config (run cmd):" "curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} | sed '1d'| jq  -C '.[]'"
             dlog "[guide] To crate/delete project (visit):" "${server}/admin/repos/${source}"
 
     ;;   branch~*)
             bar inline "find branches by name"
-            curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/?m=${target} | sed '1d'| jq  -cC '.[]|{ref,revision}' | more -60
+            curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/?m=${target} | sed '1d'| jq  -cC '.[]|{ref,revision}' | more -60
     ;;branchadd~*)
             bar inline "create branch with base revision"
             if [ -z "${extra}" ]; then read -p "input base branch which new branch is created from: ";fi
-            showRUNQ y curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -H "Content-Type: application/json" --data "{"revision": "${extra:-${REPLY}}"}"  -X PUT
+            showRUNQ y curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -H "Content-Type: application/json" --data "{"revision": "${extra:-${REPLY}}"}"  -X PUT
 
     ;;branchdel~*)
             bar inline "delete branch by name"
-            showRUNQ y curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -X DELETE
+            showRUNQ y curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -X DELETE
+            
+    ;;commit~*)
+            local change_id=$(curl -su ${ACCOUNT}:${key} ${server}/a/changes/${source} |grep -oP '(?<=change_id": ").*(?=")')
+            if [ -z "${change_id}" ]; then err "NOT found: change_id for commit_id[${source}]"; return 1; fi
+            curl -su ${ACCOUNT}:${key} ${server}/a/changes/?q=${change_id}
     esac
 }
 
@@ -1858,46 +1880,46 @@ function revvcmd(){
 				   ex) revv cmd
 EOF
             bar outline "info gerritserver: show gerrit account"
-            showRUN curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${usercmd} |more
+            showRUN curl -su ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${usercmd} |more
 
     ;; *)
             bar outline "show gerrit account commands"
             cat <<-EOF
-			## check if <user> account is existed           ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${usercmd}| more
-			## list group <user> belongs to                 ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/${usercmd}/groups |sed '1d'| jq  '.[].name'| sort |more
-			## find group which has string <group-name>     ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/?m=<group-name>
+			## check if <user> account is existed           ex) curl -su ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${usercmd}| more
+			## list group <user> belongs to                 ex) curl -su ${ACCOUNT}:${key} ${server}/a/accounts/${usercmd}/groups |sed '1d'| jq  '.[].name'| sort |more
+			## find group which has string <group-name>     ex) curl -su ${ACCOUNT}:${key} ${server}/a/groups/?m=<group-name>
 
-			## show group member for <group-name>           ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/<group-name>/members?recursive
-			## list sub-group in <group-name>               ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/<group-name>/groups/
-			## add account to group                         ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/<group-name>/members/${usercmd} -X PUT
-			## check account is existed in <group-name>     ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/<group-name>/members|grep ${usercmd}
-			## remote accout from group                     ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/groups/<group-name>/members/${usercmd} -X DELETE
-			## get ssh-key for specific account             ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/accounts/${usercmd}/sshkeys
+			## show group member for <group-name>           ex) curl -su ${ACCOUNT}:${key} ${server}/a/groups/<group-name>/members?recursive
+			## list sub-group in <group-name>               ex) curl -su ${ACCOUNT}:${key} ${server}/a/groups/<group-name>/groups/
+			## add account to group                         ex) curl -su ${ACCOUNT}:${key} ${server}/a/groups/<group-name>/members/${usercmd} -X PUT
+			## check account is existed in <group-name>     ex) curl -su ${ACCOUNT}:${key} ${server}/a/groups/<group-name>/members|grep ${usercmd}
+			## remote accout from group                     ex) curl -su ${ACCOUNT}:${key} ${server}/a/groups/<group-name>/members/${usercmd} -X DELETE
+			## get ssh-key for specific account             ex) curl -su ${ACCOUNT}:${key} ${server}/a/accounts/${usercmd}/sshkeys
 EOF
             bar outline "show gerrit project which name has <project-name>"
             cat <<-EOF
-			##find git project named <gitproject>           ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/?m=${gitproject:-"<project-name>"}
-			##find labels, parents[id], basic info          ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}
-			##find child projects of <project name>         ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/children/?recursive| sed '1d'| jq  '.[].name'
+			##find git project named <gitproject>           ex) curl -su ${ACCOUNT}:${key} ${server}/a/projects/?m=${gitproject:-"<project-name>"}
+			##find labels, parents[id], basic info          ex) curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}
+			##find child projects of <project name>         ex) curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/children/?recursive| sed '1d'| jq  '.[].name'
 EOF
             bar outline "show gerrit branch which name has <branch-name>"
             cat <<-EOF
-			##list branches including named <branch>        ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/branches/?m=<branch-name>
-			##remove branch                                 ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/branches/<branch-name> -X DELETE
-			##create branch with base revision              ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/branches/<branch-name> -H "Content-Type: application/json" --data '{"sha": "049405ab2885e6c6844b212f83b43f835c904"}'  -X PUT
+			##list branches including named <branch>        ex) curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/branches/?m=<branch-name>
+			##remove branch                                 ex) curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/branches/<branch-name> -X DELETE
+			##create branch with base revision              ex) curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/branches/<branch-name> -H "Content-Type: application/json" --data '{"sha": "049405ab2885e6c6844b212f83b43f835c904"}'  -X PUT
 EOF
             bar outline "show gerrit tag which name has ${tag}"
             cat <<-EOF
-			##list tag named <tag-name>                     ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/tags?m=<tag-name>
-			##show tag date, tag revision, committer        ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/tags/<tag-name>
+			##list tag named <tag-name>                     ex) curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/tags?m=<tag-name>
+			##show tag date, tag revision, committer        ex) curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/tags/<tag-name>
 EOF
             bar outline "show gerrit commit with branch info"
             cat <<-EOF
-			##show commit msg with data, author, committer  ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/commits/<full-sha-code>
-			##show branches that commit beloings to         ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/commits/<full-sha-code>/in
-			##show files that commit has changed            ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/commits/<full-sha-code>/files
-			##show all hashtaged commit                     ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/changes/?q=hashtag
-			##show hastag with HITT or TAT2                 ex) curl -s -u ${ACCOUNT}:${key} ${server}/a/changes/?q=hashtag:HITT+OR+hashtag:TAT2
+			##show commit msg with data, author, committer  ex) curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/commits/<full-sha-code>
+			##show branches that commit beloings to         ex) curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/commits/<full-sha-code>/in
+			##show files that commit has changed            ex) curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/commits/<full-sha-code>/files
+			##show all hashtaged commit                     ex) curl -su ${ACCOUNT}:${key} ${server}/a/changes/?q=hashtag
+			##show hastag with HITT or TAT2                 ex) curl -su ${ACCOUNT}:${key} ${server}/a/changes/?q=hashtag:HITT+OR+hashtag:TAT2
 EOF
     esac
 }
