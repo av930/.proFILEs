@@ -103,6 +103,8 @@ function docker_hub(){
             read -p "must input Repository path [ex) vw/imgname]: " path
             if [ "$cntr_img" = "" ];then echo "image is mandatory"; return 1; fi
 
+            ##tag not latest: docker tag ${cntr_img} ${repo_path}/${path}:{tag_name}
+            ##push not latest: docker push ${repo_path}/${path}:{tag_name}
             echorun docker tag ${cntr_img} ${repo_path}/${path}
             echorun docker push ${repo_path}/${path}
             ;;
