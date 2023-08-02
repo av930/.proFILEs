@@ -1780,7 +1780,11 @@ EOF
             
     ;;commit~*)
             local change_id=$(curl -su ${ACCOUNT}:${key} ${server}/a/changes/${source} |grep -oP '(?<=change_id": ").*(?=")')
-            if [ -z "${change_id}" ]; then err "NOT found: change_id for commit_id[${source}]"; return 1; fi
+            if [ -z "${change_id}" ]; then 
+                err "NOT Found: change_id for commit_id[${source}]"
+                echo "this commit is not registered in gerrit system. ex) direct pushed"
+                return 1; 
+            fi
             curl -su ${ACCOUNT}:${key} ${server}/a/changes/?q=${change_id}
     esac
 }
