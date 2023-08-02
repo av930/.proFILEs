@@ -239,35 +239,40 @@ CHANGE
                 ## listup xml by date
                 [ -z "${item}" ] && ( git log --since=3-weeks --first-parent --date=format:'%Y-%m-%d (%a) %H:%M:%S' --pretty=format:'%Cgreen%cd [%t]%Creset' --name-status| awk 'NF==1{date=$1}NF>1 && !seen[$2]++{print date,$0}' FS=$'\t' )
                 if [ -z "${item}" ]; then 
-                    read -p $'\n\nchoose manifest to compare: ' opt 
+                    read -p $'\n\nchoose old manifest compare to current: ' opt 
                     clog "\ninput old [${opt}]" "will be compared to current manifest [${REPPFILE_MANI}]"
                     clog "otherwise" "ctrl+c to break, and run 'repp mani diff ${opt} <manifest to compare>'"
                 fi
                 echo 
                 read -p $'\ninfo: repo sync all branch is needed (without -c option) [enter:continue| ctrl+c:break] '
-                                                                                                                                                                      repo --no-pager diffmanifests --no-color --raw ${item:-${opt}} ${str:-${REPPFILE_MANI}} --pretty-format='%h| %ci| %an| %s' > repp.diff
+                repo sync -qj5
+                repo --no-pager diffmanifests --no-color --raw ${item:-${opt}} ${str:-${REPPFILE_MANI}} --pretty-format='%h| %ci| %an| %s' > repp.diff
                 showRUN repo diffmanifests ${item:-${opt}} ${str:-${REPPFILE_MANI}} --pretty-format='%Cred%h %Cgreen(%ci) %C(blue)<%an>%Creset %s' 
                 
                 cat <<-EOL
-		guide)        added projects(NOT compare) : path-added,   project-added   (in ${str} manifest)
-			        removed projects(NOT compare) : path-removed, project-removed (in {item} manifest)
-		          	missing projects(NOT compare) : path-same,    project-changed          
-		       unreachable revisions(NOT compare) : need to 'repo sync' (without -c, fetch all project revision)
-			           skip projects(NOT compare) : path-same, project-same, branch-same (No diff, SKIP)
-			        changed projects( OK compare) : path-same, project-same, branch-changed 
+		guide)   added projects(NOT compare) : path-added,   project-added   (in ${str} manifest)
+		       removed projects(NOT compare) : path-removed, project-removed (in {item} manifest)
+		       missing projects(NOT compare) : path-same,    project-changed          
+		  unreachable revisions(NOT compare) : need to 'repo sync' (without -c, fetch all project revision)
+		          skip projects(NOT compare) : path-same, project-same, branch-same (No diff, SKIP)
+		       changed projects( OK compare) : path-same, project-same, branch-changed 
 EOL
     ;;  diffcheck)
                 bar inline "check result of difference 2 manifests"
-                local cpath cbrold cbrnew cremote cproject ccommitid notfound
-                cat repp.diff | sed -e 's/\x1b\[[0-9;]*m//g'| while read -a line; do
+                local cpath cbrold cbrnew cremote cproject ccommitid deployed
+                IFS=' '; cat repp.diff | sed -e 's/\x1b\[[0-9;]*m//g'| while read -r -a line; do
                     case ${line[0]} in 
-                         C) cpath="${line[1]}"; cbrold="${line[2]}"; cbrnew="${line[3]}"
+                         C) 
+                            cpath="${line[1]}"; cbrold="${line[2]}"; cbrnew="${line[3]}"
                             cremote=$(cat ${REPPFILE_CSV} |grep ${cpath} | cut -d'|' -f2)
                             cproject=$(cat ${REPPFILE_CSV} |grep ${cpath} | cut -d'|' -f4|xargs)
+                            
                         ;;R) 
                             ccommitid="${line[1]/|/}"
-                            notfound=$( revv commit $(getserver ${cremote} path) ${ccommitid} | sed '1d'|  jq -cC '.[].branch' | grep "${cbrnew}" )
-                            [ -z "${notfound}" ] && info "[missing commits] ${cremote}> ${cproject}> ${cbrnew}> ${ccommitid}"
+                            ##echo "${cremote}> ${cproject}> ${cbrnew}> ${ccommitid}"                            
+                            ##get change_id and find commmit in new branch, it is deployed.
+                            deployed=$( revv commit $(getserver ${cremote} path) ${ccommitid} | sed '1d'|  jq -cC '.[].branch' | grep "${cbrnew}" )
+                            [ -z "${deployed}" ] && info "[missing commits] ${cremote}> ${cproject}> ${cbrnew}> ${ccommitid}"
                     esac
                 done
                                 
@@ -281,7 +286,8 @@ EOL
 				usage) repp mani diff event/old.xml <new.xml>             #compare old manifest to new manifest 
 				   ex) repp mani diff event/compare.xml                   #compare history event/compare.xml to current.xml
 				   ex) repp mani diff default.xml event/230712_mig.xml    #compare history from 2 different manifests 
-				usage) repp mani diffcheck                                #reuse result after 'repp mani diff' and check missed commits 
+				   ex) repp mani diff                                     #can choose manifest in recent 3 weeks, comparing to current manifest
+				usage) repp mani diffcheck                                #post analysis after 'repp mani diff' for missed commits checking
 EOF
     ;; esac
 }
