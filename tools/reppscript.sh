@@ -1,21 +1,25 @@
 #### repo template
 ## usage
-# repo forall -vecj4 bash -c 'reppscript.sh'
+# repo forall -evcj4 bash -c 'reppscript.sh'
 
-## repo forall -c 'cmd.sh'                                      #   basic usage:  REPO variable is available
-## repo forall -c bash -c 'cmd.sh'                              # advanced usage: SHELL variable is available
-## repo forall . -c 'cmd.sh'                                    # for only current project
-## repo forall mustang/tm/src honda/linux/build_tsu -c 'cmd.sh' # for serveral project
-## repo forall $(cat fromfilelist.txt)  -c 'cmd.sh'             # for serveral project from file
-## repo forall -r poky/*  -c 'cmd.sh'                           # for git projects matched regexp
-## repo forall -i poky/*  -c 'cmd.sh'                           # for git projects not matched regexp
-## repo forall -g hlos  -c 'cmd.sh'                             # for git projects included in specific group
-: ' ##comment block
-option -j:jobs, -e:stop if error happen, --ignore-missing:, --interactive:
-       -p:print gitproject, -v:verbose, -q:only show errors
+## description
+# repo forall . -c bash 'cmd.sh'                                    # for current git only, make SHELL variable valid
+# repo forall mustang/tm/src honda/linux/build_tsu -c bash 'cmd.sh' # for serveral project
+# repo forall $(cat fromfilelist.txt)  -c 'cmd.sh'                  # for serveral project from file
+# repo forall -r poky/* -c bash 'cmd.sh'                            # for git projects matched regexp
+# repo forall -i poky/* -c bash 'cmd.sh'                            # for git projects not matched regexp
+# repo forall -g hlos -c bash 'cmd.sh'                              # for git projects included in specific group
 
-repo variables
-${REPO_I} ${REPO_COUNT}, ${REPO_LREV}, ${REPO_REMOTE}, ${REPO_RREV}, ${REPO_PROJECT}, ${REPO_PATH}, ${REPO_INNERPATH}"
+## options && variable
+# option -j:jobs, -e:stop if error happen, --ignore-missing:?, --interactive:?
+#        -p:print gitproject, -v:verbose, -q:only show errors
+
+## repo variables
+# $REPO__$VARIABLE
+# REPO_I, REPO_COUNT
+# REPO_REMOTE, REPO_PROJECT
+# REPO_PATH, REPO_INNERPATH, REPO_OUTERPATH
+# REPO_LREV, REPO_RREV, REPO_DEST_BRANCH, REPO_UPSTREAM
 '
 
 ## HEADING 
