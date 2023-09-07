@@ -55,7 +55,7 @@ BAR="~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 NCOL='\e[0m'; YELLOW='\e[1;33m'; RED='\e[1;31m'; GREEN='\e[1;32m';
 JSON_IDFY=")]}'"
 tempr=/tmp/revv.ret
-tempf=/tmp/revv.log
+tempf=$(mktemp)
 if [ ! -f "${tempf}" ]; then touch "${tempf}"; fi
 
 clog()   { printf "${GREEN}$1 ${NCOL} ${@:2}\n" ;}
@@ -126,9 +126,9 @@ esac;
 ## case branch target & source
 case $target in
     *\**)
-            target="${target//\*/}"; clog "[warn]" "asterisk * is not permitted in gerrit, so removed"
+        target="${target//\*/}"; clog "[warn]" "asterisk * is not permitted in gerrit, must check"
     ;; @branch)
-            target="${CURR_branch}"
+        target="${CURR_branch}"
 esac
 case $source in
     @branch) source="${CURR_branch}"
