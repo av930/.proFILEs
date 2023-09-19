@@ -275,10 +275,10 @@ function start(){
         -v /etc/shadow:/etc/shadow:ro                                           \
         -v /etc/timezone:/etc/timezone:ro                                       \
         -v /etc/localtime:/etc/localtime:ro                                     \
-        -v /lib/modules:/lib/modules:ro                                         \
+        -v /etc/ssh:/etc/ssh:ro                                                 \
         -v /usr/local/bin:/usr/local/bin:ro                                     \
         -v /usr/bin/git-lfs:/usr/bin/git-lfs:ro                                 \
-        -v /etc/ssh:/etc/ssh:ro                                                 \
+        -v /lib/modules:/lib/modules:ro                                         \
         -v ${home_dir}/.profile:${home_dir}/.profile:ro                         \
         -v ${home_dir}/.bashrc:${home_dir}/.bashrc:ro                           \
         -v ${home_dir}/.gitconfig:${home_dir}/.gitconfig:ro                     \
