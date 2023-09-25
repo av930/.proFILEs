@@ -307,8 +307,10 @@ function stoprm(){
     else
         printf "${red}========== "$cmd" ========== ${NCOL}\n"    
         read -p "your input are ${param} : [continue:enter| ctrl+c]:"
+	set -ex
         docker stop ${param}
         docker rm ${param}
+	set +ex
         list ps --all        
     fi
 }
