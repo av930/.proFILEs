@@ -293,35 +293,46 @@ function start(){
 }
 
 
-function stoprmrmi(){
+function stoprm(){
 ## ---------------------------------------------------------------------------
-    case $1 in
-        ##stop, rm, rmi
-        stoprm)
-            list ps --all
-            printf "${red}========== "$1" ========== ${NCOL}\n"
-            read -p "must input Container [Name| ID]: " cntr_name
-            docker stop ${cntr_name}
-	    
-            read -p "remove container? [enter|ctrl+c]: " 
-            docker rm ${cntr_name} 
-	    ;;
-        remove)
-            list images
-            printf "${red}========== "$1" ========== ${NCOL}\n"
-            printf "[docker rmi] command will be executed!! otherwise use [dock stop]\n"
-            read -p "must input Image ID/Repository or enter [ImageID| Repository]: " cntr_img
-            docker rmi ${cntr_img}
-
-            if [ $? -ne 0 ]; then
-                read -p "docker rmi ${cntr_img} --force [Enter:${cntr_img}| Ctrl+C]: "
-                if [ "$REPLY" = "" ]; then
-                    docker rmi ${cntr_img} --force
-                fi
-            fi
-            ;;
-    esac
+    local cmd=$1
+    local param="${@:2}"
+    if [ -z "${param}" ]; then 
+        list ps --all
+        printf "${red}========== "$cmd" ========== ${NCOL}\n"
+        read -p "must input Container [Name| ID]: " cntr_name; 
+        docker stop ${cntr_name}
+        read -p "remove container? [enter|ctrl+c]: " 
+        docker rm ${cntr_name}                 
+    else
+        printf "${red}========== "$cmd" ========== ${NCOL}\n"    
+        read -p "your input are ${param} : [continue:enter| ctrl+c]:"
+        docker stop ${param}
+        docker rm ${param}
+        list ps --all        
+    fi
 }
+
+
+function rmi(){
+## ---------------------------------------------------------------------------
+    local cmd=$1
+
+    list images
+    printf "${red}========== "$cmd" ========== ${NCOL}\n"
+    printf "[docker rmi] command will be executed!! otherwise use [dock stop]\n"
+    
+    read -p "must input Image ID/Repository or enter [ImageID| Repository]: " cntr_img
+    docker rmi ${cntr_img}
+
+    if [ $? -ne 0 ]; then
+        read -p "docker rmi ${cntr_img} --force [Enter:${cntr_img}| Ctrl+C]: "
+        if [ "$REPLY" = "" ]; then
+            docker rmi ${cntr_img} --force
+        fi
+    fi
+}
+
 
 
 function exec(){
@@ -495,8 +506,8 @@ local ret=0
           run) start run                                                    ;;
           exec) exec                                                        ;;
           debug) debug                                                      ;;
-        stop|rm) stoprmrmi stoprm                                           ;;
-          rmi|remove) stoprmrmi remove                                      ;;
+        stop|rm) stoprm "${@:1}"                                            ;;
+          rmi|remove) rmi                                                   ;;
           clean) clean;                                                     ;;
         pull|push|find) docker_hub "${@:1}"                                 ;;
           down) download_dockerfile  "${@:2}"                               ;;
