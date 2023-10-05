@@ -1083,8 +1083,8 @@ function repp_initvar(){
         REPP_MIRROR=$(git config --get-regexp repo.reference |head -1|cut -d' ' -f2)
         REPP_COUNT=$($REPP_PATH/../repo/repo list |wc -l)
 
-        REPP_REMOTELIST=( $(repo manifest |grep review | sed -E 's#.*name="([^"]*[^"]*)".*#\1#') )
-        REPP_REVIEWLIST=( $(repo manifest |grep review | sed -E 's#.*review="([^"]*[^"]*)".*#\1#') )
+        REPP_REMOTELIST=( $(repo manifest 2>/dev/null |grep review | sed -E 's#.*name="([^"]*[^"]*)".*#\1#') )
+        REPP_REVIEWLIST=( $(repo manifest 2>/dev/null |grep review | sed -E 's#.*review="([^"]*[^"]*)".*#\1#') )
         popd
         ret=0
     fi
@@ -1780,7 +1780,7 @@ EOF
     ;;branchadd~*)
             bar inline "create branch with base revision"
             if [ -z "${extra}" ]; then read -p "input base branch which new branch is created from: ";fi
-            showRUNQ y curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -H "Content-Type: application/json" --data "{"revision": "${extra:-${REPLY}}"}"  -X PUT
+            showRUNQ y curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -H "Content-Type:application/json" --data "{"revision":"${extra:-${REPLY}}"}"  -X PUT
 
     ;;branchdel~*)
             bar inline "delete branch by name"
@@ -2034,7 +2034,7 @@ local ret=0
 case "$1" in
      ##$1:cmd        ${@:2}:parameters
           help)                                            reppmenu help "${MENU[@]}"
-    ;;     '')                                             reppmenu revv "${MENU[@]}"
+    ;;      '')                                            reppmenu revv "${MENU[@]}"
     ;;     cmd)      reppcheck_initvar reppgittrevv    &&  revvcmd "${@:2}"
     ;;  server)      reppcheck_initvar gittrevv        &&  revvserver "${@:2}"
     ;; connect)      reppcheck_initvar gittrevv        &&  revvcheck_server "${@:2}"
