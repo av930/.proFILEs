@@ -148,13 +148,13 @@ termcapinfo xterm 'hs:ts=\E]2;:fs=\007:ds=\E]2;screen\007'
 ## 시작시 shell login을 하기 위해, login-shell지정 (run .bashrc)
 
 ## defshell -bash 와 같은 구문
- shell -$SHELL
+# shell -$SHELL
 # shell  zsh
 # shell  bash
 
 ## should allocate a script that is able to init shell
 ## for changing $SHELL variable
-# shell "$HOME/.proFILEs/scw"
+ shell "$HOME/.proFILEs/scw"
 ## for not changing $SHELL variable
 # exec "$HOME/.proFILEs/scw"
 
