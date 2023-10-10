@@ -140,8 +140,10 @@ function reppshow_manifesttree(){
     printf "%s$1 \n" "${path::${treedepth}}"
 
     (( treedepth=treedepth+3 ))
-    ##print name of branches
-    cat $1| sed -n 's/.*revision="\([^ |\t]*\)".*/\1/p' |sort|uniq| xargs -n1 -I {} printf "%60s {}\n"
+    ##print name of branches not revision
+    cat $1| sed -n 's/.*revision="\([^ |\t]*\)".*/\1/p'| grep -v '^[a-f0-9]*$'| sort| uniq| xargs -n1 -I {} printf "%60s {}\n"
+    ##print only 10 revision for notice
+    cat $1| sed -n 's/.*revision="\([^ |\t]*\)".*/\1/p'| grep -e '^[a-f0-9]*$'| head -10| xargs -n1 -I {} printf "%60s {}\n"
 
     ##sub manifests
     cat $1 | sed -n 's/.*include name="\(.*\)".*/\1/p' | \
@@ -324,10 +326,13 @@ function reppget_repcmd(){
         REPPFILE_MANI=default.xml
     fi
 
-    if [ -n "$REPP_MIRROR" ];then EXTRA_OPTION="--reference=$REPP_MIRROR"; fi
+    if [ -n "$REPP_GROUPS" ];then EXTRA_OPTION="--groups=$REPP_GROUPS "; fi
+    if [ -n "$REPP_MIRROR" ];then EXTRA_OPTION+="--reference=$REPP_MIRROR"; fi
+
+    
     if [ "$1" = "info" ];then
         bar inline "repo-init cmd"
-        REPP_CMD="repo init -u $REPP_URL -b $REPP_BRANCH -m $REPPFILE_MANI --repo-url=$REPP_REPOURL $EXTRA_OPTION"
+        REPP_CMD="repo init -u $REPP_URL -b $REPP_BRANCH -m ${REPPFILE_MANI} ${EXTRA_OPTION} --repo-url=${REPP_REPOURL}"
         log "${REPP_CMD}"
     fi
     return 0
@@ -1081,6 +1086,7 @@ function repp_initvar(){
         REPP_REPOURL=$(cat ../repo/.git/config |grep url|sed 's/.*= \(.*\)/\1/')
         #REPP_MIRROR=$(cat ../manifests.git/config |grep reference|sed 's/.*= \(.*\)/\1/')
         REPP_MIRROR=$(git config --get-regexp repo.reference |head -1|cut -d' ' -f2)
+        REPP_GROUPS=$(git config --get-regexp manifest.groups |head -1|cut -d' ' -f2)
         REPP_COUNT=$($REPP_PATH/../repo/repo list |wc -l)
 
         REPP_REMOTELIST=( $(repo manifest 2>/dev/null |grep review | sed -E 's#.*name="([^"]*[^"]*)".*#\1#') )
@@ -1850,6 +1856,7 @@ EOF
                 echo "flag_forall=${@:2}" ; #option is all next cmd from @:2
                 source  <(echo 'flag_forall="${@:2}"'); return 0
     ;; branch*|Dbranch*|Pbranch*) :
+    ;; debug|project|Dproject*|Pproject*) :
     ;;      *)  err "please check usage: not registerd cmd, use 'revv forall help' "; return 1
     esac
 
@@ -2183,7 +2190,7 @@ function reppdebug(){
         bar inline "GITT_VARIABLE && REPP_VARIABLE for all repository"
         for var in \
         '${GITT_PROJECT}' '${GITT_REMOTE}' '${GITT_BRANCH}' '${GITT_REVIEW}' '${GITT_URL}' '${GITT_PATH}' \
-        '${REPP_PATH}' '${REPP_ROOT}' '${REPP_REMOTE}' '${REPP_PROJECT}' '${REPP_BRANCH}' '${REPP_URL}' '${REPP_REPOURL}' '${REPP_MIRROR}' '${REPP_COUNT}' \
+        '${REPP_PATH}' '${REPP_ROOT}' '${REPP_REMOTE}' '${REPP_PROJECT}' '${REPP_BRANCH}' '${REPP_URL}' '${REPP_REPOURL}' '${REPP_MIRROR}' '${REPP_GROUPS}' '${REPP_COUNT}' \
         '${REPPFILE_STATUS}' '${REPPFILE_COMMIT}' '${REPPFILE_CSV}' '${REPPFILE_XML}' '${REPPFILE_MANI}'
         do
            dlog "$var\t" $(eval echo $var)
@@ -2260,7 +2267,7 @@ esac
 ## Main
 ##============================================================================
 GITT_REMOTE= &&GITT_PROJECT= &&GITT_BRANCH= &&GITT_REVIEW= &&GITT_URL= &&GITT_PATH=
-REPP_PATH= &&REPP_ROOT= &&REPP_REMOTE= &&REPP_PROJECT= &&REPP_URL= &&REPP_BRANCH= &&REPP_REPOURL= &&REPP_MIRROR= &&REPP_COUNT= &&REPP_CMD=
+REPP_PATH= &&REPP_ROOT= &&REPP_REMOTE= &&REPP_PROJECT= &&REPP_URL= &&REPP_BRANCH= &&REPP_REPOURL= &&REPP_MIRROR= &&REPP_GROUPS= &&REPP_COUNT= &&REPP_CMD=
 REPP_REMOTELIST=()
 REPP_REVIEWLIST=()
 REPP_PATH_ALL=()

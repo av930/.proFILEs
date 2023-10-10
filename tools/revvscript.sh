@@ -140,7 +140,8 @@ case $cmd in
     ;;                              branchlist) target="?m=${target}"
     ;;     branchpre|branchaddpre|branchdelpre) target="${target}${REPO_RREV}"
     ;;  branchpost|branchaddpost|branchdelpost) target="${REPO_RREV}${target}"
-    ;;  *) err "command not recongnized, check uasge"; exit 1
+    ;;  project) target="${REPO_PROJECT}${target}"
+    ;;  *) err "command not recongnized, check usage"; exit 1
 
 esac
 
@@ -179,6 +180,8 @@ case ${CURR_branch} in
                     showRUN ${run_command} -X PUT -H "Content-Type: application/json" --data "{"revision": "${source}"}"
         ;;     branchdel|branchdelpre|branchdelpost)
                     showRUN ${run_command} -X DELETE
+        ;;     project)
+                    showRUN ${run_command%/branches*} -o ${tempf}
         ;;     *)
                     err "command not recongnized!"; exit 1
         esac
