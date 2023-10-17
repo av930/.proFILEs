@@ -72,7 +72,7 @@ if [ -f "${proFILEdirOS}/.profile" ]; then source "${proFILEdirOS}/.profile" ;fi
 #Set PATH so it includes user's private bin if it exists
 ##################################################################
 #PATH=".:${HOME}:${proFILEdir}/tools:${HOME}/bin:${PATH}"
-PATH=".:${proFILEdir}/tools:${proFILEdir}/bin:${PATH}"
+PATH=".:${proFILEdir}/tools:$${proFILEdir}/bin/prio_high:{proFILEdir}/bin:${PATH}"
 
 
 # launch default shell emulator
