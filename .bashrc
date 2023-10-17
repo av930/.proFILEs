@@ -231,7 +231,7 @@ alias pathimport='__pathimport'
 function __pathimport()
 {
     if [ -f ~/path.export ];then PATH_FILE=$(cat ~/path.export|sed -z "s/\n//g");else PATH_FILE=$PATH; fi
-    PATH=${1:-$HOME/bin/temporary_path}:$PATH_FILE
+    PATH=$1:$PATH_FILE
     pathshow
     echo
     echo "path is changed by path.export file"
