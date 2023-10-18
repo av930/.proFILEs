@@ -1219,12 +1219,12 @@ function gittinfo(){
         ;; *vgit.lge.com:29999*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'devops_test' ${review_gerrit}/${GITT_URL##*9/} )
         ;;                    *) GIT_SITE="please add site custom setting" ;;
         esac
-    ;;''|*)             GIT_SITE=$(printf "%s/${review_gerrit}/%s" $(echo ${GITT_REVIEW}|sed -E 's#(.*)[/]$#\1#') ${GITT_PROJECT} )
+    ;;''|*)             GIT_SITE=$(printf "%s/${review_gerrit}/%s" "$(echo ${GITT_REVIEW}|sed -E 's#(.*)[/]$#\1#')" ${GITT_PROJECT} )
     ;;esac
     clog "review system site:" ${GIT_SITE}
-    clog "branch ${GITT_BRANCH} url on gitiles & gerrit:"
-    clog "gitiles: "${GIT_SITE/"${review_gerrit}"/"plugins/gitiles"}/+/refs/heads/${GITT_BRANCH}
-    clog " gerrit: "${GIT_SITE/"${review_gerrit}/"/"gitweb?p="}.git\;a=shortlog\;h=refs/heads/${GITT_BRANCH}
+    clog "url on gitiles & gerrit for branch:" "(${GITT_BRANCH})"
+    clog "gitiles: " ${GIT_SITE/"${review_gerrit}"/"plugins/gitiles"}/+/refs/heads/${GITT_BRANCH}
+    clog " gerrit: " ${GIT_SITE/"${review_gerrit}/"/"gitweb?p="}.git\;a=shortlog\;h=refs/heads/${GITT_BRANCH}
 
     bar inline "git clone & push commands"
     clog " git clone:" "git clone ${GITT_URL} -b ${GITT_BRANCH}"
