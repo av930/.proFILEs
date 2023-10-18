@@ -1132,7 +1132,8 @@ function gitt_initvar(){
     #NEEDTO WORK: find more secure way to get current branch revision
     GITT_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
     [ -z "${GITT_BRANCH}" ] && GITT_BRANCH=$(git branch -ar |grep -e '->' |sed -E 's#.*[/|>](.*)$#\1#') 
-    [ -z "${GITT_BRANCH}" ] && (warn "'repo start <workingbranch> --all' is recommended" ; GITT_BRANCH=$(git branch -ar |grep -e 'm/' |sed -E 's#.*[/|>](.*)$#\1#') )
+    [ -z "${GITT_BRANCH}" ] && GITT_BRANCH=$(git branch -ar |grep -e 'm/' |sed -E 's#.*[/|>](.*)$#\1#')
+    [ -z "${GITT_BRANCH}" ] && warn "'repo start <workingbranch> --all' is recommended" 
     [ -z "${GITT_BRANCH}" ] && ( err "check your branch with 'git branch'
     repo start <working branch> --all       # make working branch
     source repp                             # reload repp script"
