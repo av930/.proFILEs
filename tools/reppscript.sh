@@ -1,75 +1,76 @@
 #### repo template
 ## usage
-# repo forall -evcj4 bash -c 'reppscript.sh'
+## copy this script to your REPO_PATH
+# cp ~/.proFILEs/tools/reppscript.sh ./cmd.sh
+# or repo forall -evcj4 bash -c 'reppscript.sh'
 
-## description
-# repo forall . -c bash 'cmd.sh'                                    # for current git only, make SHELL variable valid
+## call like this
+# repo forall -evcj4 bash -c 'cmd.sh'                               # if exit 1, repo forall will be stopped
+# repo forall . -ec bash 'cmd.sh'                                   # for current git only, make SHELL variable valid
+# repo forall -evcj4 bash -c 'cmd.sh ${@:0}' aaa bbb ccc ddd        # passing parameters to cmd.sh
 # repo forall mustang/tm/src honda/linux/build_tsu -c bash 'cmd.sh' # for serveral project
 # repo forall $(cat fromfilelist.txt)  -c 'cmd.sh'                  # for serveral project from file
 # repo forall -r poky/* -c bash 'cmd.sh'                            # for git projects matched regexp
 # repo forall -i poky/* -c bash 'cmd.sh'                            # for git projects not matched regexp
 # repo forall -g hlos -c bash 'cmd.sh'                              # for git projects included in specific group
 
-## options && variable
-# option -j:jobs, -e:stop if error happen, --ignore-missing:?, --interactive:?
-#        -p:print gitproject, -v:verbose, -q:only show errors
+## reference options && variable
+# option -j:jobs, -e:stop if error happen, -p:print gitproject, -v:verbose, -q:only show errors
+#        --ignore-missing:?, --interactive:?
 
-## repo variables
+## reference repo variables
 # $REPO__$VARIABLE
 # REPO_I, REPO_COUNT
 # REPO_REMOTE, REPO_PROJECT
 # REPO_PATH, REPO_INNERPATH, REPO_OUTERPATH
 # REPO_LREV, REPO_RREV, REPO_DEST_BRANCH, REPO_UPSTREAM
-'
 
-## HEADING 
+
 BAR="~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-YELLOW='\e[1;33m'; NCOL='\e[0m';
-#err()    { printf "${RED}ERROR: ${NCOL} %b\\n"   ;}
-#dlog()   { printf "\n${BAR}\n%b\\n" "${YELLOW}$1 ${NCOL} ${@:2}" ;}
-printf "${BAR}\n${YELLOW}%-10.10b${NCOL} %-12.12b|%-26.26b|%-76.76b\n" \
-       "[${REPO_I}/${REPO_COUNT}]" "${REPO_REMOTE}" "${REPO_RREV}" "${REPO_PROJECT}"
-       
-
-TARGET=${REPO_RREV}_precs1_migration_220214
+RED='\e[1;31m'; YELLOW='\e[1;33m'; NCOL='\e[0m'; GREEN='\e[1;32m'; CYAN='\e[1;36m';
+log()   { printf "%b\\n" "${*}"  ;}
+err()   { log "${RED}ERROR: ${NCOL} ${*}"   ;}
+warn()  { log "${YELLOW}WARN : ${NCOL} ${*}" ;}
+info()  { log "${CYAN}INFO : ${NCOL} ${*}" ;}
+#log()     { printf "\n${BAR}\n%b\\n" "${YELLOW}$1 ${NCOL} ${@:2}" ;}
 
 
-## exception handler by git project
+## title
+printf "${BAR}\n${YELLOW}%-10.10b${NCOL} %-12.12b|%-26.26b|%-80.80b|%b\n" \
+       "[${REPO_I}/${REPO_COUNT}]" "${REPO_REMOTE}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"
+
+
+## pre-process by git project
 case ${REPO_PROJECT} in
-    vendor/manifest                                 |\
-    __found_error                                   ) echo "this case must never happen" && exit 1 
-    
-    ;;  
-    vendor/qct/sa515m/sa515m_wlan_rome/cnss_proc    |\
-    __skip_project                                  ) echo "skip projcet" && exit 0
-    
-    ;;  
-    mustang/tm/src                                  |\
-    honda/linux/build_tsu                           |\
-    __except_project                                ) echo "exception handler" 
-        echo git fetch ${REPO_REMOTE} ${TARGET}
-        echo git checkout ${REPO_REMOTE}/${TARGET}
-        exit 0    
+    vendor/example/__sample_case                    |\
+    vendor/example/case_error                       ) 
+        err "error occure & stop repo forall"      && exit 1
+
+    ;;
+    vendor/example/__sample_case                    |\
+    vendor/example/case_skip                        ) 
+        echo "skip projcet & continue repo forall" && exit 0
+
+    ;;
+    vendor/example/__sample_case                    |\
+    vendor/example/case_prerun                      ) 
+        echo "pre-run & continue repo forall"
+        #echo git fetch ${REPO_REMOTE} ${REPO_RREV}_precs1_migration_220214
+        #echo git checkout ${REPO_REMOTE}/${REPO_RREV}_precs1_migration_220214
+       
+        exit 0
 esac;
-## goto main
+#### always processed
+## example print info 
+err ${REPO_REMOTE} ${REPO_PROJECT} [$1][$2][$3]
+warn ${REPO_REMOTE} ${REPO_PROJECT} $2
+info ${REPO_REMOTE} ${REPO_PROJECT} $@
 
 
-## main handler by git branch
-case ${REPO_RREV} in
-    __select_source                                 ) echo "select source branch ${REPO_RREV}, stay here" 
-    
-    ;;  
-    tsu_25.5my_release                              |\
-    __select_target                                 ) echo "select target branch ${REPO_RREV}, checkout" 
-        echo git fetch ${REPO_REMOTE} ${TARGET}
-        echo git checkout ${REPO_REMOTE}/${TARGET}
-        
-    ;;  
-    tiger_desktop_release                           |\
-    __select_merge                                  ) echo "select branch merge ${REPO_RREV}, merge" 
-        echo git fetch ${REPO_REMOTE} ${TARGET}
-        echo git merge --no-edit ${REPO_REMOTE}/${TARGET}
-        
-    ;;  
-    __select_other | *                              ) : echo "done"
-esac;
+## example git check
+#git remote show "ssh://vc.integrator@61.189.53.205:29418/${REPO_PROJECT}" > /dev/null
+
+## example git push
+#git push ssh://vc.integrator@61.189.53.205:29418/${REPO_PROJECT} HEAD:refs/heads/cockpit_neusoft_ss_PR230719
+
+
