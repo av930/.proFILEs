@@ -1131,7 +1131,8 @@ function gitt_initvar(){
 
     #NEEDTO WORK: find more secure way to get current branch revision
     GITT_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
-    [ -z "${GITT_BRANCH}" ] && (warn "'repo start <workingbranch> --all' is recommended" ; GITT_BRANCH=$(git branch -ar |grep -e '->' |sed -E 's#.*[/|>](.*)$#\1#') )
+    [ -z "${GITT_BRANCH}" ] && GITT_BRANCH=$(git branch -ar |grep -e '->' |sed -E 's#.*[/|>](.*)$#\1#') 
+    [ -z "${GITT_BRANCH}" ] && (warn "'repo start <workingbranch> --all' is recommended" ; GITT_BRANCH=$(git branch -ar |grep -e 'm/' |sed -E 's#.*[/|>](.*)$#\1#') )
     [ -z "${GITT_BRANCH}" ] && ( err "check your branch with 'git branch'
     repo start <working branch> --all       # make working branch
     source repp                             # reload repp script"
@@ -1208,14 +1209,15 @@ function gittinfo(){
     case $(git config --get-regexp remote|cut -d' ' -f2) in
       help)             echo "site customization"
     ;;*github.com*)     GIT_SITE=$(printf "https://%s" ${GITT_URL}|sed -E 's#^.*github.com:(.*.git)$#http://github.com/\1#')
-    ;;*vgit.lge.com*manifest*) case ${GITT_URL} in #remove starting string 'vgit.lge.com:29420/'
-                              *vgit.lge.com:29420*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'na' ${review_gerrit}/${GITT_URL##*0/} ) ;;
-                              *vgit.lge.com:29430*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'eu' ${review_gerrit}/${GITT_URL##*0/} ) ;;
-                              *vgit.lge.com:29440*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'as' ${review_gerrit}/${GITT_URL##*0/} ) ;;
-                              *vgit.lge.com:29550*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'adas' ${review_gerrit}/${GITT_URL##*0/} ) ;;
-                              *vgit.lge.com:29999*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'devops_test' ${review_gerrit}/${GITT_URL##*9/} ) ;;
-                              *) GIT_SITE="please add site custom setting" ;;
-                              esac
+    ;;*vgit.lge.com*manifest*) 
+        case ${GITT_URL} in #remove starting string 'vgit.lge.com:29420/'
+           *vgit.lge.com:29420*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'na' ${review_gerrit}/${GITT_URL##*0/} )
+        ;; *vgit.lge.com:29430*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'eu' ${review_gerrit}/${GITT_URL##*0/} )
+        ;; *vgit.lge.com:29440*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'as' ${review_gerrit}/${GITT_URL##*0/} )
+        ;; *vgit.lge.com:29550*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'adas' ${review_gerrit}/${GITT_URL##*0/} )
+        ;; *vgit.lge.com:29999*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'devops_test' ${review_gerrit}/${GITT_URL##*9/} )
+        ;;                    *) GIT_SITE="please add site custom setting" ;;
+        esac
     ;;''|*)             GIT_SITE=$(printf "%s/${review_gerrit}/%s" $(echo ${GITT_REVIEW}|sed -E 's#(.*)[/]$#\1#') ${GITT_PROJECT} )
     ;;esac
     clog "review system site:" ${GIT_SITE}
