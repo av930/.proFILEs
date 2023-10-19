@@ -829,13 +829,18 @@ function reppversion(){
 ## ---------------------------------------------------------------------------
 # print information of repo
 # $1 manifests file (default is current manifests)
+    local file_log=$(mktemp)
+    python3  $(which repo) --version > ${file_log}
+    
     local cmd="$1"
     ## only 3digit length version code is valid to compare old version
-    local VER=$(repo --version | grep "repo version"  |tr -dc '[:digit:]')
+    local VER=$(cat ${file_log} | grep "repo version"  |tr -dc '[:digit:]')
     case $cmd in
           help) :
         ;; ver) echo ${VER:0:3} && return 0
     esac
+    #if VER is not integer, in case of error
+    [[ ${VER} != ?(-)+([0-9]) ]] && VER=000
 
     echo "this version is expected to used, please check this version is matched to your local version"
 
@@ -847,7 +852,7 @@ function reppversion(){
     bar inline "found"
     info "the local version currently you are using"
     bar inline "what"
-    repo --version
+    cat ${file_log}
 
     echo
     py_path=$(which python) >/dev/null
