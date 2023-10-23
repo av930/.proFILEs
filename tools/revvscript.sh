@@ -1,8 +1,8 @@
 ###### revv script template
 ## usage
-# repo forall -evc bash 'revvscript.sh' branch 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog master debug
-# repo forall -evc bash 'revvscript.sh' branchlist 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog \* debug
-# repo forall -evc bash -ex 'revvscript.sh' branchlist 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog \* debug
+# repo forall -evc bash 'revvscript.sh' branch 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog master 
+# repo forall -evc bash 'revvscript.sh' branchlist 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog \* 
+# repo forall -evc bash -ex 'revvscript.sh' branchlist 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog \* 
 
 ## description
 # repo forall . -c bash 'cmd.sh'                                    # for current git only, make SHELL variable valid
@@ -23,7 +23,12 @@
 # REPO_PATH, REPO_INNERPATH, REPO_OUTERPATH
 # REPO_LREV, REPO_RREV, REPO_DEST_BRANCH, REPO_UPSTREAM
 
-##revv
+##revv set cmd
+# revv forall setgit .                                  #repo forall을 적용시킬 git을 설정한다. .은 현재 git
+# revv forall setgit sample/poky sample/meta-browser    #나열된 2개의 git에만 적용한다.
+# revv forall setgit                                    #설정된 git정보를 없앤다. 모든 git에 적용한다.
+
+##revv run cmd
 # revv forall branch @branch = repo forall -evc bash 'revvscript.sh' 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog branch @branch
 # revv forall branch        master                      # 정확한 이름의 브랜치 존재여부
 # revv forall Pbranch       master                      # master branch에 대해 실행명령만 출력, 실제 실행안함
@@ -66,16 +71,19 @@ err()    { printf "${RED} $BASH_SOURCE [ERROR] ${NCOL} ${*}"   ;}
 ## DEBUG=[ false | "printf ${RED}%s${NCOL}\n" ]
 DEBUG=false
 case ${cmd::1} in
+  P|E) dflag=${cmd::1}; cmd=${cmd:1}                                    ;;  ## print on
+    O) dflag=${cmd::1}; cmd=${cmd:1}                                    ;;  ## only print without run
     D) dflag=${cmd::1}; cmd=${cmd:1};  DEBUG="printf ${RED}%s${NCOL}\n" ;;  ## debug print & run
-    P) dflag=${cmd::1}; cmd=${cmd:1}                                    ;;  ## only print without run
 esac
 
 
 showRUN(){
     case ${dflag} in
-    P) echo "$@"; exit 0;       ;; #show 1st command & exit
-    D) set -x; "$@"; exit 1;    ;; #show 1st command & run & exit
-    *) "$@"                     ;; #just run
+    E) "$@"; [ $? -ne 0 ] && exit 1     ;; #run command, break if error occurred.
+    P) echo "$@";                       ;; #show command without running cmd, continue.
+    O) echo "$@"; exit 1;               ;; #show only 1st command & break.
+    D) set -x; "$@"; exit 1;            ;; #show only 1st command & run & break.
+    *) "$@"                             ;; #run command, continue regardless of result.
     esac
 }
 
@@ -129,6 +137,12 @@ case $target in
         target="${target//\*/}"; clog "[warn]" "asterisk * is not permitted in gerrit, must check"
     ;; @branch)
         target="${CURR_branch}"
+    ;; '')
+        if [ ! "$cmd" = branchlist ]; then 
+            clog "[error]" "target is null, so many result will be displayed"; 
+            clog "[error]" "so try to stop, some commands may be not stopped, must check"; 
+            exit 1; 
+        fi
 esac
 case $source in
     @branch) source="${CURR_branch}"
