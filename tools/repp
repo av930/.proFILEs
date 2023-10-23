@@ -1833,13 +1833,19 @@ function revvforall(){
     case $cmd in
         help) cat <<-EOF
 			usage) revv forall <cmd> <target_branch> <base_branch>
-			 info) Dcmd: run 1st command & debug info & exit, Pcmd: print all command without run
+			 info) Pcmd: print all command without run
+			       Ocmd: print 1st command without run
+			       Dcmd: run 1st command & debug info & exit
 			 info) @branch: current branch, @remote: current remote, @project: current project
-			 info) use 'revv forall option' to apply 'repo forall <option>'
+			 info) use 'revv forall setgit' to apply specific gits, this setting is remained,  
+			   ex) revv forall setgit        .                           # repo forall . (for current project)
+			   ex) revv forall setgit sample/poky sample/meta-browser    # repo forall some projects (for only input projects)
+			   ex) revv forall setgit                                    # reset, therefore all gits is applied
 
 			   ex) revv forall branch        master                      # check if branch(master) exist
+			   ex) revv forall Ebranch       master                      # check if branch(master) exist, if error occurred, will stop.
 			   ex) revv forall Pbranch       master                      # print command without running
-			   ex) revv forall Dbranch       master                      # print debug info with running
+			   ex) revv forall Dbranch       master                      # print debug info with running 1st cmd
 			   ex) revv forall branch        @branch                     # check if current branch is existed in remote
 			   ex) revv forall branchlist                                # print all branches
 			   ex) revv forall branchlist    '*my*'                      # print all branches including 'my'
@@ -1853,19 +1859,18 @@ function revvforall(){
 			   ex) revv forall branchdel     @branch                     # delete current branch (current remote branch)
 			   ex) revv forall branchdelpre  new_ @branch                # delete branch with name of new_<current_branch> from current
 			   ex) revv forall branchdelpost _new @branch                # delete branch with name of <current_branch>_new from current
-			   ex) revv forall option        .                           # repo forall . (for current project)
-			   ex) revv forall option sample/poky sample/meta-browser    # repo forall some projects (for only input projects)
 EOF
             return 0
-    ;; option)  info "option is delivered to 'repo forall <option>', it is toggled"
+    ;; setgit)  info "setgit is delivered to 'repo forall <git list>', this setting is sustain until reset it"
                 echo "flow) cat ${REPPFILE_CSV} |awk -F'|' {'print \$4'} > project.list"
-                echo "flow) revv forall option \$(cat project.list)"
-                echo "flow) revv forall Pbranch master"
+                echo "flow) revv forall setgit \$(cat project.list) #select gits" 
+                echo "flow) revv forall Pbranch master #do job for any selected gits"
+                echo "flow) revv forall setgit #reset, remove selected git setting" 
 
-                echo "flag_forall=${@:2}" ; #option is all next cmd from @:2
+                echo "flag_forall=${@:2} #print selected gits" ; #setgit is all next cmd from @:2
                 source  <(echo 'flag_forall="${@:2}"'); return 0
-    ;; branch*|Dbranch*|Pbranch*) :
-    ;; debug|project|Dproject*|Pproject*) :
+    ;; branch*|Ebranch*|Pbranch*|Obranch*|Dbranch*) :
+    ;; project|Eproject*|Pproject*|Oproject*|Dproject*) :
     ;;      *)  err "please check usage: not registerd cmd, use 'revv forall help' "; return 1
     esac
 
@@ -1875,7 +1880,7 @@ EOF
     #test case all) revv forall branchlist, gitt branch list '*', revv forall branchlist '*mas*'
     [[ "${target}" =~ "*" ]] && clog "[warn]" "asterisk * is not permitted in gerrit, automatically removed"
     case ${cmd::1} in
-        D) repo forall ${flag_forall} -evcj4 bash 'revvscript.sh' $cmd ${key} ${target//\*/} ${source}
+    D|O|E) repo forall ${flag_forall} -evcj4 bash 'revvscript.sh' $cmd ${key} ${target//\*/} ${source}
       ;;*) repo forall ${flag_forall} -vcj4 bash 'revvscript.sh' $cmd ${key} ${target//\*/} ${source}
     esac
 
