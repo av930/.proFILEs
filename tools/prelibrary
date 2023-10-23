@@ -31,7 +31,7 @@ clog()   { log "${cyan}$1 ${NCOL} ${@:2}"  ;}
 info()   { log "${GREEN}INFO: ${NCOL} ${*}"  ;}
 warn()   { log "${YELLOW}WARN: ${NCOL} ${*}" ;}
 err()    { log "${RED}ERROR: ${NCOL} ${*}" > /dev/stderr ;}
-
+pCount() { tee >(clog \#count: $(wc -l)) ;}
 
 #${2:+[$2] }: if $2 exist, use '[$2] '
 #${line:(${2:+3}+${#2})}: if $2 is exist, skip 3 '-' chars for '[] ' chars
@@ -43,7 +43,6 @@ under()  {
     if [ "${1:(-2)}" = "\n" ]; then temp=${temp::-2}; ret="\n"; fi
     printf "\n${green}〓〓〓   ${CYAN}%b${green}\n%b${NCOL}" "${temp}" "${linedb}${ret}";
 }
-
 
 function printToFILE(){ 
 ## ---------------------------------------------------------------------------
