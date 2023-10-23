@@ -3,6 +3,7 @@
 user.gitconfig*
 tempdir/*
 .idea/*
+bin/prio_high
 
 
 # Compiled source #
