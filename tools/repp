@@ -1498,8 +1498,9 @@ function gittfind(){
 
     case $keyword in
     ''|help) cat <<- EOF
-				usage) gitt find <string>                       #find <string> in committer, message, code-diff
-				   ex) gitt find docker dock                    #find string 'docker' in file 'dock'
+				usage) gitt find '<string>'                     #find <string> in committer, message, code-diff
+				                                                #please brace string with single quoat('~~~')
+				   ex) gitt find 'docker' dock                  #find string 'docker' in file 'dock'
 EOF
              return 0;
     ;; *)   bar outline "search in commit with regexp(${keyword}) in files(${area:-file list or path})"
@@ -1509,10 +1510,12 @@ EOF
     under "find string(${keyword}) in committer in history(${area:-all})\n"
     echo "ex) git log --author=".*${keyword}.*" ${area}"
     echo "ex) git log --owner=".*${keyword}.*" ${area}"
+    checkifSHA ${keyword} &&  git log -1 ${keyword}
     showRUN git log --committer=".*${keyword}.*" ${area}
+    
 
     under "find string(${keyword}) in commit message of history (${area:-all}) with file-changes\n"
-    showRUN git log -i --name-status --grep="${keyword}" ${area}
+    showRUN git log -i --name-status -F --grep="${keyword}" ${area}
 
     under "find string(${keyword}) in commit diff in file history(${area:-all}) \n"
     echo "ex) git grep -e regexp1 --or -e regexp2"
