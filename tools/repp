@@ -1368,7 +1368,7 @@ function gittcommit(){
     ;; help|*)    cat <<-EOF
 				usage) gitt commit info         # show commit info and diff with cached
 				usage) gitt commit auto         # add auto commit
-                   ex) gitt commit auto misc    # add auto commit with msg 'misc'
+				   ex) gitt commit auto misc    # add auto commit with msg 'misc'
 				usage) gitt commit reset        # show useful reset command
 
 				 info) gitt diff                # diff advanced with HEAD, HEAD^, staged, unstaged, revision
@@ -1463,7 +1463,7 @@ function gittbranch(){
        help) cat <<- EOF
 				usage) gitt branch info                         # show current branch info
 				usage) gitt branch list <''|name-filter>        # show remote recent 20 tag/branches
-                   ex) gitt branch list *my*                    # find branches including 'my'
+				   ex) gitt branch list *my*                    # find branches including 'my'
 				usage) gitt branch create|new <name>            # create new branch with exact-name, with confirm
 				usage) gitt branch delete|remove <name>         # delete branch with exact-name, with confirm 'y'
 				   ex) gitt branch create my_temp_branch        # create my_temp_branch, with confirm 'y'
@@ -1563,12 +1563,12 @@ function gittdiff(){
 				usage) gitt diff HEAD <path>                        #    HEAD >>> diff <<< unstaged & staged(add empty path)
 				usage) gitt diff HEAD^ <path>                       #    HEAD >>> diff <<< HEAD^
 				usage) gitt diff branch <path> <branchA> <branchB>  #branch A >>> diff <<< branch B, <path> is mandatory
-                   ex) gitt diff branch . vgit_na/tsu_25.5my_release vgit_na/tcua_release
+				   ex) gitt diff branch . vgit_na/tsu_25.5my_release vgit_na/tcua_release
 				usage) gitt diff commit <path> <commitA> <commitB>  #commit A >>> diff <<< commit B, <path> is ignored
-                   ex) gitt diff commit . HEAD^ 03c2df
+				   ex) gitt diff commit . HEAD^ 03c2df
 
 				flow) gitt branch list                              # find remote branch name : origin/master
-                      gitt fetch                                    # get all branch for comparing
+				      gitt fetch                                    # get all branch for comparing
 				      gitt diff branch . HEAD origin/master         # compare current branch to origin/master
 				      gitt diff branch . default origin/master      # compare default branch to origin/master
 EOF
