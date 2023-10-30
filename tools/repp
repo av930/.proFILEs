@@ -1782,6 +1782,45 @@ EOF
             curl -su ${ACCOUNT}:${key} ${server}/a/groups/${source}/members|grep ${target}
 
     ;;  project~*)
+            dlog "[guide] To create/delete project (visit):" "${server}/admin/repos/${source}"
+            dlog "[guide] To see project config (run cmd):" "curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} | sed '1d'| jq  -C '.[]'"
+    
+            bar inline "find project and show project url"
+            curl -su ${ACCOUNT}:${key} ${server}/a/projects/?m=${source} |sed '1d' > $file
+            clog "matching project: "  $(cat $file| jq -c 'keys[]')
+            cat $file| jq --arg jq_var ${VGIT} -c '"link: http://" + $jq_var + .[].web_links[].url'
+            
+            bar inline "parent-project info"
+            curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} |sed '1d' | jq -cC '.|{name,parent}'
+            curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/access |sed '1d' > $file
+            cat $file| jq --arg jq_var "${server}/admin/repos/" -c '"link: " + $jq_var + .inherits_from.name'
+            cat $file| jq -cC '.inherits_from|{name,parent}'
+            
+            bar inline "parents group info"
+            cat $file| jq -cC .groups[]
+            
+            read -p "enter to continue"
+            bar inline "parents permission info"
+            cat $file| jq -C .local
+
+            bar inline "child-project info inherited from ${source}, plz wait..."
+            curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/children/?recursive| sed '1d'| jq  -cC '.[].name' | more -60
+            printf "\n\n"
+
+
+    ;;projectadd*)
+            bar inline "add new project"
+            curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}  -X PUT |sed '1d' > $file
+            clog "result for creaing project: "  
+            cat $file| jq -C . 
+
+            bar inline "changing parent from All-projects(default)"
+            curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/parent -H "Content-Type: application/json" --data "{\"parent\":\"${target}\"}" -X PUT > $file
+            clog "result for changing parent: "
+            cat $file| sed '1d'| jq . | more -60
+            printf "\n\n"
+
+    ;;projectdel*)
             bar inline "find project and show project url"
             curl -su ${ACCOUNT}:${key} ${server}/a/projects/?m=${source} |sed '1d' > $file
             clog "matching project: "  $(cat $file| jq -c 'keys[]')
@@ -1789,8 +1828,7 @@ EOF
             bar inline "search child-project inherit from project ${source}, plz wait..."
             curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/children/?recursive| sed '1d'| jq  -cC '.[].name' | more -60
             printf "\n\n"
-            dlog "[guide] To see project config (run cmd):" "curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} | sed '1d'| jq  -C '.[]'"
-            dlog "[guide] To crate/delete project (visit):" "${server}/admin/repos/${source}"
+
 
     ;;   branch~*)
             bar inline "find branches by name"
@@ -1812,6 +1850,7 @@ EOF
                 return 1; 
             fi
             curl -su ${ACCOUNT}:${key} ${server}/a/changes/?q=${change_id}
+    ;;*)    err "please check command ex)revv project help, revv branch help"            
     esac
 }
 
@@ -1884,7 +1923,7 @@ EOF
     [[ "${target}" =~ "*" ]] && clog "[warn]" "asterisk * is not permitted in gerrit, automatically removed"
     case ${cmd::1} in
     D|O|E) repo forall ${flag_forall} -evcj4 bash 'revvscript.sh' $cmd ${key} ${target//\*/} ${source}
-      ;;*) repo forall ${flag_forall} -vcj4 bash 'revvscript.sh' $cmd ${key} ${target//\*/} ${source}
+    ;;P|*) repo forall ${flag_forall}  -vcj4 bash 'revvscript.sh' $cmd ${key} ${target//\*/} ${source}
     esac
 
 
