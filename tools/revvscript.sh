@@ -50,10 +50,10 @@
 
 ###### setting for env
 ## USER input
-cmd=$1
+cmd=$1         #branch, project
 key_http=$2
-target=$3
-source=$4
+target=$3      #branch-name, project-name
+source=$4      #base-branch-name, parent-project-name
 
 ## default variable & functions
 BAR="~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
@@ -69,6 +69,7 @@ err()    { printf "${RED} $BASH_SOURCE [ERROR] ${NCOL} ${*}"   ;}
 
 ## setting for debugging
 ## DEBUG=[ false | "printf ${RED}%s${NCOL}\n" ]
+## filter flag and pass to command to cmd
 DEBUG=false
 case ${cmd::1} in
   P|E) dflag=${cmd::1}; cmd=${cmd:1}                                    ;;  ## print on
@@ -132,17 +133,13 @@ esac;
 
 
 ## case branch target & source
-case $target in
-    *\**)
-        target="${target//\*/}"; clog "[warn]" "asterisk * is not permitted in gerrit, must check"
-    ;; @branch)
-        target="${CURR_branch}"
-    ;; '')
-        if [ ! "$cmd" = branchlist ]; then 
-            clog "[error]" "target is null, so many result will be displayed"; 
-            clog "[error]" "so try to stop, some commands may be not stopped, must check"; 
-            exit 1; 
-        fi
+SEP='~'
+case ${cmd}${SEP}${target} in
+    *\**) target="${target//\*/}"; clog "[warn]" "asterisk * is not permitted in gerrit, must check"
+    ;; branch*~@branch) target="${CURR_branch}"
+    ;; project*~@project) target="${CURR_project}"
+    ;; branchlist~) : ##allow target=null    
+    ;; branch*~|project*~) err "target is null, stop some commands may be not stopped, must check"; exit 1; 
 esac
 case $source in
     @branch) source="${CURR_branch}"
@@ -154,7 +151,7 @@ case $cmd in
     ;;                              branchlist) target="?m=${target}"
     ;;     branchpre|branchaddpre|branchdelpre) target="${target}${REPO_RREV}"
     ;;  branchpost|branchaddpost|branchdelpost) target="${REPO_RREV}${target}"
-    ;;  project) target="${REPO_PROJECT}${target}"
+    ;;  project) target="${REPO_PROJECT}"
     ;;  *) err "command not recongnized, check usage"; exit 1
 
 esac
@@ -173,7 +170,8 @@ $DEBUG "input param: cmd: [$cmd]| target: ${target}| source: ${source}"
 $DEBUG "positional params: [$0][$1][$2][$3][${@:4}]"
 
 
-run_command="curl -s -u $REPO__$USER:${key_http} ${CURR_url}/a/projects/${REPO_PROJECT//'/'/'%2F'}/branches/${target} -o ${tempf}"
+cmd_branch="curl -su $REPO__$USER:${key_http} ${CURR_url}/a/projects/${REPO_PROJECT//'/'/'%2F'}/branches/${target} -o ${tempf}"
+cmd_project="curl -su $REPO__$USER:${key_http} ${CURR_url}/a/projects/${REPO_PROJECT//'/'/'%2F'} -o ${tempf}"
 ## main handler by git branch
 case ${CURR_branch} in
     __branch_A                                      |\
@@ -189,24 +187,32 @@ case ${CURR_branch} in
         set -o noglob #for preventing globbing parameter *
         case $cmd in
              branch|branchpre|branchpost|branchlist)
-                    showRUN ${run_command}
+                    showRUN ${cmd_branch}
         ;;     branchadd|branchaddpre|branchaddpost)
-                    showRUN ${run_command} -X PUT -H "Content-Type: application/json" --data "{"revision": "${source}"}"
+                    showRUN ${cmd_branch} -X PUT -H "Content-Type: application/json" --data "{"revision": "${source}"}"
         ;;     branchdel|branchdelpre|branchdelpost)
-                    showRUN ${run_command} -X DELETE
+                    showRUN ${cmd_branch} -X DELETE
         ;;     project)
-                    showRUN ${run_command%/branches*} -o ${tempf}
+                    showRUN ${cmd_project}
+        ;;     projectadd)
+                    showRUN ${cmd_project} -X PUT
+                    showRUN ${cmd_project}/parent -X PUT -H "Content-Type: application/json" --data "{"parent": "${source}"}"
         ;;     *)
                     err "command not recongnized!"; exit 1
         esac
         set +o noglob
 
+        case $cmd in
+        branch*)   PRINT_INFO='{ref,revision}';;
+        project*)  PRINT_INFO='{name,parent}' ;;
+        esac
+        
         if [ "$(cat ${tempf} | head -1)" = "${JSON_IDFY}" ]; then
             if [ "$(cat ${tempf} | sed -n '2p')" = "[]" ]; then clog "executed" "result is nothing"; cat ${tempf} | tail -n +3;  RET=FAIL1
-            elif [ "$(cat ${tempf} | sed -n '2p')" = "{" ]; then cat "${tempf}" | sed "1d" | jq  -cC ".|{ref,revision}"; RET=OKAY1
-            else cat "${tempf}" | sed '1d'| jq  -cC '.[]|{ref,revision}';  RET=OKAY2
+            elif [ "$(cat ${tempf} | sed -n '2p')" = "{" ]; then cat "${tempf}" | sed "1d" | jq -cC ".|${PRINT_INFO}"; RET=OKAY1
+            else cat "${tempf}" | sed '1d'| jq  -cC '.[]|${PRINT_INFO}';  RET=OKAY2
             fi
-        elif [ -z "$(cat ${tempf} | head -1)" ]; then clog "warn" "return success, but you must check the result by hand  !" ;  RET=OKAY3
+        elif [ -z "$(cat ${tempf} | head -1)" ]; then clog "warn" "API well executed, but you must check the result by hand." ;  RET=OKAY3
         else cat "${tempf}" ;  RET=FAIL2
         fi
         #show result summury of each git repository after running a command
