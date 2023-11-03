@@ -1712,7 +1712,7 @@ EOF
 
 
 
-function revvcontrol(){
+function revvgerrit(){
 ## ---------------------------------------------------------------------------
 
 # read information from gerrit
@@ -1746,6 +1746,9 @@ function revvcontrol(){
 			usage) revv groupmem  na sa515m_reviewer  joongkeun.kim            # check member is in group and its sub-groups
 			usage) revv project   na mustang/tm/src                            # find project with project-name
 			usage) revv project   na vendor/qct/sa515m/_lge_only               # find project and its child projects
+			usage) revv projectadd na sample/target sample/parent              # add git project from parent            
+			usage) revv projectadd na sample/target                            # add git project from All-project
+			usage) revv projectdel na sample/target                            # get remove page url in gerrit
 			usage) revv branch    na mustang/tm/src tsu_25.5my_release         # find branch with branch-name
 			usage) revv branchadd na mustang/tm/src tsu_25.5my_release_new     # create branch
 			usage) revv branchdel na mustang/tm/src tsu_25.5my_release_new     # remove branch
@@ -1807,32 +1810,47 @@ EOF
             curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/children/?recursive| sed '1d'| jq  -cC '.[].name' | more -60
             printf "\n\n"
 
-
-    ;;projectadd*)
+    ;;projectadd~*)
+            bar inline "check if project already existed"
+            local temp=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} |sed '1d' | jq -cC '.name')
+            if [ -n "${temp}" ]
+            then err "[${temp}] already legacy project existed" && return 1; 
+            else clog "passed, no legacy project" "ok, continue to create"
+            fi
+            
+            if [ -n "${target}" ]; then
+                temp=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${target//'/'/'%2F'} |sed '1d' | jq -cC '.name')
+                if [ -z "${temp}" ]; then err "but no parent project, stop to create"; return 1; fi
+            fi
+            
             bar inline "add new project"
             curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}  -X PUT |sed '1d' > $file
             clog "result for creaing project: "  
             cat $file| jq -C . 
-
+            [ -z "${target}" ] && (warn "git created whose parent is All-project(default)" && return 0)
             bar inline "changing parent from All-projects(default)"
             curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/parent -H "Content-Type: application/json" --data "{\"parent\":\"${target}\"}" -X PUT > $file
             clog "result for changing parent: "
             cat $file| sed '1d'| jq . | more -60
             printf "\n\n"
 
-    ;;projectdel*)
-            bar inline "find project and show project url"
-            curl -su ${ACCOUNT}:${key} ${server}/a/projects/?m=${source} |sed '1d' > $file
-            clog "matching project: "  $(cat $file| jq -c 'keys[]')
-            cat $file| jq --arg jq_var ${VGIT} -c '"link: http://" + $jq_var + .[].web_links[].url'
-            bar inline "search child-project inherit from project ${source}, plz wait..."
-            curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/children/?recursive| sed '1d'| jq  -cC '.[].name' | more -60
+    ;;projectdel~*)
+            bar inline "check if project already existed"
+            local temp=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} |sed '1d' | jq -cC '.name')
+            if [ -n "${temp}" ]
+            then clog "[${temp}] already legacy project existed" "ok, please remove manually" 
+            else err "no existing project, stopped" && return 1
+            fi
+    
+            bar inline "'removing project' by CLI is not supported in gerrit"
+            dlog "so only provide url link, you cand remove git project there"
+            dlog "[guide] To delete project (visit):" "${server}/admin/repos/${source},commands"
             printf "\n\n"
-
 
     ;;   branch~*)
             bar inline "find branches by name"
             curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/?m=${target} | sed '1d'| jq  -cC '.[]|{ref,revision}' | more -60
+
     ;;branchadd~*)
             bar inline "create branch with base revision"
             if [ -z "${extra}" ]; then read -p "input base branch which new branch is created from: ";fi
@@ -1850,7 +1868,7 @@ EOF
                 return 1; 
             fi
             curl -su ${ACCOUNT}:${key} ${server}/a/changes/?q=${change_id}
-    ;;*)    err "please check command ex)revv project help, revv branch help"            
+    ;;*)    err "please check command ex)revv project help, revv branch help"
     esac
 }
 
@@ -1911,7 +1929,7 @@ EOF
 
                 echo "flag_forall=${@:2} #print selected gits" ; #setgit is all next cmd from @:2
                 source  <(echo 'flag_forall="${@:2}"'); return 0
-    ;; branch*|Ebranch*|Pbranch*|Obranch*|Dbranch*) :
+    ;; *branch*|Ebranch*|Pbranch*|Obranch*|Dbranch*) :
     ;; project|Eproject*|Pproject*|Oproject*|Dproject*) :
     ;;      *)  err "please check usage: not registerd cmd, use 'revv forall help' "; return 1
     esac
@@ -2104,7 +2122,7 @@ case "$1" in
     ;;    info)      reppcheck_initvar gittrevv        &&  revvinfo  "${@:2}"
     ;;   debug)      reppcheck_initvar gittrevv        &&  revvdebug "${@:2}"
     ;;  forall)      reppcheck_initvar repprevv        &&  revvforall "${@:2}"
-    ;;       *)      reppcheck_initvar gittrevv        &&  revvcontrol "${@:1}"
+    ;;       *)      reppcheck_initvar repprevv        &&  revvgerrit "${@:1}"
 esac
 return $ret
 }
