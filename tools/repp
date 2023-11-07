@@ -986,14 +986,14 @@ function reppconnect(){
     case ${cmd} in
 
        help)    cat <<-EOF
-			  usage) repp connect   [user]    [review] [gitproject]   [branch]
-			 ---------------------------------------------------------------------
-			default) repp connect $ACCOUNT    remotes    manifests    current
-			     ex) repp connect testaccount    na    tiger/tools  tiger_release
-			     ex) repp connect joongkeun.kim  na    tiger/tools  tiger_release
-			     ex) repp connect testaccount    na    tiger/tools
-			     ex) repp connect testaccount    na
-			     ex) repp connect testaccount
+			  usage) repp connect [server]  [user]          [gitproject]   [branch]
+			 -----------------------------------------------------------------
+			default) repp connect remotes   $ACCOUNT        manifests    current
+			     ex) repp connect na        testaccount     tiger/tools  tiger_release
+			     ex) repp connect na        joongkeun.kim   tiger/tools  tiger_release
+			     ex) repp connect na        testaccount     tiger/tools
+			     ex) repp connect na        testaccount     
+			     ex) repp connect na        testaccount
 			     ex) repp connect
 EOF
                 return 1;
