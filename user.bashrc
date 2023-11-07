@@ -1,3 +1,4 @@
+# vim: set filetype=bash: 
 printf '[%s] called: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
 
 func_su(){
@@ -24,3 +25,4 @@ func_su(){
 }
 
 alias sul="func_su"
+if (( 8 > $(grep \/docker /proc/1/cgroup |wc -l) )); then PS1="\e[33;1m\u@\${CURR_IP}_d:\e[31m\$PWD\e[0m \n$ "; fi
