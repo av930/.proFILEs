@@ -26,6 +26,6 @@ func_su(){
 
 alias sul="func_su"
 if (( 8 < $(grep \/docker /proc/1/cgroup |wc -l) )); then 
-    PS1SC=$(cat ~/.bash_aliases | grep PS1SC) 
+    eval $(cat ~/.bash_aliases | grep PS1SC) 
     [ -n "${PS1SC}" ] && PS1="${PS1SC}"
 fi
