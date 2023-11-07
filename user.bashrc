@@ -25,4 +25,7 @@ func_su(){
 }
 
 alias sul="func_su"
-if (( 8 > $(grep \/docker /proc/1/cgroup |wc -l) )); then PS1="\e[33;1m\u@\${CURR_IP}_d:\e[31m\$PWD\e[0m \n$ "; fi
+if (( 8 < $(grep \/docker /proc/1/cgroup |wc -l) )); then 
+    PS1SC=$(cat ~/.bash_aliases | grep PS1SC) 
+    [ -n "${PS1SC}" ] && PS1="${PS1SC}"
+fi
