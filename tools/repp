@@ -1160,7 +1160,7 @@ function revv_initvar(){
 
     if (( 40 > ${#key} )); then
         warn "if problem continue, check gerrit http key value in [~/.key_${key_id}] \n
-        you can generate .key_XXX : code enf ${key_id} <check_key_from_gerrit_account>"
+        you can generate .key_XXX : ende_code enf ${key_id} <check_key_from_gerrit_account>"
         ret=1
     fi
 
