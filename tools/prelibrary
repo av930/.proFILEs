@@ -128,9 +128,14 @@ function ende_code(){
 local temp temp_var
 local cmd=$1 tag=$2 key=$3
     case $cmd in
+        env|dev|enf|def) warn "please check 'ende_code help'"
+    esac
+
+    case $cmd in
         help) info "variable is live during session, file is live permanent"
-            echo "en/decoding as variable: ende_code env <keyname> <key>; code dev <keyname>"
-            echo "en/decoding as file    : ende_code enf <keyfile> <key>; code def <keyfile>"
+            echo "en/decoding as variable: ende_code env <keyname> <key>, ende_code dev <keyname>"
+            echo "en/decoding as file    : ende_code enf <keyfile> <key>, ende_code def <keyfile>"
+            echo "encode example         : ende_code enf .key_vgit ejladf69a79f8d79fdsqd02"
              
        ;;env) #encrypt to ENCODE_$tag
             declare -g "ENCODE_$tag=$( echo $key | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey )"
