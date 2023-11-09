@@ -135,7 +135,8 @@ local cmd=$1 tag=$2 key=$3
         help) info "variable is live during session, file is live permanent"
             echo "en/decoding as variable: ende_code env <keyname> <key>, ende_code dev <keyname>"
             echo "en/decoding as file    : ende_code enf <keyfile> <key>, ende_code def <keyfile>"
-            echo "encode example         : ende_code enf .key_vgit ejladf69a79f8d79fdsqd02"
+	    echo "ex) save file for vgit : ende_code enf vgit ejladf69a79f8d79fdsqd02"
+	    echo "ex) save var for lamp  : ende_code env lamp ejladf69a79f8d79fdsqd02"
              
        ;;env) #encrypt to ENCODE_$tag
             declare -g "ENCODE_$tag=$( echo $key | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey )"
