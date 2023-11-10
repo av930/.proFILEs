@@ -89,7 +89,7 @@ function update_history(){
 		|| printf "\033k%s\033\\" "${PWD##*/}"
         path=${PWD}
     fi
-    screen -X chdir "$PWD"
+    screen -X chdir "$PWD" > /dev/null
     #history -c
 }
 #update_history
