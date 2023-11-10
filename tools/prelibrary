@@ -128,7 +128,8 @@ function ende_code(){
 local temp temp_var
 local cmd=$1 tag=$2 key=$3
     case $cmd in
-        env|dev|enf|def) warn "please check 'ende_code help'"
+	env|enf) [ -z "${key}" ] && ende_code help
+	;; dev|def) [ -z "${tag}" ] && ende_code help
     esac
 
     case $cmd in
