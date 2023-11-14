@@ -1195,6 +1195,42 @@ function reppcheck_initvar(){
 
 
 
+function gittsshcmd(){
+## ---------------------------------------------------------------------------
+# find replication server
+# $1 server-url
+# $2 port-number
+    local server_port=${REPP_URL#*@}
+    local server=${1:-${server_port%:*}}
+    local user=${2:-${USER}}
+    local port=${3:-$(echo ${server_port} | grep -oP '(?<=:)[0-9]+(?=/)')}
+
+    case $cmd in
+       help) cat <<- EOF
+				usage) gitt sshcmd checkserver                         # show current branch info
+				usage) gitt branch delete|remove <name>         # delete branch with exact-name, with confirm 'y'
+				   ex) gitt branch create my_temp_branch        # create my_temp_branch, with confirm 'y'
+				 info) gitt diff                                # see gitt diff to compare branch
+EOF
+
+    ;; checkserver)
+        if [ -z "${server}" ] || [ -z "${port}" ] ; then info "usage) revv server vgit.lge.com 29999"; return 1;fi
+        ping $server -s 1016 -c 4 -A
+        printf "${yellow}--------------------------------------------------------------------------------------\n${NCOL}"
+        if [ $? -ne 0 ]; then continue; fi
+        ssh ${user}@$server -p $port -o ConnectTimeout=2 -o ConnectionAttempts=1 gerrit show-caches
+        if [ $? -ne 0 ]; then continue;fi
+        printf "${yellow}--------------------------------------------------------------------------------------\n${NCOL}"
+        echo "please check 1) ipg/ewma from ping, 2) AvgGet from gerrit connection"
+
+    ;; *) gittbranch help
+    ;; esac
+    
+}
+
+
+
+
 function gittinfo(){
 ## ---------------------------------------------------------------------------
 # main handler for this scriptre
@@ -1471,8 +1507,14 @@ function gittbranch(){
 				 info) gitt diff                                # see gitt diff to compare branch
 EOF
     ;; create|new)  if [ -z "${name}" ]; then err "branch name must be input" && return 1;fi
+                info "create branch with empty commit"
+                echo "git switch --orphan <branch-name>" #switch to new empty branch
+                echo "git commit --allow-empty -m 'Initial commit to create branch'" #add empty commit
+                echo "git push  ssh://vgit.lge.com:29440/honda/con/autosar HEAD:refs/heads/<branch-name>"
+                
                 bar inline "create branch: new branch will be created from current HEAD"
                 showRUNQ y git push ${GITT_REMOTE} HEAD:refs/heads/${name}
+
     ;; delete|remove)  if [ -z "${name}" ]; then err "branch name must be input" && return 1;fi
                 bar inline "delete branch: branch [${name}] will be removed from REMOTE"
                 showRUNQ y git push ${GITT_REMOTE} --delete ${name}
@@ -1764,14 +1806,6 @@ EOF
             bar outline "get registered SSH-key for account [${source}] in server [$server]"
             curl -su ${ACCOUNT}:${key} ${server}/a/accounts/${source}/sshkeys |sed '1d'| jq -cC '.[]|{ssh_public_key, comment}'
 
-    ;;     group~*)
-            bar inline "find group by name"
-            curl -su ${ACCOUNT}:${key} ${server}/a/groups/?m=${source} |sed '1d'| jq '.'
-            bar inline "list sub-group by ${source} group"
-            curl -su ${ACCOUNT}:${key} ${server}/a/groups/${source}/groups/ |sed '1d'| jq -c '.[]|{name, created_on}'
-            bar inline "show group member by ${source} group to its decendents"
-            curl -su ${ACCOUNT}:${key} ${server}/a/groups/${source}/members?recursive |sed '1d'| jq -cC '.[]|{name, email}'  | more -60
-
     ;;  groupadd~*)
             bar outline "add member to group"
             curl -su ${ACCOUNT}:${key} ${server}/a/groups/${source}/members/${target} -X PUT
@@ -1784,31 +1818,13 @@ EOF
             bar outline "find member from group"
             curl -su ${ACCOUNT}:${key} ${server}/a/groups/${source}/members|grep ${target}
 
-    ;;  project~*)
-            dlog "[guide] To create/delete project (visit):" "${server}/admin/repos/${source}"
-            dlog "[guide] To see project config (run cmd):" "curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} | sed '1d'| jq  -C '.[]'"
-    
-            bar inline "find project and show project url"
-            curl -su ${ACCOUNT}:${key} ${server}/a/projects/?m=${source} |sed '1d' > $file
-            clog "matching project: "  $(cat $file| jq -c 'keys[]')
-            cat $file| jq --arg jq_var ${VGIT} -c '"link: http://" + $jq_var + .[].web_links[].url'
-            
-            bar inline "parent-project info"
-            curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} |sed '1d' | jq -cC '.|{name,parent}'
-            curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/access |sed '1d' > $file
-            cat $file| jq --arg jq_var "${server}/admin/repos/" -c '"link: " + $jq_var + .inherits_from.name'
-            cat $file| jq -cC '.inherits_from|{name,parent}'
-            
-            bar inline "parents group info"
-            cat $file| jq -cC .groups[]
-            
-            read -p "enter to continue"
-            bar inline "parents permission info"
-            cat $file| jq -C .local
-
-            bar inline "child-project info inherited from ${source}, plz wait..."
-            curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/children/?recursive| sed '1d'| jq  -cC '.[].name' | more -60
-            printf "\n\n"
+    ;;     group~*)
+            bar inline "find group by name"
+            curl -su ${ACCOUNT}:${key} ${server}/a/groups/?m=${source} |sed '1d'| jq '.'
+            bar inline "list sub-group by ${source} group"
+            curl -su ${ACCOUNT}:${key} ${server}/a/groups/${source}/groups/ |sed '1d'| jq -c '.[]|{name, created_on}'
+            bar inline "show group member by ${source} group to its decendents"
+            curl -su ${ACCOUNT}:${key} ${server}/a/groups/${source}/members?recursive |sed '1d'| jq -cC '.[]|{name, email}'  | more -60
 
     ;;projectadd~*)
             bar inline "check if project already existed"
@@ -1846,10 +1862,35 @@ EOF
             dlog "so only provide url link, you cand remove git project there"
             dlog "[guide] To delete project (visit):" "${server}/admin/repos/${source},commands"
             printf "\n\n"
+            
+    ;;  project~*)
+            dlog "[gerrit url] gerrit cli:" "curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} | sed '1d'| jq  -cC '.[]'"
 
-    ;;   branch~*)
-            bar inline "find branches by name"
-            curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/?m=${target} | sed '1d'| jq  -cC '.[]|{ref,revision}' | more -60
+            info "config: " "${server}/admin/repos/${source}"
+            bar inline "find project and show project url"
+            curl -su ${ACCOUNT}:${key} ${server}/a/projects/?m=${source} |sed '1d' > $file
+            clog "matching project: "  $(cat $file| jq -c 'keys[]')
+            cat $file| jq --arg jq_var ${VGIT} -c '"src: http://" + $jq_var + .[].web_links[].url'
+            
+            bar inline "parent-project info"
+            curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} |sed '1d' | jq -cC '.|{name,parent}'
+            curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/access |sed '1d' > $file
+            cat $file| jq --arg jq_var "${server}/admin/repos/" -c '"config: " + $jq_var + .inherits_from.name'
+            
+            bar inline "grand parent-project info"
+            cat $file| jq -cC '.inherits_from|{name,parent}'
+            cat $file| jq --arg jq_var "${server}/admin/repos/" -c '"config: " + $jq_var + .inherits_from.parent'
+            
+            bar inline "permission group name"
+            cat $file| jq -cC .groups[]
+            
+            read -p "enter to continue"
+            bar inline "permission info for each group"
+            cat $file| jq -C .local
+
+            bar inline "child-project info inherited from ${source}, plz wait..."
+            curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/children/?recursive| sed '1d'| jq  -cC '.[].name' | more -60
+            printf "\n\n"
 
     ;;branchadd~*)
             bar inline "create branch with base revision"
@@ -1859,8 +1900,12 @@ EOF
     ;;branchdel~*)
             bar inline "delete branch by name"
             showRUNQ y curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -X DELETE
+
+    ;;   branch~*)
+            bar inline "find branches by name"
+            curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/?m=${target} | sed '1d'| jq  -cC '.[]|{ref,revision}' | more -60
             
-    ;;commit~*)
+    ;;   commit~*)
             local change_id=$(curl -su ${ACCOUNT}:${key} ${server}/a/changes/${source} |grep -oP '(?<=change_id": ").*(?=")')
             if [ -z "${change_id}" ]; then 
                 err "NOT Found: change_id for commit_id[${source}]"
@@ -1893,11 +1938,15 @@ function revvforall(){
     case $cmd in
         help) cat <<-EOF
 			usage) revv forall <cmd> <target_branch> <base_branch>
-			 info) Pcmd: print all command without run
-			       Ocmd: print 1st command without run
+			guide) revv forall is working based on the manifest.xml.
+			 info) Ocmd: print 1st command without run
 			       Dcmd: run 1st command & debug info & exit
+			       Pcmd: print all command without run
+			       Ecmd: run command, if error occurs then exit
+			        cmd: run command, if error occurs then continue
+
 			 info) @branch: current branch, @remote: current remote, @project: current project
-			 info) use 'revv forall setgit' to apply specific gits, this setting is remained,  
+			 info) use 'revv forall setgit' to apply specific gits, this setting is remained until reset.
 			   ex) revv forall setgit        .                           # repo forall . (for current project)
 			   ex) revv forall setgit sample/poky sample/meta-browser    # repo forall some projects (for only input projects)
 			   ex) revv forall setgit                                    # reset, therefore all gits is applied
@@ -1940,22 +1989,26 @@ EOF
     #test case all) revv forall branchlist, gitt branch list '*', revv forall branchlist '*mas*'
     [[ "${target}" =~ "*" ]] && clog "[warn]" "asterisk * is not permitted in gerrit, automatically removed"
     case ${cmd::1} in
-    D|O|E) repo forall ${flag_forall} -evcj4 bash 'revvscript.sh' $cmd ${key} ${target//\*/} ${source}
+    O|D|E) repo forall ${flag_forall} -evcj1 bash 'revvscript.sh' $cmd ${key} ${target//\*/} ${source} 2> /dev/null
     ;;P|*) repo forall ${flag_forall}  -vcj4 bash 'revvscript.sh' $cmd ${key} ${target//\*/} ${source}
     esac
 
-
+    set +o noglob
+    #supress show result msg
+    case ${cmd::1} in
+    P|O|D) return 0
+    esac
+    
     read -p $'\n\nshow result log: [ctrl+c: exit | enter: continue]? '
     bar inline ""
     cat ${tempr} |grep --color=always FAIL | tee /dev/tty | wc -l
     bar inline ""
     cat ${tempr} |grep --color=always OKAY | tee /dev/tty | wc -l
     #pr -2 -t <(cat ${tempr} |grep FAIL)
-    set +o noglob
 }
 
 
-function revvcmd(){
+function revvshowcmd(){
 ## ---------------------------------------------------------------------------
 # read information from gerrit
 # $1 account
@@ -2116,7 +2169,7 @@ case "$1" in
      ##$1:cmd        ${@:2}:parameters
           help)                                            reppmenu help "${MENU[@]}"
     ;;      '')                                            reppmenu revv "${MENU[@]}"
-    ;;     cmd)      reppcheck_initvar reppgittrevv    &&  revvcmd "${@:2}"
+    ;;     cmd)      reppcheck_initvar reppgittrevv    &&  revvshowcmd "${@:2}"
     ;;  server)      reppcheck_initvar gittrevv        &&  revvserver "${@:2}"
     ;; connect)      reppcheck_initvar gittrevv        &&  revvcheck_server "${@:2}"
     ;;    info)      reppcheck_initvar gittrevv        &&  revvinfo  "${@:2}"
