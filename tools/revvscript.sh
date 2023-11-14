@@ -36,16 +36,16 @@
 # revv forall branch        @branch                     # 현재 branch가 gerrit에 모두 존재하는지 확인(remote 존재여부)
 # revv forall branchlist                                # 모든 project에 대해서 모든 브랜치 나열
 # revv forall branchlist    '*my*'                      # my가 포함된 branch list up, *는 무시됨.
-# revv forall branchlist    mas                         # mas가 들어가는 모든브랜치 나열, branch가 없는 project는 출력안됨
-# revv forall branchadd     new master                  # master기준으로 new라는 브랜치 생성, src(master)가 없으면 브랜치 생성안됨
+# revv forall branchlist    mas                         # mas가 들어가는 모든브랜치 나열, branch가 없는 project는 출력안됨
+# revv forall branchadd     new master                  # master기준으로 new라는 브랜치 생성, src(master)가 없으면 브랜치 생성안됨
 # revv forall branchadd     @branch master              # master기준으로 manifest revision에 기록된 branch를 생성
-# revv forall branchaddpre  new_ @branch                # new_<current_branch> 현재 branch에서 new prefix붙인 이름으로 생성
-# revv forall branchaddpost _new @branch                # <current_branch>_new 현재 branch에서 new postfix붙인 이름으로 생성
-# revv forall branchaddpost _new master                 # master가 존재하는 경우만 master_new가 생성됨
+# revv forall branchaddpre  new_ @branch                # new_<current_branch> 현재 branch에서 new prefix붙인 이름으로 생성
+# revv forall branchaddpost _new @branch                # <current_branch>_new 현재 branch에서 new postfix붙인 이름으로 생성
+# revv forall branchaddpost _new master                 # master가 존재하는 경우만 master_new가 생성됨
 # revv forall branchdel     master                      # master가 존재하는 경우만 해당 branch를 삭제
 # revv forall branchdel     @branch                     # 현재 branch 삭제(정확히는 gerrit의 remote branch를 삭제함)
-# revv forall branchdelpre  new_ @branch                # 현재 branch기준으로 new_<current_branch> 라는 branch 삭제
-# revv forall branchdelpost _new @branch                # <current_branch>_new 삭제하는 명령만 출력
+# revv forall branchdelpre  new_ @branch                # 현재 branch기준으로 new_<current_branch> 라는 branch 삭제
+# revv forall branchdelpost _new @branch                # <current_branch>_new 삭제하는 명령만 출력
 
 
 ###### setting for env
@@ -60,7 +60,7 @@ BAR="~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 NCOL='\e[0m'; YELLOW='\e[1;33m'; RED='\e[1;31m'; GREEN='\e[1;32m';
 JSON_IDFY=")]}'"
 tempr=/tmp/revv.ret
-tempf=$(mktemp)
+tempf=/tmp/aaa$(mktemp)
 if [ ! -f "${tempf}" ]; then touch "${tempf}"; fi
 
 clog()   { printf "${GREEN}$1 ${NCOL} ${@:2}\n" ;}
@@ -72,22 +72,22 @@ err()    { printf "${RED} $BASH_SOURCE [ERROR] ${NCOL} ${*}"   ;}
 ## filter flag and pass to command to cmd
 DEBUG=false
 case ${cmd::1} in
-  P|E) dflag=${cmd::1}; cmd=${cmd:1}                                    ;;  ## print on
-    O) dflag=${cmd::1}; cmd=${cmd:1}                                    ;;  ## only print without run
-    D) dflag=${cmd::1}; cmd=${cmd:1};  DEBUG="printf ${RED}%s${NCOL}\n" ;;  ## debug print & run
+  P|E|O) dflag=${cmd::1}; cmd=${cmd:1}                                    ;;  ## print on
+      D) dflag=${cmd::1}; cmd=${cmd:1};  DEBUG="printf ${RED}%s${NCOL}\n" ;;  ## debug print & run
 esac
 
 
+## cflag is true, run current cmd and stop all next.
+cflag=false
 showRUN(){
     case ${dflag} in
-    E) "$@"; [ $? -ne 0 ] && exit 1     ;; #run command, break if error occurred.
-    P) echo "$@";                       ;; #show command without running cmd, continue.
-    O) echo "$@"; exit 1;               ;; #show only 1st command & break.
-    D) set -x; "$@"; exit 1;            ;; #show only 1st command & run & break.
-    *) "$@"                             ;; #run command, continue regardless of result.
+    E) "$@"; [ $? -ne 0 ] && cflag=true  ;; #run command, break if error occurred.
+    P) echo "$@";                        ;; #show command without running cmd, continue.
+    O) cflag=true; echo "$@";            ;; #show only 1st command & break.
+    D) cflag=true; set -x; "$@";         ;; #show only 1st command & run & break.
+    *) "$@"                              ;; #run command, continue regardless of result.
     esac
 }
-
 
 
 ## builtin-variable specific repo
@@ -96,7 +96,7 @@ CURR_remote=${REPO_REMOTE}
 CURR_project=${REPO_PROJECT}
 CURR_branch=${REPO_RREV}
 CURR_path=${REPO_PATH}
-CURR_nrepos=${REPO_COUNT}
+CURR_ntot=${REPO_COUNT}
 CURR_n=${REPO_I}
 CURR_upstream=${REPO_UPSTREAM}
 CURR_destbranch=${REPO_DEST_BRANCH}
@@ -165,7 +165,7 @@ printf "${BAR}\n${YELLOW}%-10.10b${NCOL} remote:%-12.12b | project:%-84.84b %s\n
 
 ## debugging value
 $DEBUG "CURR_remote:${CURR_remote}| CURR_url:${CURR_url}| CURR_project:${CURR_project}| CURR_path:${CURR_path}"
-$DEBUG "CURR_branch:${CURR_branch}| CURR_upstream:${REPO_UPSTREAM}| CURR_destbranch:${REPO_DEST_BRANCH}| CURR_nrepos:${CURR_nrepos}"
+$DEBUG "CURR_branch:${CURR_branch}| CURR_upstream:${REPO_UPSTREAM}| CURR_destbranch:${REPO_DEST_BRANCH}| CURR_ntot:${CURR_ntot}"
 $DEBUG "input param: cmd: [$cmd]| target: ${target}| source: ${source}"
 $DEBUG "positional params: [$0][$1][$2][$3][${@:4}]"
 
@@ -210,11 +210,17 @@ case ${CURR_branch} in
         if [ "$(cat ${tempf} | head -1)" = "${JSON_IDFY}" ]; then
             if [ "$(cat ${tempf} | sed -n '2p')" = "[]" ]; then clog "executed" "result is nothing"; cat ${tempf} | tail -n +3;  RET=FAIL1
             elif [ "$(cat ${tempf} | sed -n '2p')" = "{" ]; then cat "${tempf}" | sed "1d" | jq -cC ".|${PRINT_INFO}"; RET=OKAY1
-            else cat "${tempf}" | sed '1d'| jq  -cC '.[]|${PRINT_INFO}';  RET=OKAY2
+            else cat "${tempf}" | sed '1d'| jq  -cC ".[]|${PRINT_INFO}";  RET=OKAY2
             fi
         elif [ -z "$(cat ${tempf} | head -1)" ]; then clog "warn" "API well executed, but you must check the result by hand." ;  RET=OKAY3
         else cat "${tempf}" ;  RET=FAIL2
         fi
+        
+        ## handle for Ecmd
+        [[ "${RET}" =~ "FAIL" ]] && cflag=true
+        #to break forall by sending ERROR
+
+        if "${cflag}"; then err "result is failed"; exit 1; fi
         #show result summury of each git repository after running a command
-        printf "%4.4s: [%4.4s] %s\n" "${RET}" "${CURR_n}" "${CURR_project}" >> ${tempr}
+        printf "%4.4s: [%4.4s] %s\n" "${RET}" "${CURR_n}" "${CURR_project}" >> ${tempr}        
 esac;
