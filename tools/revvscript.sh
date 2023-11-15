@@ -60,7 +60,7 @@ BAR="~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 NCOL='\e[0m'; YELLOW='\e[1;33m'; RED='\e[1;31m'; GREEN='\e[1;32m';
 JSON_IDFY=")]}'"
 tempr=/tmp/revv.ret
-tempf=/tmp/aaa$(mktemp)
+tempf=$(mktemp)
 if [ ! -f "${tempf}" ]; then touch "${tempf}"; fi
 
 clog()   { printf "${GREEN}$1 ${NCOL} ${@:2}\n" ;}
@@ -69,22 +69,22 @@ err()    { printf "${RED} $BASH_SOURCE [ERROR] ${NCOL} ${*}"   ;}
 
 ## setting for debugging
 ## DEBUG=[ false | "printf ${RED}%s${NCOL}\n" ]
-## filter flag and pass to command to cmd
+## type flag and pass to command to cmd
 DEBUG=false
 case ${cmd::1} in
-  P|E|O) dflag=${cmd::1}; cmd=${cmd:1}                                    ;;  ## print on
-      D) dflag=${cmd::1}; cmd=${cmd:1};  DEBUG="printf ${RED}%s${NCOL}\n" ;;  ## debug print & run
+  P|E|O) tflag=${cmd::1}; cmd=${cmd:1}                                    ;;  ## print on
+      D) tflag=${cmd::1}; cmd=${cmd:1};  DEBUG="printf ${RED}%s${NCOL}\n" ;;  ## debug print & run
 esac
 
 
-## cflag is true, run current cmd and stop all next.
-cflag=false
+## stop flag is true, run current cmd and stop all next.
+sflag=false
 showRUN(){
-    case ${dflag} in
-    E) "$@"; [ $? -ne 0 ] && cflag=true  ;; #run command, break if error occurred.
+    case ${tflag} in
+    E) "$@";                             ;; #run command, break if error occurred.
     P) echo "$@";                        ;; #show command without running cmd, continue.
-    O) cflag=true; echo "$@";            ;; #show only 1st command & break.
-    D) cflag=true; set -x; "$@";         ;; #show only 1st command & run & break.
+    O) sflag=true; echo "$@";            ;; #show only 1st command & break.
+    D) sflag=true; set -x; "$@";         ;; #show only 1st command & run & break.
     *) "$@"                              ;; #run command, continue regardless of result.
     esac
 }
@@ -137,9 +137,9 @@ SEP='~'
 case ${cmd}${SEP}${target} in
     *\**) target="${target//\*/}"; clog "[warn]" "asterisk * is not permitted in gerrit, must check"
     ;; branch*~@branch) target="${CURR_branch}"
-    ;; project*~@project) target="${CURR_project}"
-    ;; branchlist~) : ##allow target=null    
-    ;; branch*~|project*~) err "target is null, stop some commands may be not stopped, must check"; exit 1; 
+    ;; project*~) target="${CURR_project}"
+    ;; branchlist~) : ##allow target=null
+    ;; branch*~) err "target is null, stop some commands may be not stopped, must check"; exit 1; 
 esac
 case $source in
     @branch) source="${CURR_branch}"
@@ -215,12 +215,13 @@ case ${CURR_branch} in
         elif [ -z "$(cat ${tempf} | head -1)" ]; then clog "warn" "API well executed, but you must check the result by hand." ;  RET=OKAY3
         else cat "${tempf}" ;  RET=FAIL2
         fi
-        
+
+        echo [$CURR_n] [$RET] [$sflag]
         ## handle for Ecmd
-        [[ "${RET}" =~ "FAIL" ]] && cflag=true
+        [[ "${RET}" =~ "FAIL" ]] && sflag=true
         #to break forall by sending ERROR
 
-        if "${cflag}"; then err "result is failed"; exit 1; fi
+        if "${sflag}"; then err "stopped by stopflag"; exit 1; fi
         #show result summury of each git repository after running a command
         printf "%4.4s: [%4.4s] %s\n" "${RET}" "${CURR_n}" "${CURR_project}" >> ${tempr}        
 esac;
