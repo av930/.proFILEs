@@ -1978,8 +1978,8 @@ EOF
 
                 echo "flag_forall=${@:2} #print selected gits" ; #setgit is all next cmd from @:2
                 source  <(echo 'flag_forall="${@:2}"'); return 0
-    ;; *branch*|Ebranch*|Pbranch*|Obranch*|Dbranch*) :
-    ;; project|Eproject*|Pproject*|Oproject*|Dproject*) :
+    ;; branch*|?branch*) :
+    ;; project*|?project*) :
     ;;      *)  err "please check usage: not registerd cmd, use 'revv forall help' "; return 1
     esac
 
