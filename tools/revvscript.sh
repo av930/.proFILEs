@@ -52,8 +52,8 @@
 ## USER input
 cmd=$1         #branch, project
 key_http=$2
-target=$3      #branch-name, project-name
-source=$4      #base-branch-name, parent-project-name
+target=$3      #branch-name, parent-project-name
+source=$4      #base-branch-name
 
 ## default variable & functions
 BAR="~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
@@ -135,11 +135,11 @@ esac;
 ## case branch target & source
 SEP='~'
 case ${cmd}${SEP}${target} in
-    *\**) target="${target//\*/}"; clog "[warn]" "asterisk * is not permitted in gerrit, must check"
+                  *\**) target="${target//\*/}"; clog "[warn]" "asterisk * is not permitted in gerrit, must check"
     ;; branch*~@branch) target="${CURR_branch}"
-    ;; project*~) target="${CURR_project}"
-    ;; branchlist~) : ##allow target=null
-    ;; branch*~) err "target is null, stop some commands may be not stopped, must check"; exit 1; 
+          ;; project*~) :
+        ;; branchlist~) : ##allow target=null
+           ;; branch*~) err "target is null, stop some commands may be not stopped, must check"; exit 1; 
 esac
 case $source in
     @branch) source="${CURR_branch}"
@@ -151,8 +151,8 @@ case $cmd in
     ;;                              branchlist) target="?m=${target}"
     ;;     branchpre|branchaddpre|branchdelpre) target="${target}${REPO_RREV}"
     ;;  branchpost|branchaddpost|branchdelpost) target="${REPO_RREV}${target}"
-    ;;  project) target="${REPO_PROJECT}"
-    ;;  *) err "command not recongnized, check usage"; exit 1
+    ;;                                project*) :
+    ;;                                       *) err "command not recongnized, check usage"; exit 1
 
 esac
 
@@ -170,8 +170,8 @@ $DEBUG "input param: cmd: [$cmd]| target: ${target}| source: ${source}"
 $DEBUG "positional params: [$0][$1][$2][$3][${@:4}]"
 
 
-cmd_branch="curl -su $REPO__$USER:${key_http} ${CURR_url}/a/projects/${REPO_PROJECT//'/'/'%2F'}/branches/${target} -o ${tempf}"
-cmd_project="curl -su $REPO__$USER:${key_http} ${CURR_url}/a/projects/${REPO_PROJECT//'/'/'%2F'} -o ${tempf}"
+cmd_branch="curl -su $REPO__$USER:${key_http} ${CURR_url}/a/projects/${CURR_project//'/'/'%2F'}/branches/${target} -o ${tempf}"
+cmd_project="curl -su $REPO__$USER:${key_http} ${CURR_url}/a/projects/${CURR_project//'/'/'%2F'} -o ${tempf}"
 ## main handler by git branch
 case ${CURR_branch} in
     __branch_A                                      |\
@@ -196,12 +196,15 @@ case ${CURR_branch} in
                     showRUN ${cmd_project}
         ;;     projectadd)
                     showRUN ${cmd_project} -X PUT
-                    showRUN ${cmd_project}/parent -X PUT -H "Content-Type: application/json" --data "{"parent": "${source}"}"
+                    showRUN ${cmd_project}/parent -X PUT -H "Content-Type: application/json" --data "{"parent": "${target}"}"
+        ;;     projectdel)
+                    echo ${CURR_url}/admin/repos/${CURR_project//'/'/'%2F'},commands; exit 0
         ;;     *)
                     err "command not recongnized!"; exit 1
         esac
         set +o noglob
 
+        ## parse result & 
         case $cmd in
         branch*)   PRINT_INFO='{ref,revision}';;
         project*)  PRINT_INFO='{name,parent}' ;;
@@ -216,7 +219,7 @@ case ${CURR_branch} in
         else cat "${tempf}" ;  RET=FAIL2
         fi
 
-        echo [$CURR_n] [$RET] [$sflag]
+        $DEBUG [$CURR_n] [$RET] [$sflag]
         ## handle for Ecmd
         [[ "${RET}" =~ "FAIL" ]] && sflag=true
         #to break forall by sending ERROR
