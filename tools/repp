@@ -1968,6 +1968,10 @@ function revvforall(){
 			   ex) revv forall branchdel     @branch                     # delete current branch (current remote branch)
 			   ex) revv forall branchdelpre  new_ @branch                # delete branch with name of new_<current_branch> from current
 			   ex) revv forall branchdelpost _new @branch                # delete branch with name of <current_branch>_new from current
+
+			   ex) revv forall project                                   # check if projects exist listed in manifest
+			   ex) revv forall projectadd    parent                      # add projects listed in manifest
+			   ex) revv forall projectdel                                # list up all url can delete the git
 EOF
             return 0
     ;; setgit)  info "setgit is delivered to 'repo forall <git list>', this setting is sustain until reset it"
@@ -1978,9 +1982,9 @@ EOF
 
                 echo "flag_forall=${@:2} #print selected gits" ; #setgit is all next cmd from @:2
                 source  <(echo 'flag_forall="${@:2}"'); return 0
-    ;; branch*|?branch*) :
+    ;;   branch*|?branch*) :
     ;; project*|?project*) :
-    ;;      *)  err "please check usage: not registerd cmd, use 'revv forall help' "; return 1
+    ;;                  *)  err "please check usage: not registerd cmd, use 'revv forall help' "; return 1
     esac
 
     set -o noglob
