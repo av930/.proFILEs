@@ -1989,15 +1989,16 @@ EOF
     #test case all) revv forall branchlist, gitt branch list '*', revv forall branchlist '*mas*'
     [[ "${target}" =~ "*" ]] && clog "[warn]" "asterisk * is not permitted in gerrit, automatically removed"
     case ${cmd::1} in
-    O|D|E) repo forall ${flag_forall} -evcj1 bash 'revvscript.sh' $cmd ${key} ${target//\*/} ${source} 2> /dev/null
-    ;;P|*) repo forall ${flag_forall}  -vcj4 bash 'revvscript.sh' $cmd ${key} ${target//\*/} ${source}
+      O|D) repo forall ${flag_forall}                   -evcj1 bash 'revvscript.sh' $cmd ${key} ${target//\*/} ${source} 2>/dev/null
+    ;;  E) ## if missing-project exists, repo forall -e option cannot stop bash subprocess, so continue to end
+           err $(repo forall -c '') #only print log: skipping project
+           repo forall ${flag_forall} --ignore-missing -evcpj1 bash 'revvscript.sh' $cmd ${key} ${target//\*/} ${source} 2>/dev/null
+    ;;P|*) repo forall ${flag_forall}                   -vcpj4 bash 'revvscript.sh' $cmd ${key} ${target//\*/} ${source}
     esac
 
     set +o noglob
-    #supress show result msg
-    case ${cmd::1} in
-    P|O|D) return 0
-    esac
+    #supress show result msg, only E|NONE type show log.
+    case ${cmd::1} in  P|O|D) return 0; esac
     
     read -p $'\n\nshow result log: [ctrl+c: exit | enter: continue]? '
     bar inline ""
