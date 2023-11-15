@@ -46,7 +46,10 @@
 # revv forall branchdel     @branch                     # 현재 branch 삭제(정확히는 gerrit의 remote branch를 삭제함)
 # revv forall branchdelpre  new_ @branch                # 현재 branch기준으로 new_<current_branch> 라는 branch 삭제
 # revv forall branchdelpost _new @branch                # <current_branch>_new 삭제하는 명령만 출력
-
+# revv forall project                                   # manifest에 기록된 모든 프로젝트가 존재하는지 확인
+# revv forall projectadd    parent_git                  # manifest에 기록된 모든 프로젝트를 추가및 부모설정
+# revv forall projectdel                                # manifest에 기록된 모든 프로젝트에 대해 삭제가 가능한 link제공
+                                                        # gerrit은 project를 삭제할수 있는 cli cmd는 제공하지 않음.
 
 ###### setting for env
 ## USER input
