@@ -1754,7 +1754,7 @@ EOF
 
 
 
-function revvgerrit(){
+function revvproject(){
 ## ---------------------------------------------------------------------------
 
 # read information from gerrit
@@ -1803,6 +1803,7 @@ EOF
             curl -su ${ACCOUNT}:${key} ${server}/a/accounts/${source}/groups |sed '1d'| jq -cC '.[]|{name, created_on}' | more -60
 
     ;;    sshkey~*)
+            info "config: " "${server}/na/settings/#SSHKeys"
             bar outline "get registered SSH-key for account [${source}] in server [$server]"
             curl -su ${ACCOUNT}:${key} ${server}/a/accounts/${source}/sshkeys |sed '1d'| jq -cC '.[]|{ssh_public_key, comment}'
 
@@ -1819,6 +1820,8 @@ EOF
             curl -su ${ACCOUNT}:${key} ${server}/a/groups/${source}/members|grep ${target}
 
     ;;     group~*)
+            info "config: " "${server}/admin/groups/q/filter:${source}"
+            info "please visit url for creating & removing user/group"
             bar inline "find group by name"
             curl -su ${ACCOUNT}:${key} ${server}/a/groups/?m=${source} |sed '1d'| jq '.'
             bar inline "list sub-group by ${source} group"
@@ -1891,6 +1894,41 @@ EOF
             bar inline "child-project info inherited from ${source}, plz wait..."
             curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/children/?recursive| sed '1d'| jq  -cC '.[].name' | more -60
             printf "\n\n"
+    ;;*)    err "please check command ex)revv project help"
+    esac
+}
+
+
+
+function revvbranch(){
+## ---------------------------------------------------------------------------
+
+# read information from gerrit
+# $1 account
+# $2 server
+# $3 gitproject
+# $4 branch
+    local cmd=$1
+    local subcmd=$2
+    local server=$(getserver ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
+    local key=$(ende_code dev $(getserver ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub))
+    local source=${3:-$USER}
+    local target=$4
+    local extra=$5
+    local file=$(mktemp)
+
+
+    #local branch=$4
+
+    local SEP='~'
+    case ${cmd}${SEP}${subcmd} in
+           *~help)
+            echo "check your cmd [${cmd}]"; cat <<-EOF
+			usage) revv branch    na mustang/tm/src tsu_25.5my_release         # find branch with branch-name
+			usage) revv branchadd na mustang/tm/src tsu_25.5my_release_new     # create branch
+			usage) revv branchdel na mustang/tm/src tsu_25.5my_release_new     # remove branch
+			usage) revv commit    na 57a4eeeca914                              # get change_id
+EOF
 
     ;;branchadd~*)
             bar inline "create branch with base revision"
@@ -1913,7 +1951,7 @@ EOF
                 return 1; 
             fi
             curl -su ${ACCOUNT}:${key} ${server}/a/changes/?q=${change_id}
-    ;;*)    err "please check command ex)revv project help, revv branch help"
+    ;;*)    err "please check command ex)revv branch help"
     esac
 }
 
@@ -2180,7 +2218,8 @@ case "$1" in
     ;;    info)      reppcheck_initvar gittrevv        &&  revvinfo  "${@:2}"
     ;;   debug)      reppcheck_initvar gittrevv        &&  revvdebug "${@:2}"
     ;;  forall)      reppcheck_initvar repprevv        &&  revvforall "${@:2}"
-    ;;       *)      reppcheck_initvar repprevv        &&  revvgerrit "${@:1}"
+    ;; branch*)      reppcheck_initvar repprevv        &&  revvbranch "${@:1}"
+    ;;       *)      reppcheck_initvar repprevv        &&  revvproject "${@:1}"
 esac
 return $ret
 }
