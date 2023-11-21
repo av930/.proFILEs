@@ -181,7 +181,7 @@ alias kil='_kil(){ echo "kill -SIGTERM -- -[PGID]"; kill -SIGTERM -- -$1 ;}; _ki
 alias ls='ls --color=auto'
 alias lls='echo -n size-base; ls -agohrS'
 alias llt='echo -n time-base; ls -agohrt'
-alias lld='echo -n dir-time-base; ls -ltd */'
+alias lld="echo -n dir-time-base; ls -rtlp | grep -E '(*/|->)' "
 alias ll='ls -althrF --color=auto --show-control-chars'
 alias dir='ls -al -F --color=auto| grep /'
 alias grep='grep --color=auto'

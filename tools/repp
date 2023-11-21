@@ -1754,7 +1754,7 @@ EOF
 
 
 
-function revvproject(){
+function revvaccount(){
 ## ---------------------------------------------------------------------------
 
 # read information from gerrit
@@ -1778,6 +1778,7 @@ function revvproject(){
     case ${cmd}${SEP}${subcmd} in
            *~help)
             echo "check your cmd [${cmd}]"; cat <<-EOF
+			usage) revv user      na joongkeun.kim                             # 계정과 그룹이 존재하는지 확인한다.
 			usage) revv user      na joongkeun.kim                             # check account is existed and its groups
 			   ex) revv user      na joon                                      # check all accounts named joon
 			usage) revv sshkey    na joongkeun.kim                             # get registered SSH-KEY
@@ -1786,15 +1787,6 @@ function revvproject(){
 			usage) revv groupadd  na sa515m_developer joongkeun.kim            # add member to group
 			usage) revv groupdel  na sa515m_reviewer  joongkeun.kim            # delete member from group
 			usage) revv groupmem  na sa515m_reviewer  joongkeun.kim            # check member is in group and its sub-groups
-			usage) revv project   na mustang/tm/src                            # find project with project-name
-			usage) revv project   na vendor/qct/sa515m/_lge_only               # find project and its child projects
-			usage) revv projectadd na sample/target sample/parent              # add git project from parent            
-			usage) revv projectadd na sample/target                            # add git project from All-project
-			usage) revv projectdel na sample/target                            # get remove page url in gerrit
-			usage) revv branch    na mustang/tm/src tsu_25.5my_release         # find branch with branch-name
-			usage) revv branchadd na mustang/tm/src tsu_25.5my_release_new     # create branch
-			usage) revv branchdel na mustang/tm/src tsu_25.5my_release_new     # remove branch
-			usage) revv commit    na 57a4eeeca914                              # get change_id
 EOF
     ;;      user~*)
             bar inline "check if account is existed & get account info "
@@ -1829,6 +1821,42 @@ EOF
             bar inline "show group member by ${source} group to its decendents"
             curl -su ${ACCOUNT}:${key} ${server}/a/groups/${source}/members?recursive |sed '1d'| jq -cC '.[]|{name, email}'  | more -60
 
+    ;;*)    err "please check command ex)revv user help, revv group help"
+    esac
+}
+
+
+
+function revvproject(){
+## ---------------------------------------------------------------------------
+
+# read information from gerrit
+# $1 account
+# $2 server
+# $3 gitproject
+# $4 branch
+    local cmd=$1
+    local subcmd=$2
+    local server=$(getserver ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
+    local key=$(ende_code dev $(getserver ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub))
+    local source=${3:-$USER}
+    local target=$4
+    local extra=$5
+    local file=$(mktemp)
+
+
+    #local branch=$4
+
+    local SEP='~'
+    case ${cmd}${SEP}${subcmd} in
+           *~help)
+            echo "check your cmd [${cmd}]"; cat <<-EOF
+			usage) revv project   na mustang/tm/src                            # find project with project-name
+			usage) revv project   na vendor/qct/sa515m/_lge_only               # find project and its child projects
+			usage) revv projectadd na sample/target sample/parent              # add git project from parent            
+			usage) revv projectadd na sample/target                            # add git project from All-project
+			usage) revv projectdel na sample/target                            # get remove page url in gerrit
+EOF
     ;;projectadd~*)
             bar inline "check if project already existed"
             local temp=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} |sed '1d' | jq -cC '.name')
@@ -2218,8 +2246,10 @@ case "$1" in
     ;;    info)      reppcheck_initvar gittrevv        &&  revvinfo  "${@:2}"
     ;;   debug)      reppcheck_initvar gittrevv        &&  revvdebug "${@:2}"
     ;;  forall)      reppcheck_initvar repprevv        &&  revvforall "${@:2}"
+    ;;  commit)      reppcheck_initvar repprevv        &&  revvbranch "${@:1}"
     ;; branch*)      reppcheck_initvar repprevv        &&  revvbranch "${@:1}"
-    ;;       *)      reppcheck_initvar repprevv        &&  revvproject "${@:1}"
+    ;;project*)      reppcheck_initvar repprevv        &&  revvproject "${@:1}"
+    ;;       *)      reppcheck_initvar repprevv        &&  revvaccount "${@:1}"
 esac
 return $ret
 }
