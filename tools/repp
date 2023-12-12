@@ -1145,8 +1145,9 @@ function gitt_initvar(){
     source repp                             # reload repp script"
     )
 
-    GITT_REVIEW=$(git config --get-regexp remote.*.review|cut -d' ' -f2|head -1)
     GITT_URL=$(git config --get-regexp remote.${GITT_REMOTE}.url|cut -d' ' -f2|head -1)
+    GITT_REVIEW=$(git config --get-regexp remote.*.review|cut -d' ' -f2|head -1)
+    GITT_REVIEW=${GITT_REVIEW:="${GITT_URL/${GITT_PROJECT}/}"}
     GITT_PATH=$(git rev-parse --show-toplevel)
     return 0
 }
@@ -1242,17 +1243,17 @@ function gittinfo(){
 
     ## "error: must check" must be checked!!!
     bar inline "show all remote info"
-    clog ' remote:' ${GITT_REMOTE:="error: must check"}
-    clog 'project:' ${GITT_PROJECT:="not defined"}
-    clog ' branch:' ${GITT_BRANCH:="error: must check"}
-    clog ' review:' ${GITT_REVIEW:="not defined"}
-    clog '    url:' ${GITT_URL:="error: must check"}
+    clog ' remote:' ${GITT_REMOTE:="error: must check"}                        #remote name
+    clog 'project:' ${GITT_PROJECT:="not defined"}                             #project name
+    clog ' branch:' ${GITT_BRANCH:="error: must check"}                        #branch name
+    clog ' review:' ${GITT_REVIEW:="not defined"}                              #git review site
+    clog '    url:' ${GITT_URL:="error: must check"}                           #git review url
 
     ##review system check
     case $(git config --get-regexp remote|cut -d' ' -f2) in
       help)             echo "site customization"
     ;;*github.com*)     GIT_SITE=$(printf "https://%s" ${GITT_URL}|sed -E 's#^.*github.com:(.*.git)$#http://github.com/\1#')
-    ;;*vgit.lge.com*manifest*) 
+    ;;*vgit.lge.com:*) 
         case ${GITT_URL} in #remove starting string 'vgit.lge.com:29420/'
            *vgit.lge.com:29420*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'na' ${review_gerrit}/${GITT_URL##*0/} )
         ;; *vgit.lge.com:29430*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'eu' ${review_gerrit}/${GITT_URL##*0/} )
@@ -1263,22 +1264,20 @@ function gittinfo(){
         esac
     ;;''|*)             GIT_SITE=$(printf "%s/${review_gerrit}/%s" "$(echo ${GITT_REVIEW}|sed -E 's#(.*)[/]$#\1#')" ${GITT_PROJECT} )
     ;;esac
-    clog "review system site:" ${GIT_SITE}
-    clog "url on gitiles & gerrit for branch:" "(${GITT_BRANCH})"
-    clog "gitiles: " ${GIT_SITE/"${review_gerrit}"/"plugins/gitiles"}/+/refs/heads/${GITT_BRANCH}
-    clog " gerrit: " ${GIT_SITE/"${review_gerrit}/"/"gitweb?p="}.git\;a=shortlog\;h=refs/heads/${GITT_BRANCH}
+    clog "review system site:" ${GIT_SITE}                                     #http review url
+    clog "gitiles: " ${GIT_SITE/"${review_gerrit}"/"plugins/gitiles"}/+/refs/heads/${GITT_BRANCH}                #source from gitiles
+    clog " gerrit: " ${GIT_SITE/"${review_gerrit}/"/"gitweb?p="}.git\;a=shortlog\;h=refs/heads/${GITT_BRANCH}    #source from gerrit
 
     bar inline "git clone & push commands"
-    clog " git clone:" "git clone ${GITT_URL} -b ${GITT_BRANCH}"
+    clog " git clone:" "git clone ${GITT_URL} -b ${GITT_BRANCH}"               #make git clone command
     TEMP=$(printf "git push $GITT_REMOTE HEAD:refs/heads/%s" ${GITT_BRANCH})
-    clog " git push review:" ${TEMP/\/heads/\/for}    
-    clog " git push direct:" $TEMP
+    clog " git push review:" ${TEMP/\/heads/\/for}                             #make git push command for
+    clog " git push direct:" $TEMP                                             #make git push command head
 
-    bar inline "recent commit info"
+    bar inline "recent commit info"                                            #extract last commit info
     git show --stat --oneline HEAD
 
-    bar inline "last synced time"
-    #show last synced time
+    bar inline "last synced time"                                              #extract sync time
     oldIFS=${IFS}; IFS='';
     if [ -f ${GITT_PATH}/.git/FETCH_HEAD ]; then clog "last manifest-synced date: " $(stat -c %y ${GITT_PATH}/.git/FETCH_HEAD );
     else clog "last manifest-synced date(check date of files below):" "\n$(ls -lct ${GITT_PATH}/.git| tail -1)";fi
