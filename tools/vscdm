@@ -163,8 +163,9 @@ function read_config(){
 
     ## retrieve DB by HEREDOC
     MYSQL_PWD=$(ende_code def vscdm) mysql -hvscdm.lge.com -uroot vscdm_db -sB <<QUERY >${source}
-    SELECT * FROM config_tbl WHERE is_disabled=0 and cnf_nm = '${product}'
+    SELECT  FROM config_tbl WHERE is_disabled=0 and cnf_nm = '${product}'
 QUERY
+
     ## remove empty line
     #sed -i '/^[[:space:]]$/d' ${source}
 
@@ -180,25 +181,43 @@ QUERY
 }
 
 
+
+function clone_config(){
+## ---------------------------------------------------------------------------
+#product=honda_25_5my
+#field
+    product=${1:=${product}}
+    local target=$2
+    #product=${1:=${product:?"vscdm [empty-product]"}}
+    local source=$(mktemp)
+
+    MYSQL_PWD=$(ende_code def vscdm) mysql -hvscdm.lge.com -uroot vscdm_db -sB <<QUERY >${source}
+    INSERT INTO config_tbl ( cnf_id, '${target}', proj_id, proj_cd, cmmt_msg_rul, proj_cnf, file_sys_cnf, bld_data, rvr, rls_cnf, is_disabled, reg_user_id, reg_dt, reg_date )
+    SELECT cnf_id, cnf_nm, proj_id, proj_cd, cmmt_msg_rul, proj_cnf, file_sys_cnf, bld_data, rvr, rls_cnf, is_disabled, reg_user_id, reg_dt, reg_date FROM config_tbl WHERE is_disabled=0 and cnf_nm = '${product}'
+QUERY
+    cat ${source}
+}
+
+
 function handle_commands(){
 ## ---------------------------------------------------------------------------
 product=$1
 local ret=0
 local SEP='~'
 local field=$2
+local target=$3
     echo "${product}${SEP}${field}" 
     case "${product}${SEP}${field}" in
-                 *${SEP}build) read_config ${product} "build_data"
-        ;;     *${SEP}project) read_config ${product} "proj_config"
-        ;;     *${SEP}release) read_config ${product} "release_cfg"
-        ;;        *${SEP}file) read_config ${product} "file_system_config"
-        ;;      *${SEP}review) read_config ${product} "reviewers"
-        ;;      *${SEP}commit) read_config ${product} "commit_msg_rule"
-        ;;         *${SEP}all) read_config ${product} ""
-        ;;        help${SEP}*) handler_menu "${@}"        
+                 *${SEP}build) read_config  ${product} "build_data"
+        ;;     *${SEP}project) read_config  ${product} "proj_config"
+        ;;     *${SEP}release) read_config  ${product} "release_cfg"
+        ;;        *${SEP}file) read_config  ${product} "file_system_config"
+        ;;      *${SEP}review) read_config  ${product} "reviewers"
+        ;;      *${SEP}commit) read_config  ${product} "commit_msg_rule"
+        ;;         *${SEP}all) read_config  ${product} 
+        ;;       *${SEP}clone) : #clone_config ${product} ""
+        ;;        help${SEP}*) handler_menu "${@}"
         ;;     ${SEP}|*${SEP}) read_product ${product} 
-
-
           return $ret;;
     esac
 }
