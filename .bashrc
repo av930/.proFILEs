@@ -81,6 +81,8 @@ export HISTFILESIZE=40000
 export HISTTIMEFORMAT='[%Y-%m-%d_%H] '
 
 #update history only login
+#suppress update_history log
+#export PROMPT_COMMAND="BASH_XTRACEFD=7; update_history 7>/dev/null; $PROMPT_COMMAND"
 function update_history(){
     history -a
     if [ -n "${STY}" ] && [ "${path}" != "${PWD}" ] ; then  #mean [ ${TERM} = 'screen' ]
@@ -89,11 +91,12 @@ function update_history(){
 		|| printf "\033k%s\033\\" "${PWD##*/}"
         path=${PWD}
     fi
-    screen -X chdir "$PWD" > /dev/null
+    screen -X chdir "$PWD" 
     #history -c
-}
-#update_history
+} &>/dev/null
+#update_history 
 export PROMPT_COMMAND="update_history; $PROMPT_COMMAND"
+    
 shopt -s cmdhist
 shopt -s lithist
 

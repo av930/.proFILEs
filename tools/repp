@@ -915,7 +915,7 @@ function reppcheck_server(){
     local file_error="$(mktemp)"
     #echo "\$ ssh -T $user@$server -p $2 -vvv" ;
     bar inline "step3.1-localserver: [remote] check if sshd is serviced on this port $port "
-    clog solution "check port num is correct? check account and ssh-key is matched and registered?"
+    clog try "check port num is correct? check account and ssh-key is matched and registered?"
 
     #echo "ssh -T $user@$server -p $port -vvv 2> $file_error"
     echo \n| ssh -T $user@$server -p $port -vvv 2> $file_error
@@ -936,12 +936,12 @@ function reppcheck_server(){
     esac
 
     bar inline "step3.2-localserver: [remote] check if I can access git project from local-server"
-    clog solution "check git name path is correct and can access"
+    clog try "check git name path is correct and can access"
     ret=$(ssh $user@$server -p $port gerrit ls-projects --prefix ${gitproject})
     [ -n "$ret" ] &&  echo "gitproject existed and accessed [${gitproject}]" || err "check git project is existed or permission allowed [${gitproject}]"
 
     bar inline "step3.3-localserver: [remote] check if I can access the branch from local-server (default: master)"
-    clog solution "check branch name path is correct and can access"
+    clog try "check branch name path is correct and can access"
     #ssh $user@$server -p $port gerrit ls-projects --prefix ${gitproject} -b ${branch}
     ret=$(ssh $user@$server -p $port gerrit ls-projects --prefix ${gitproject} -b ${branch})
     [ -n "$ret" ] &&  echo "branch existed and accessed [${branch}]" || err "check git branch is existed or permission allowed [${branch}]"
@@ -1015,12 +1015,12 @@ EOF
     under "step1: check basic server environments\n"
     #local port=$(echo ${server_port} | grep -oP '(?<=:)[0-9]+(?=/)')
     bar inline "step1.1-ssh: [local] check if ssh is installed"
-    clog solution "install proper version of ssh"
+    clog try "install proper version of ssh"
     if [ -x "$(command -v ssh)" ]; then  log "ssh is installed in [$(which ssh)]"; else err "ssh is not installed, install it"; fi
 
     if [ -z $oriserver ]; then reppconnect help && return 1;fi
     bar inline "step1.2-tcp: [remote] check if server tcp port is well listened"
-    clog solution "check port num is correct? firewall is active? internet is on?"
+    clog try "check port num is correct? firewall is active? internet is on?"
     showRUN timeout 5 bash -c "</dev/tcp/${server}/$port"
     if [ $? == 0 ];then echo "server $server over port $port is listened";
     else echo "server $server over port $port is not listened, please contact server manager"; fi
@@ -1165,7 +1165,7 @@ function revv_initvar(){
         ret=1
     fi
 
-    if ! revvcheck_server ${server:-na} ${ACCOUNT} checkapi; then
+    if ! revvcheck_server ${server:-na} ${ACCOUNT}; then
         err "please check correct account&key is saved in ~/.key_${key_id} in $HOME dir"
         ret=1
     fi
@@ -1674,17 +1674,14 @@ function revvcheck_server(){
 # usage) revv connect na joongkeun.kim tiger/tools tiger_release
 # $1: target user
 # $2: target review system
-# $3: gitproject (if it is 'checkapi', it check only API validation)
+# $3: gitproject 
 # $4: branch
 
     local server=$1
     local user=$2
-    local oriproject=$3 ;
-    local gitproject=${oriproject//'/'/'%2F'}
-    local branch=$4
+    local flag=$3
     local key_id=$(getserver ${server} sub)
     local key=$(ende_code dev ${key_id})
-    local status
 
     #local port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)')
     if [ -z "${server}" ];
@@ -1692,36 +1689,107 @@ function revvcheck_server(){
     else port=$(getserver ${server} port); server=$(getserver ${server} http);
     fi
 
-    [ "${oriproject}" != "checkapi" ] && (
-    bar inline "step2.1-gerritserver: [remote] check if gerrit server is active by $ACCOUNT"
-    clog solution "check gerrit service is online from web"
-    )
-    status=$(curl -su ${ACCOUNT}:${key} ${server}/a/config/server/version )
-    case ${status} in
-    *[2-9].[0-9].[0-9]*)   echo "ok. version is verified " > /dev/null;;
-    *)                     err "gerrit is not working, please check"; return 1;;
-    esac
-
-    [ "${oriproject}" = "checkapi" ] && return 0
-
-    bar inline "step2.2-gerritserver: [remote] check if gerrit is accessed by ${user} (default: input>current>vgit-na)"
-    clog solution "check gerrit current account in gerrit system"
-    if [ -z "${oriproject}" ];then info "usage) repp connect testaccount na tiger/tools tiger_release" && return 1;fi
-    if [[ "$oriproject" == *.git* ]]; then err ".git postfix must be removed in [$oriproject]" && return 1; fi
-    status=$(curl -su ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${user})
-    [[ "$status" =~ "_account_id" ]] &&  echo "gerrit account existed [${user}]" || ( err "create gerrit account [${user}] by login" && return 1)
+    REVV_VER=$(curl -su ${ACCOUNT}:${key} ${server}/a/config/server/version |sed '1d'| jq -cC '.')
+    if ! [[ "${REVV_VER}" =~ [2-9].[0-9].[0-9]* ]]; then REVV_VER='NA'; err "gerrit is not working, please check"; return 1; fi
+    
+    if [ "${flag}" = "log" ]; then 
+        bar inline "step1.1-gerritserver: [remote] check if gerrit server is active by $ACCOUNT"
+        clog try "check gerrit service is online from web"
+        echo "ok. gerrit is working ${REVV_VER}"
+    fi
+    return 0
+}
 
 
-    bar inline "step2.3-gerritserver: [remote] check if git project is accessed by ${user} (default: input>current>manifests)"
-    clog solution "check git name path is correct and can access"
-    status=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject})
-    [[ "$status" =~ "ACTIVE" ]] &&  echo "git existed and accessed [${oriproject}]" || ( err "check git project path [${oriproject}]" && return 1)
 
-    bar inline "step2.4-gerritserver: [remote] check if branch is accessed by ${user} (default: input>current>master)"
-    clog solution "check branch name path is correct and can access"
+function revvcheck_account(){
+## ---------------------------------------------------------------------------
+# check gerrit is permitted for input user on git project > branch
+# usage) revv connect na joongkeun.kim tiger/tools tiger_release
+# $1: target user
+# $2: target review system
+# $3: gitproject 
+# $4: branch
+
+    local server=$1
+    local user=$2
+    local flag=$3
+    local key_id=$(getserver ${server} sub)
+    local key=$(ende_code dev ${key_id})
+    local ret=()
+
+    #local port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)')
+    if [ -z "${server}" ];
+    then port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)'); server=$(getserver ${port} http)
+    else port=$(getserver ${server} port); server=$(getserver ${server} http);
+    fi
+
+    readarray -d',' -t ret < <(curl -su ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${user}|sed '1d'| jq -c '.[]|{_account_id,username,name,email}'|sed  's/[{}"]//g')
+    ! [[ "${ret[*]}" =~ "${user}" ]] && (err "there is no account [${user}] in gerrit" && return 1)
+    
+    ##get username & accountID from gerrit
+    REVV_USERID="${ret[0]}"
+    REVV_USER="${ret[1]}"
+    
+    if [ "${flag}" = "log" ]; then 
+        bar inline "step1.2-gerritserver: [remote] check if gerrit is accessed by ${user}"
+        clog try "check current account is in gerrit system"
+        echo "ok. gerrit account existed: ${ret[@]}"
+        #declare -p ret
+    fi
+    return 0
+}
+
+
+
+function revvcheck_permission(){
+## ---------------------------------------------------------------------------
+# check gerrit is permitted for input user on git project > branch
+# usage) revv connect na joongkeun.kim tiger/tools tiger_release
+# $1: target user
+# $2: target review system
+# $3: gitproject 
+# $4: branch
+# $5: permission(https://gerrit-review.googlesource.com/Documentation/access-control.html#access_categories)
+#     Abandon,Create(Create Reference),Delete(Delete Reference),Forge Author, Forge Committer,Forge Server,Owner,Push,Direct Push
+#     Push Merge Commits,Create Annotated Tag,Read,Rebase,Revert,Submit,Submit (On Behalf Of),Edit Hashtags,Edit Topic Name
+#     
+
+    local server=$1
+    local user=$2
+    local oriproject=$3 ;
+    local gitproject=${oriproject//'/'/'%2F'}
+    local branch=$4
+    local perm=$5
+    local key_id=$(getserver ${server} sub)
+    local key=$(ende_code dev ${key_id})
+    local log ret
+
+    #local port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)')
+    if [ -z "${server}" ];
+    then port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)'); server=$(getserver ${port} http)
+    else port=$(getserver ${server} port); server=$(getserver ${server} http);
+    fi
+    if [ -z "${oriproject}" ];then info "guide) repp connect help" && return 1;fi
+
+    #curl -su vc.integrator:'UUmF3ZYZofW1JqRwEFe4g1tHbs1hLoVuVVKrxpvG0g' http://vgit.lge.com/as/a/projects/honda%2Flinux%2Fbuild_tsu/check.access?account=7986\&ref=refs%2fheads%2fmaster\&perm=read
+
+    bar inline "step2.3-gerritserver: [remote] check if git project is accessed by ${user}"
+    clog try "check git name path is correct and can access"
+    log=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject}/check.access?account=${REVV_USERID#*:})
+    ret=$( echo "${log}" |sed '1d'| jq -c '.')
+    ! [[ "${ret#*:}" =~ 200 ]] && (err "check gerrit project error: ${log}" && return 1)
+    echo "ok. gerrit account[${REVV_USER#*:}] can access by[read]: ${oriproject}"
+    
+    
+    bar inline "step2.4-gerritserver: [remote] check if branch is accessed by ${user}"
+    clog try "check branch name path is correct and can access"
     [ -z "${branch}" ] && branch="master"
-    status=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject}/branches?m=${branch})
-    [[ "$status" =~ "ref" ]] &&  echo "branch existed and accessed [${branch}]" || ( err "check git branch is existed or permission allowed [${branch}]" && return 1)
+    [ -z "${perm}" ] && perm="read"
+    log=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject}/check.access?account=${REVV_USERID#*:}\&ref=refs%2fheads%2f${branch}\&perm=${perm})
+    ret=$( echo "${log}" |sed '1d'| jq -c '.')
+    ! [[ "${ret#*:}" =~ 200 ]] && (err "check gerrit branch error: ${log}" && return 1)
+    echo "ok. gerrit branch[${branch}] existed and can accessed with[${perm}] permission by[${REVV_USER#*:}]" 
     
     return 0
 }
@@ -2466,6 +2534,7 @@ esac
 ##============================================================================
 ## Main
 ##============================================================================
+REVV_VER=
 GITT_REMOTE= &&GITT_PROJECT= &&GITT_BRANCH= &&GITT_REVIEW= &&GITT_URL= &&GITT_PATH=
 REPP_PATH= &&REPP_ROOT= &&REPP_REMOTE= &&REPP_PROJECT= &&REPP_URL= &&REPP_BRANCH= &&REPP_REPOURL= &&REPP_MIRROR= &&REPP_GROUPS= &&REPP_COUNT= &&REPP_CMD=
 REPP_REMOTELIST=()
