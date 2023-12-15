@@ -92,10 +92,12 @@ cat << PREFACE
  read config from VSCDM
  -------------------------------------------------------------------------------------------------
  o step: vscdm list >> vscdm [product] all >> vscdm [product] build
-
+ 모델찾기
  ex) vscdm help                    ## 명령어 설명을 보여준다.
- ex) vscdm                         ## 개발하는 모델을 보여준다. 기본값 최근 1년안에 수정한모델
- ex) vscdm 1month                  ## 최근 1달동안 수정한 모델만 보여준다.
+ ex) vscdm                         ## 개발하는 모델을 보여준다. 기본값 최근 1년안에 수정한 모든모델 
+ ex) vscdm 3month                  ## 최근 3달동안 수정한 모델만 보여준다. day, month, year 지원
+ ex) vscdm HONDA                   ## honda 라는 string을 가진 모든 모델
+ 내용보기
  ex) vscdm HONDA_25_5MY build      ## HONDA_25_5MY의 build 관련 설정을 보여준다.
  ex) vscdm HONDA_25_5MY all        ## HONDA_25_5MY의 모든 설정을 보여준다.
 ===================================================================================================
@@ -123,25 +125,31 @@ function read_product(){
 #cmd=honda_25_5my
 #field
     local cmd=$1
-    local source=$(mktemp)    
+    local source=$(mktemp)
     local format='date +%Y-%m-%d'
 
     case ${cmd} in
-          1month) cmd=$(${format} -d'1 month ago')
-        ;;6month) cmd=$(${format} -d'6 month ago')
-        ;; 2year) cmd=$(${format} -d'2 year ago')
-        ;;     *) 
-            ## 날짜입력포맷 잘못된 경우는 default 1년으로 처리
-            if ! [[ ${cmd} =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then 
-                cmd=$(${format} -d'1 year ago')
-                read -p  "default search date : ${cmd} or input 'vscdm help' "
-            fi
+            *day) cmd=$(${format} -d"${cmd:0:1} day ago")  ;            date="and reg_date >= '${cmd}'"
+        ;;*month) cmd=$(${format} -d"${cmd:0:1} month ago");            date="and reg_date >= '${cmd}'"
+        ;; ?year) cmd=$(${format} -d"${cmd:0:1} year ago") ;            date="and reg_date >= '${cmd}'" 
+        ;;     *) ## 날짜입력포맷 잘못된 경우는 default 1년으로 처리
+                  if [[ ${cmd} =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then date="and reg_date >= '${cmd}'"
+                  else 
+                      date="and reg_date >= '$(${format} -d'2 year ago')'"
+                      filter="and cnf_nm LIKE '%${cmd}%'"
+                      read -p  "default search date : 2 year or input 'vscdm help' "                       
+                  fi
     esac
-    
+
     #SELECT proj_cd FROM project_tbl WHERE is_disabled=0
+    
     MYSQL_PWD=$(ende_code def vscdm) mysql -hvscdm.lge.com -uroot vscdm_db -sB <<QUERY >${source}
-    SELECT cnf_nm FROM config_tbl WHERE is_disabled=0 and reg_date >= '${cmd}'
+    SELECT cnf_nm FROM config_tbl WHERE is_disabled=0 ${date} ${filter}
 QUERY
+
+    #SELECT cnf_nm FROM config_tbl WHERE is_disabled=0 ${date}
+    #SELECT cnf_nm FROM config_tbl WHERE is_disabled=0 and reg_date >= '${cmd}'
+    #SELECT cnf_nm FROM config_tbl WHERE is_disabled=0 and reg_date >= '${cmd}' and cnf_nm = 'honda_25_5my'
 
     ## extract json body
     cat ${source}| sed -E 's#(.*)_[0-9]+$#\1#' ${source} |sort -f|uniq |pr -4 -t -W200 
@@ -163,7 +171,7 @@ function read_config(){
 
     ## retrieve DB by HEREDOC
     MYSQL_PWD=$(ende_code def vscdm) mysql -hvscdm.lge.com -uroot vscdm_db -sB <<QUERY >${source}
-    SELECT  FROM config_tbl WHERE is_disabled=0 and cnf_nm = '${product}'
+    SELECT * FROM config_tbl WHERE is_disabled=0 and cnf_nm = '${product}'
 QUERY
 
     ## remove empty line
