@@ -81,7 +81,7 @@ function list_repo(){
 function docker_hub(){
 ## ---------------------------------------------------------------------------
     local repo_path=${repo_url}/devops-docker
-    local path
+    local path input_img input_tag
     printf "${red}========== "$1" ========== ${NCOL}\n"
 
     echorun docker login ${repo_url}/artifactory-devops-docker.jfrog.io
@@ -94,8 +94,9 @@ function docker_hub(){
         pull)
             list_repo
             read -p "must input image name [Number]: " input_img
+            read -t 2 -p "default tag is latest otherwise input tag[2s]:" input_tag
             if [ -z "$input_img" ]; then echo you have to input image number; return; fi
-            echorun docker pull ${repo_url}/devops-docker/${listimg[${input_img}]}
+            echorun docker pull ${repo_url}/devops-docker/${listimg[${input_img}]}:${input_tag:=latest}
             ;;
         push)
             list images
