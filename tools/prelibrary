@@ -63,7 +63,7 @@ function printToFILE(){
 }
 
 
-function showRUN(){ echo "\$ $@"; "$@" ; }
+function showRUN(){ echo "\$> $@"; "$@" ; }
 ## ---------------------------------------------------------------------------
 # show command before execution
 # $1: command
@@ -75,15 +75,15 @@ function showRUNQ(){
 # show command before execution
 # $1: command
 # usage: showRUN repo sync -qcj${njobs:-16} --no-tags --no-clone-bundle $1
-	if [ "$1" = y ]; then 
-	    echo "\$ ${@:2}"; 
-		read -p "choose [y:continue| ctrl+c:break] : " 
-		#if [ "$REPLY" == 'y' ]; then "eval ${@:2}" ; fi 
-		if [ "$REPLY" == 'y' ]; then eval "${@:2}" ; fi 
-	else
-		echo "\$ ${@}"; 
-		eval "${@}"
-	fi	
+    if [ "$1" = y ]; then 
+        echo "\$ ${@:2}"; 
+        read -p "choose [y:continue| ctrl+c:break] : " 
+        #if [ "$REPLY" == 'y' ]; then "eval ${@:2}" ; fi 
+        if [ "$REPLY" == 'y' ]; then eval "${@:2}" ; fi 
+    else
+        echo "\$ ${@}"; 
+        eval "${@}"
+    fi  
 }
 
 
@@ -128,16 +128,16 @@ function ende_code(){
 local temp temp_var
 local cmd=$1 tag=$2 key=$3
     case $cmd in
-	env|enf) [ -z "${key}" ] && ende_code help
-	;; dev|def) [ -z "${tag}" ] && ende_code help
+    env|enf) [ -z "${key}" ] && ende_code help
+    ;; dev|def) [ -z "${tag}" ] && ende_code help
     esac
 
     case $cmd in
         help) info "variable is live during session, file is live permanent"
             echo "en/decoding as variable: ende_code env <keyname> <key>, ende_code dev <keyname>"
             echo "en/decoding as file    : ende_code enf <keyfile> <key>, ende_code def <keyfile>"
-	    echo "ex) save file for vgit : ende_code enf vgit ejladf69a79f8d79fdsqd02"
-	    echo "ex) save var for lamp  : ende_code env lamp ejladf69a79f8d79fdsqd02"
+        echo "ex) save file for vgit : ende_code enf vgit ejladf69a79f8d79fdsqd02"
+        echo "ex) save var for lamp  : ende_code env lamp ejladf69a79f8d79fdsqd02"
              
        ;;env) #encrypt to ENCODE_$tag
             declare -g "ENCODE_$tag=$( echo $key | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey )"

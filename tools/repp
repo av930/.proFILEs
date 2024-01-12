@@ -132,21 +132,24 @@ function reppshow_manifesttree(){
 # read file and print line "include" keyword
 # $1 manifest file name
 # $2 treedepth to display sub manifest
-    local file
+    local file 
+    local manifest=$(mktemp)
     local path='|--|--|--|--|--|--'
     local treedepth=${2:-0}
 
+    cat $1| sed '/<!--.*-->/d' | sed '/<!--/,/-->/d' > ${manifest}
+    
     ##print name of manifest
     printf "%s$1 \n" "${path::${treedepth}}"
 
     (( treedepth=treedepth+3 ))
     ##print name of branches not revision
-    cat $1| sed -n 's/.*revision="\([^ |\t]*\)".*/\1/p'| grep -v '^[a-f0-9]*$'| sort| uniq| xargs -n1 -I {} printf "%60s {}\n"
+    cat ${manifest}| sed -n 's/.*revision="\([^ |\t]*\)".*/\1/p'| grep -v '^[a-f0-9]*$'| sort| uniq| xargs -n1 -I {} printf "%60s {}\n"
     ##print only 10 revision for notice
-    cat $1| sed -n 's/.*revision="\([^ |\t]*\)".*/\1/p'| grep -e '^[a-f0-9]*$'| head -10| xargs -n1 -I {} printf "%60s {}\n"
+    cat ${manifest}| sed -n 's/.*revision="\([^ |\t]*\)".*/\1/p'| grep -e '^[a-f0-9]*$'| head -10| xargs -n1 -I {} printf "%60s {}\n"
 
     ##sub manifests
-    cat $1 | sed -n 's/.*include name="\(.*\)".*/\1/p' | \
+    cat ${manifest}| sed -n 's/.*include name="\(.*\)".*/\1/p' | \
     while read -r file; do
         if [ -n "${file}" ];then reppshow_manifesttree ${file} ${treedepth}; fi
     done
@@ -911,13 +914,24 @@ function reppcheck_server(){
     local gitproject=$4
     local branch=$5
     local ret
-
     local file_error="$(mktemp)"
-    #echo "\$ ssh -T $user@$server -p $2 -vvv" ;
-    bar inline "step3.1-localserver: [remote] check if sshd is serviced on this port $port "
-    clog try "check port num is correct? check account and ssh-key is matched and registered?"
 
+    #local port=$(echo ${server_port} | grep -oP '(?<=:)[0-9]+(?=/)')
+    bar inline "step2.1-ssh: check local if ssh is installed (checked by $ACCOUNT)"
+    clog try "install proper version of ssh"
+    if [ -x "$(command -v ssh)" ]; then  log "ssh is installed in [$(which ssh)]"; else err "ssh is not installed, plz install it"; fi
+
+    if [ -z $oriserver ]; then reppconnect help && return 1;fi
+    bar inline "step2.2-tcp: check remote if tcp port is well listened (checked by $ACCOUNT)"
+    clog try "check port num is correct? firewall is active? internet is on?"
+    showRUN timeout 5 bash -c "</dev/tcp/${server}/$port"
+    if [ $? == 0 ];then echo "server $server over port $port is listened";
+    else echo "server $server over port $port is not listened, please contact server manager"; fi
+
+    bar inline "step2.3-sshd: check remote if ${user} can access ${server} on ${port}port (checked by ${user})"
+    clog try "check port num is correct? check account and ssh-key is matched and registered?"
     #echo "ssh -T $user@$server -p $port -vvv 2> $file_error"
+    : '
     echo \n| ssh -T $user@$server -p $port -vvv 2> $file_error
 
     case $(cat ${file_error}) in
@@ -930,31 +944,48 @@ function reppcheck_server(){
                     ping $server -c2
                     return 1
     ;; *publickey*) err check publickey
-                    return 1
+                    read -p "go or stop? [enter:continue | ctrl+c:stop]"
     ;; *)           err "unknown error is occured, please check log [${file_error}]"
                     return 1
     esac
-
-    bar inline "step3.2-localserver: [remote] check if I can access git project from local-server"
+    '
+    bar inline "step2.4-project: check remote if ${user} can access git project (checked by ${user})"
     clog try "check git name path is correct and can access"
-    ret=$(ssh $user@$server -p $port gerrit ls-projects --prefix ${gitproject})
-    [ -n "$ret" ] &&  echo "gitproject existed and accessed [${gitproject}]" || err "check git project is existed or permission allowed [${gitproject}]"
-
-    bar inline "step3.3-localserver: [remote] check if I can access the branch from local-server (default: master)"
+    ret=$(ssh -q ${user}@10.158.7.50 -p 22 bash <<SSH_COMMAND
+    ssh $user@$server -p $port gerrit ls-projects --prefix ${gitproject}
+SSH_COMMAND
+)
+    [ -n "$ret" ] &&  echo "gitproject existed and accessed [${gitproject}]" || err "check git project is existed or permission allowed [${gitproject}]"    
+    
+    bar inline "step2.5-branch: check remote if ${user} can access the branch on the project (checked by ${user})"
     clog try "check branch name path is correct and can access"
     #ssh $user@$server -p $port gerrit ls-projects --prefix ${gitproject} -b ${branch}
-    ret=$(ssh $user@$server -p $port gerrit ls-projects --prefix ${gitproject} -b ${branch})
+    ret=$(ssh -q ${user}@10.158.7.50 -p 22 bash <<SSH_COMMAND
+    set -x
+    ssh $user@$server -p $port gerrit ls-projects --prefix ${gitproject} -b ${branch}
+SSH_COMMAND
+)
     [ -n "$ret" ] &&  echo "branch existed and accessed [${branch}]" || err "check git branch is existed or permission allowed [${branch}]"
-    #rm -f ${file_error}
 
-    under "you can check 'READ' accessibility for all branch & repository (wait 30s)\n"
+    under "you can check 'READ' accessibility for all branch & repository (wait 30s) (checked by ${user})\n"
     read -p "check accessibility for all repository  [enter:continue| ctrl+c:exit]: "
-    repo forall -c bash -c '
+    
+    ssh -q ${user}@10.158.7.50 -p 22 bash <<'SSH_COMMAND'
+    mkdir -p ~/repo.test && cd ~/repo.test
+    repo init -u ssh://vgit.lge.com:29440/honda/linux/manifest -b tsu_25.5my_release 2> /dev/null
+    repo sync -qcj8 --no-tags --no-clone-bundle --fail-fast 2> /dev/null
+    repo forall -qc bash -c '
     GERRIT=( "vgit_na:29420" "vgit_eu:29430" "vgit_as:29440" "vgit_adas:29550" "vgit_devops_test:29999" "lamp_review:29418" )
     for _item in ${GERRIT[@]};do
-        [ ${_item%:*} = "${REPO_REMOTE}" ] && printf "[%4.4s] " "${REPO_I}" && ssh $REPO__${USER}@$0 -p ${_item#*:} gerrit ls-projects --prefix ${REPO_PROJECT} -b ${REPO_RREV} --limit 1
+        if [ ${_item%:*} = "${REPO_REMOTE}" ]; then 
+            [ -z "$(ssh $REPO__${USER}@$0 -p ${_item#*:} gerrit ls-projects --prefix ${REPO_PROJECT} -b ${REPO_RREV} --limit 1)" ] && printf "[ERROR] project:%-50s path:%s" "${REPO_PROJECT}" "${REPO_PATH}"
+        fi
     done
-    ' $(getserver ${oriserver} subdomain) #vgit.lge.com
+    ' vgit.lge.com  2> /dev/null
+SSH_COMMAND
+#$(getserver ${oriserver} subdomain) #vgit.lge.com
+#repo forall -c 'echo \${REPO_REMOTE}:\${REPO_PROJECT}:\${REPO_PATH}:\${REPO_LREV}:\${REPO_RREV}' > ~/repo.test/repo.result
+        #[ ${_item%:*} = "${REPO_REMOTE}" ] && printf "[%-60.50s] " "${REPO_I}/${REPO_COUNT}/${REPO_PROJECT}" && ssh $REPO__${USER}@$0 -p ${_item#*:} gerrit ls-projects --prefix ${REPO_PROJECT} -b ${REPO_RREV} --limit 1
 }
 
 
@@ -1012,24 +1043,14 @@ EOF
     dlog [$user][$oriserver][$server][$gitproject][$branch]
     clog "should be this format:" "[testaccount][$oriserver][$server][$gitproject][$branch]"
 
-    under "step1: check basic server environments\n"
-    #local port=$(echo ${server_port} | grep -oP '(?<=:)[0-9]+(?=/)')
-    bar inline "step1.1-ssh: [local] check if ssh is installed"
-    clog try "install proper version of ssh"
-    if [ -x "$(command -v ssh)" ]; then  log "ssh is installed in [$(which ssh)]"; else err "ssh is not installed, install it"; fi
-
-    if [ -z $oriserver ]; then reppconnect help && return 1;fi
-    bar inline "step1.2-tcp: [remote] check if server tcp port is well listened"
-    clog try "check port num is correct? firewall is active? internet is on?"
-    showRUN timeout 5 bash -c "</dev/tcp/${server}/$port"
-    if [ $? == 0 ];then echo "server $server over port $port is listened";
-    else echo "server $server over port $port is not listened, please contact server manager"; fi
-
-
-    under "step2: check gerrit permission from WEB(HTTP)as admin[${ACCOUNT}]\n"
-    showRUN revvcheck_server ${oriserver} ${user} ${gitproject} ${branch}
-    under "step3: check gerrit connection from SERVER(SSH) as user[${user}]\n"
+    under "step1: check gerrit permission for ${user} from WEB(HTTP) by account admin[${ACCOUNT}]\n"
+    showRUN revvcheck_server ${oriserver} log
+    showRUN revvcheck_account ${oriserver} ${user} log
+    showRUN revvcheck_permission ${oriserver} ${user} ${gitproject} ${branch} read
+        
+    under "step2: check git permission for ${user} from SERVER(SSH) user[${user}]\n"
     showRUN reppcheck_server ${server} ${user} ${port} ${gitproject} ${branch}
+    #showRUN reppcheck_server ${buildserver} ${port} ${user} ${repo init cmd}
 }
 
 
@@ -1671,15 +1692,13 @@ EOF
 function revvcheck_server(){
 ## ---------------------------------------------------------------------------
 # check gerrit is permitted for input user on git project > branch
-# usage) revv connect na joongkeun.kim tiger/tools tiger_release
-# $1: target user
-# $2: target review system
-# $3: gitproject 
-# $4: branch
+# usage) revvcheck_server na log
+# $1: target review system
+# $2: target user
+# $3: log flag
 
     local server=$1
-    local user=$2
-    local flag=$3
+    local flag=$2
     local key_id=$(getserver ${server} sub)
     local key=$(ende_code dev ${key_id})
 
@@ -1693,7 +1712,7 @@ function revvcheck_server(){
     if ! [[ "${REVV_VER}" =~ [2-9].[0-9].[0-9]* ]]; then REVV_VER='NA'; err "gerrit is not working, please check"; return 1; fi
     
     if [ "${flag}" = "log" ]; then 
-        bar inline "step1.1-gerritserver: [remote] check if gerrit server is active by $ACCOUNT"
+        bar inline "step1.1-gerritserver: [remote] check if gerrit server is active (checked by $ACCOUNT)"
         clog try "check gerrit service is online from web"
         echo "ok. gerrit is working ${REVV_VER}"
     fi
@@ -1705,11 +1724,11 @@ function revvcheck_server(){
 function revvcheck_account(){
 ## ---------------------------------------------------------------------------
 # check gerrit is permitted for input user on git project > branch
-# usage) revv connect na joongkeun.kim tiger/tools tiger_release
-# $1: target user
-# $2: target review system
-# $3: gitproject 
-# $4: branch
+# usage) revvcheck_account na joongkeun.kim log
+# $1: target review system
+# $2: target user
+# $3: log flag
+
 
     local server=$1
     local user=$2
@@ -1725,14 +1744,14 @@ function revvcheck_account(){
     fi
 
     readarray -d',' -t ret < <(curl -su ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${user}|sed '1d'| jq -c '.[]|{_account_id,username,name,email}'|sed  's/[{}"]//g')
-    ! [[ "${ret[*]}" =~ "${user}" ]] && (err "there is no account [${user}] in gerrit" && return 1)
+    ! [[ "${ret[*]}" =~ "${user}" ]] && err "there is no account [${user}] in gerrit" && return 1
     
     ##get username & accountID from gerrit
-    REVV_USERID="${ret[0]}"
-    REVV_USER="${ret[1]}"
+    REVV_USERID="${ret[0]#*:}"
+    REVV_USER="${ret[1]#*:}"
     
     if [ "${flag}" = "log" ]; then 
-        bar inline "step1.2-gerritserver: [remote] check if gerrit is accessed by ${user}"
+        bar inline "step1.2-gerritserver: [remote] check if ${user} can access gerrit (checked by $ACCOUNT)"
         clog try "check current account is in gerrit system"
         echo "ok. gerrit account existed: ${ret[@]}"
         #declare -p ret
@@ -1745,7 +1764,7 @@ function revvcheck_account(){
 function revvcheck_permission(){
 ## ---------------------------------------------------------------------------
 # check gerrit is permitted for input user on git project > branch
-# usage) revv connect na joongkeun.kim tiger/tools tiger_release
+# usage)  revvcheck_permission as joongkeun.kim honda/con/autosar tsu_26my_release create
 # $1: target user
 # $2: target review system
 # $3: gitproject 
@@ -1761,10 +1780,13 @@ function revvcheck_permission(){
     local gitproject=${oriproject//'/'/'%2F'}
     local branch=$4
     local perm=$5
+    local flag=$6
     local key_id=$(getserver ${server} sub)
     local key=$(ende_code dev ${key_id})
     local log ret
 
+    revvcheck_account ${server} ${user}
+    
     #local port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)')
     if [ -z "${server}" ];
     then port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)'); server=$(getserver ${port} http)
@@ -1773,23 +1795,26 @@ function revvcheck_permission(){
     if [ -z "${oriproject}" ];then info "guide) repp connect help" && return 1;fi
 
     #curl -su vc.integrator:'UUmF3ZYZofW1JqRwEFe4g1tHbs1hLoVuVVKrxpvG0g' http://vgit.lge.com/as/a/projects/honda%2Flinux%2Fbuild_tsu/check.access?account=7986\&ref=refs%2fheads%2fmaster\&perm=read
-
-    bar inline "step2.3-gerritserver: [remote] check if git project is accessed by ${user}"
+    bar inline "step1.3-gerritserver: [remote] check if ${user} can access git project (checked by $ACCOUNT)"
     clog try "check git name path is correct and can access"
-    log=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject}/check.access?account=${REVV_USERID#*:})
-    ret=$( echo "${log}" |sed '1d'| jq -c '.')
-    ! [[ "${ret#*:}" =~ 200 ]] && (err "check gerrit project error: ${log}" && return 1)
-    echo "ok. gerrit account[${REVV_USER#*:}] can access by[read]: ${oriproject}"
+    log=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject}/check.access?account=${REVV_USERID})
+    ret=$(echo "${log}" |sed '1d'| jq -c '.')
+    ! [[ "${ret#*:}" =~ 200 ]] && err "check gerrit project error: ${log}" && return 1
+    echo "ok. gerrit account[${REVV_USER}] can access by[read]: ${oriproject}"
     
     
-    bar inline "step2.4-gerritserver: [remote] check if branch is accessed by ${user}"
-    clog try "check branch name path is correct and can access"
+    bar inline "step1.4-gerritserver: [remote] check if ${user} can access branch on the project (checked by $ACCOUNT)"
+    clog try "check branch name path is correct and can access [case sensitive]"
+    dlog "commit" "read,submit,push,pushMerge,revert,forgeCommitter,forgeAuthor,editTopicName,label-Code-Review"
+    dlog "branchtag" "create,delete,createTag,createSignedTag"
+    dlog "server" "priority,streamEvents,administrateServer"
     [ -z "${branch}" ] && branch="master"
     [ -z "${perm}" ] && perm="read"
-    log=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject}/check.access?account=${REVV_USERID#*:}\&ref=refs%2fheads%2f${branch}\&perm=${perm})
-    ret=$( echo "${log}" |sed '1d'| jq -c '.')
-    ! [[ "${ret#*:}" =~ 200 ]] && (err "check gerrit branch error: ${log}" && return 1)
-    echo "ok. gerrit branch[${branch}] existed and can accessed with[${perm}] permission by[${REVV_USER#*:}]" 
+    log=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject}/check.access?account=${REVV_USERID}\&ref=refs%2fheads%2f${branch}\&perm=${perm})
+    readarray -d $'\n' -t ret < <(echo "${log}" |sed '1d'| jq -rM '.message,.status')
+    ! [[ "${ret[1]}" =~ 200 ]] && err "check gerrit project error: ${log}" && return 1
+    ##get username & accountID from gerrit
+    echo "ok. gerrit branch[${branch}] existed and can accessed with[${perm}] permission by[${REVV_USER}]" 
     
     return 0
 }
