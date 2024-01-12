@@ -94,7 +94,7 @@ function docker_hub(){
         pull)
             list_repo
             read -p "must input image name [Number]: " input_img
-            read -t 2 -p "default tag is latest otherwise input tag[2s]:" input_tag
+            read -t 5 -p "default tag is latest otherwise input tag[2s]:" input_tag
             if [ -z "$input_img" ]; then echo you have to input image number; return; fi
             echorun docker pull ${repo_url}/devops-docker/${listimg[${input_img}]}:${input_tag:=latest}
             ;;
@@ -266,6 +266,9 @@ function start(){
     sudo -u ${account} mkdir -p ${home_dir}/Docker_MountDIR ${home_dir}/mirror ${home_dir}/.jfrog
     touch ${home_dir}/.ssh ${home_dir}/.profile ${home_dir}/.bashrc ${home_dir}/.gitconfig 
 
+    ## warning
+    ## if mount with ro, file is another copy from start
+    ## if mount with ro, dir is ro permissioned from start
     docker run                                                                  \
         -dit --init --privileged --cap-add=ALL --restart="always"               \
         --name ${cntr_name}                                                     \
@@ -280,9 +283,9 @@ function start(){
         -v /usr/local/bin:/usr/local/bin:ro                                     \
         -v /usr/bin/git-lfs:/usr/bin/git-lfs:ro                                 \
         -v /lib/modules:/lib/modules:ro                                         \
-        -v ${home_dir}/.profile:${home_dir}/.profile:ro                         \
-        -v ${home_dir}/.bashrc:${home_dir}/.bashrc:ro                           \
-        -v ${home_dir}/.gitconfig:${home_dir}/.gitconfig:ro                     \
+        -v ${home_dir}/.profile:${home_dir}/.profile:rw                         \
+        -v ${home_dir}/.bashrc:${home_dir}/.bashrc:rw                           \
+        -v ${home_dir}/.gitconfig:${home_dir}/.gitconfig:rw                     \
         -v ${home_dir}/.ssh:${home_dir}/.ssh:rw                                 \
         -v ${home_dir}/.jfrog:${home_dir}/.jfrog:rw                             \
         -v ${home_dir}/mirror:${home_dir}/mirror:rw                             \
