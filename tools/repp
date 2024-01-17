@@ -373,10 +373,12 @@ function reppinfo(){
     done
     ##show count of repository
     ### block infomation
-    bar inline "misc information for this repositories"
+    bar inline "more information for this repositories"
     clog "number of repositories: " $REPP_COUNT
+    clog "duplicated repositories:" ""
+    reppfind @project |sort |uniq -dc
 
-    clog "md5 sum for all repositories:"
+    clog "md5sum for all repositories:"
     repo forall -j16 -c git log -1 --pretty=format:%H%n | md5sum
 
     ##show last synced time
@@ -536,7 +538,7 @@ function reppfind(){
     
     if [ -f "${REPPFILE_CSV}" ];
     then info "reuse generated file [\${REPPFILE_CSV}] or you can remove and retry this";
-    else repo forall -j1 -c 'printf "%.6s|%.7s|%-32.32s|%-74.74s|%.80s \n" "${REPO_LREV}" "${REPO_REMOTE}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"' > ${REPPFILE_CSV}
+    else repo forall -j1 -c 'printf "%.6s|%.7s|%-32.32s|%-74.74s|%.80s \n" "${REPO_LREV}" "${REPO_REMOTE}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"' > ${REPPFILE_CSV} 2>/dev/null 
     fi
 
     case ${cmd} in
