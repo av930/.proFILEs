@@ -31,6 +31,9 @@ GERRIT=( "${VGIT}/na:29420" "${VGIT}/eu:29430" "${VGIT}/as:29440" "${VGIT}/adas:
 #### git alias
 ## load direct from below
 source <(cat <<\EOF
+## alias
+    alias repo='_repp(){ repo $@ 2> >(sed '/.../,/cp/d') ;}; _repp'
+## git alias
     git config --global alias.alias 'config --get-regexp ^alias\.'
     git config --global alias.st 'status'
     git config --global alias.ci 'commit --verbose'
@@ -42,7 +45,7 @@ source <(cat <<\EOF
     git config --global alias.difft 'difftool --dir-diff -t vimdiff'
 
 
-    ## NEEDTO: sudo apt-get install icdiff
+## NEEDTO: sudo apt-get install icdiff
     #git config --global alias.diffi "difftool --extcmd 'icdiff'"
      git config --global alias.diffi "!_gitdiff() { git difftool --extcmd 'icdiff'; }; _gitdiff"
     #git config --global alias.diffi '!_gitdiff() { git difftool --extcmd "icdiff $@"; }; _gitdiff' --replace-all
@@ -1522,7 +1525,7 @@ function gittbranch(){
 				usage) gitt branch info                         # show current branch info
 				usage) gitt branch list <''|name-filter>        # show remote recent 20 tag/branches
 				   ex) gitt branch list *my*                    # find branches including 'my'
-				usage) gitt branch create|new empty             # create new-empty branch with exact-name, with confirm
+				usage) gitt branch create|new empty             # show guide to create empty branch
 				usage) gitt branch create|new <name>            # create new branch with exact-name, with confirm
 				usage) gitt branch delete|remove <name>         # delete branch with exact-name, with confirm 'y'
 				   ex) gitt branch create my_temp_branch        # create my_temp_branch, with confirm 'y'
@@ -2070,7 +2073,7 @@ function revvbranch(){
 			usage) revv branch    na mustang/tm/src tsu_25.5my_release         # find branch with branch-name
 			usage) revv branchadd na mustang/tm/src tsu_25.5my_release_new     # create branch
 			usage) revv branchdel na mustang/tm/src tsu_25.5my_release_new     # remove branch
-			usage) revv commit    na 57a4eeeca914                              # get change_id
+			usage) revv commit    na 57a4eeeca914                              # get change-id from commit-id
 			 info) 'empty branch' can be created by 'revv projectadd' not 'revv branchadd'
 			       therefore if you want 'empty branch', you can reuse 'master branch if it empty' or 'gitt branch create'
 EOF
