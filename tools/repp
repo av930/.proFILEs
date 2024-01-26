@@ -537,11 +537,12 @@ function reppfind(){
 # $1 path or project
 # usage: reppfind [path|project]
     local cmd="$1"
+    local prnmsg='%6.6s %8.8s %-32.32s %-74.74s %.80s'
 
-    
     if [ -f "${REPPFILE_CSV}" ];
     then info "reuse generated file [\${REPPFILE_CSV}] or you can remove and retry this";
-    else repo forall -j1 -c 'printf "%.6s|%8.8s|%-32.32s|%-74.74s|%.80s \n" "${REPO_LREV}" "${REPO_REMOTE}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"' > ${REPPFILE_CSV} 2>/dev/null 
+    else repo forall -j1 -c 'prnmsg="%6.6s|%8.8s|%-32.32s|%-74.74s|%.80s";
+    printf "${prnmsg}\n" "${REPO_LREV}" "${REPO_REMOTE}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"' > ${REPPFILE_CSV} 2>/dev/null 
     fi
 
     case ${cmd} in
@@ -565,13 +566,13 @@ EOF
     ;; @branch)   clog "<REPO_RREV>";    awk -v FS="|" '{print $3}' ${REPPFILE_CSV} |sort |uniq |pCount
     ;; @project)  clog "<REPO_PROJECT>"; awk -v FS="|" '{print $4}' ${REPPFILE_CSV} |sort |pCount
     ;; @path)     clog "<REPO_PATH>";    awk -v FS="|" '{print $5}' ${REPPFILE_CSV} |sort |pCount
-    ;; '')        printf "\e[1;33m%6.6s %8.8s %-32.32s %-74.74s %.80s \e[0m\n" "REPO_LREV" "REPO_REMOTE" "REPO_RREV" "REPO_PROJECT" "REPO_PATH"
+    ;; '')        printf "\e[1;33m${prnmsg} \e[0m\n" "REPO_LREV" "REPO_REMOTE" "REPO_RREV" "REPO_PROJECT" "REPO_PATH"
                   cat ${REPPFILE_CSV} |pCount
                   printf "\n\n"
                   info "Above \${REPPFILE_CSV} is generated, all repository info is save: ${REPPFILE_CSV}"
                   clog "\${REPPFILE_CSV}" "this file can opened by excel menu [data> text> select file> file open wizard], or reformatted by [data>text to columns> select delimter'|'> finish]"
                   clog "to see help: " "repp find help"
-    ;; *)         printf "\e[1;33m%6.6s %8.8s %-32.32s %-74.74s %.80s \e[0m\n" "REPO_LREV" "REPO_REMOTE" "REPO_RREV" "REPO_PROJECT" "REPO_PATH"
+    ;; *)         printf "\e[1;33m${prnmsg} \e[0m\n" "REPO_LREV" "REPO_REMOTE" "REPO_RREV" "REPO_PROJECT" "REPO_PATH"
                   cat ${REPPFILE_CSV} | grep -i --color=always ${cmd} |pCount
     esac
 }
