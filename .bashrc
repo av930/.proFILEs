@@ -93,7 +93,7 @@ function update_history(){
     fi
     screen -X chdir "$PWD" 
     #history -c
-} &>/dev/null
+} #redirect log to null#  &>/dev/null
 #update_history 
 export PROMPT_COMMAND="update_history; $PROMPT_COMMAND"
     

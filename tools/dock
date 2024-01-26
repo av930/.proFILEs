@@ -301,22 +301,17 @@ function stoprm(){
 ## ---------------------------------------------------------------------------
     local cmd=$1
     local param="${@:2}"
-    if [ -z "${param}" ]; then 
-        list ps --all
-        printf "${red}========== "$cmd" ========== ${NCOL}\n"
-        read -p "must input Container [Name| ID]: " cntr_name; 
-        docker stop ${cntr_name}
-        read -p "remove container? [enter|ctrl+c]: " 
-        docker rm ${cntr_name}                 
-    else
-        printf "${red}========== "$cmd" ========== ${NCOL}\n"    
-        read -p "your input are ${param} : [continue:enter| ctrl+c]:"
-	set -ex
-        docker stop ${param}
-        docker rm ${param}
-	set +ex
-        list ps --all        
-    fi
+    local target
+    [ -z "${param}" ] && list ps --all
+    printf "${red}========== "stop & remove container" ========== ${NCOL}\n"
+    echo "Multiple container can be input with space ex) cntr1 cntr2 cntr3"
+    read -p "must input Container [Name| ID]: " target; 
+    docker stop ${target}
+    docker rm ${target}
+    list ps --all
+    
+    read -p "continue to remove volume? [Name or ID| ctrl+c:exit]: " target
+    docker volume rm --force ${target}
 }
 
 
