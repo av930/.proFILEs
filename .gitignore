@@ -3,7 +3,7 @@
 user.gitconfig*
 tempdir/*
 .idea/*
-bin/prio_high
+bin/_*
 
 
 # Compiled source #
@@ -37,7 +37,6 @@ bin/prio_high
 *.log
 *.sql
 *.sqlite
-screenlog.*
 
 # OS generated files #
 ######################
