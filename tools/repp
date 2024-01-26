@@ -6,14 +6,15 @@
 ###---------------------------------------------------------- DEBUG OPTION
 #DEBUG=["echo -e"|:], : means no-operation
 ## DEBUG=[ : | "printf ${RED}%s${NCOL}\n" ]
-DEBUG=: #"printf ${RED}%s${NCOL}\n"
+DEBUG=: 
+#DEBUG="printf ${RED}%s${NCOL}\n"
 
 PATH_FULL=$(realpath "$BASH_SOURCE")
 PATH_DIR="${PATH_FULL%/*}"
 PATH_FILE="${PATH_FULL##*/}"
 DIR_CURR=$(pwd)
 LC_ALL=C.UTF-8
-$DEBUG "[$_][$BASH_SOURCE][$0]  [${PATH_FULL}][${PATH_DIR}][${PATH_FILE}]"
+$DEBUG "[$_][$BASH_SOURCE][$0][${PATH_FULL}][${PATH_DIR}][${PATH_FILE}]"
 
 
 if [ -e "${PATH_DIR}/prelibrary" ]; then source ${PATH_DIR}/prelibrary;
@@ -834,6 +835,19 @@ EOF
 
 
 
+function reppvertoggle(){
+## ---------------------------------------------------------------------------
+if [ -d "${REPP_PATH%/*}/__repo" ]; 
+then ## restore
+    [ -L "${REPP_PATH%/*}/repo" ] && rm -f ${REPP_PATH%/*}/repo || ( err "cannot restore, plz check"; return 1 )
+    mv ${REPP_PATH%/*}/__repo ${REPP_PATH%/*}/repo
+else ## backup & change
+    mv ${REPP_PATH%/*}/repo ${REPP_PATH%/*}/__repo
+    ln -s ${proFILEdir}/bin/_repo ${REPP_PATH%/*}/repo
+fi
+}
+
+
 
 function reppversion(){
 ## ---------------------------------------------------------------------------
@@ -842,12 +856,16 @@ function reppversion(){
     local file_log=$(mktemp)
     python3  $(which repo) --version > ${file_log}
     
-    local cmd="$1"
-    ## only 3digit length version code is valid to compare old version
-    local VER=$(cat ${file_log} | grep "repo version"  |tr -dc '[:digit:]')
+    local VER cmd="$1"
     case $cmd in
-          help) :
-        ;; ver) echo ${VER:0:3} && return 0
+             help) cat <<-EOF
+			usage) repp version toggle         # change repo version newest & restore
+			usage) repp version                # reset all repository to original revision
+EOF
+        ;; toggle) reppvertoggle; return 0;
+        ;;    ver) ## only 3digit length version code is valid to compare old version
+                   VER=$(cat ${file_log} | grep "repo version"  |tr -dc '[:digit:]')   
+                   echo ${VER:0:3} && return 0
     esac
     #if VER is not integer, in case of error
     [[ ${VER} != ?(-)+([0-9]) ]] && VER=000
