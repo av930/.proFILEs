@@ -160,7 +160,7 @@ termcapinfo xterm 'hs:ts=\E]2;:fs=\007:ds=\E]2;screen\007'
 
 ## log file
 deflog on
-logfile $HOME/.proFILEs/tempdir/screenlog
+logfile /tmp/screenlog
 logfile flush 1800
 logtstamp on
 log on
