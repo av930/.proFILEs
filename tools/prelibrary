@@ -38,11 +38,13 @@ pCount() { tee >(clog \#count: $(wc -l)) ;}
 ## supprort 2 line type: bar inline, bar outline
 bar()    { printf "\n${!1}%s%s ${NCOL}\n" "${2:+[$2] }" "${line:(${2:+3}+${#2})}" ;}
 
+
 under()  { 
     local temp="${1}" ; local ret=''
     if [ "${1:(-2)}" = "\n" ]; then temp=${temp::-2}; ret="\n"; fi
     printf "\n${green}〓〓〓   ${CYAN}%b${green}\n%b${NCOL}" "${temp}" "${linedb}${ret}";
 }
+
 
 function printToFILE(){ 
 ## ---------------------------------------------------------------------------
@@ -118,9 +120,6 @@ function checkifSHA(){
 }
 
 
-
-
-
 function ende_code(){
 ## ---------------------------------------------------------------------------
 # en/decoding as variable: code env <keyname> <key>; code dev <keyname>
@@ -158,7 +157,6 @@ local cmd=$1 tag=$2 key=$3
             cat $HOME/.key_$tag | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 
     esac
 }
-
 
 
 #### ============================================================================
@@ -226,8 +224,6 @@ function handler_args(){
         handler_menu
     fi
 }
-
-
 
 
 function print_menu() {
