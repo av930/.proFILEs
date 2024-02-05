@@ -554,6 +554,7 @@ function reppmanidb(){
     #declare -p itemdefault
 
     readarray -t multiline < <(cat  ${REPPFILE_JSON}|jq -jr '.project[]|.revision,"|",.groups,"|",.remote,"|",.upstream,"|",."dest-branch","|",.name,"|",.path,"|\n"')
+    local line
     for line in "${multiline[@]}"; do
         ##read one item from line by '|'
         local index=0 itemtemp

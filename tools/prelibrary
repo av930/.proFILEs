@@ -18,7 +18,7 @@ file_error=~/.repoconfig/repo.error
 ## ---------------------------------------------------------------------------
 # log message to stderr
 # $1: message
-line="--------------------------------------------------------------------------------------"
+_line="--------------------------------------------------------------------------------------"
 
 lineup="￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣"
 linedn="______________________________________________________________________________________"
@@ -34,9 +34,9 @@ err()    { log "${RED}ERROR: ${NCOL} ${*}" > /dev/stderr ;}
 pCount() { tee >(clog \#count: $(wc -l)) ;}
 
 #${2:+[$2] }: if $2 exist, use '[$2] '
-#${line:(${2:+3}+${#2})}: if $2 is exist, skip 3 '-' chars for '[] ' chars
-## supprort 2 line type: bar inline, bar outline
-bar()    { printf "\n${!1}%s%s ${NCOL}\n" "${2:+[$2] }" "${line:(${2:+3}+${#2})}" ;}
+#${_line:(${2:+3}+${#2})}: if $2 is exist, skip 3 '-' chars for '[] ' chars
+## supprort 2 _line type: bar inline, bar outline
+bar()    { printf "\n${!1}%s%s ${NCOL}\n" "${2:+[$2] }" "${_line:(${2:+3}+${#2})}" ;}
 
 
 under()  { 
@@ -58,9 +58,9 @@ function printToFILE(){
             cat $printfile
             rm -f $printfile; 
         fi ;;
-    screen) printf "${yellow}%s %s ${NCOL}\n  %s\n" "$2" "${line:${#2}}" "$3" ;;
-    both) printf "${yellow}%s %s ${NCOL}\n  %s\n" "$2" "${line:${#2}}" "$3" 2>&1 | tee -a $printfile;;
-    *) printf "${yellow}%s %s ${NCOL}\n  %s\n" "$2" "${line:${#2}}" "$3" >> $printfile;;
+    screen) printf "${yellow}%s %s ${NCOL}\n  %s\n" "$2" "${_line:${#2}}" "$3" ;;
+    both) printf "${yellow}%s %s ${NCOL}\n  %s\n" "$2" "${_line:${#2}}" "$3" 2>&1 | tee -a $printfile;;
+    *) printf "${yellow}%s %s ${NCOL}\n  %s\n" "$2" "${_line:${#2}}" "$3" >> $printfile;;
     esac
 }
 
