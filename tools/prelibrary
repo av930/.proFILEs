@@ -65,7 +65,7 @@ function printToFILE(){
 }
 
 
-function showRUN(){ echo "\$> $@"; "$@" ; }
+function showRUN(){ echo "\$> $@"; "$@" ; return $?; }
 ## ---------------------------------------------------------------------------
 # show command before execution
 # $1: command
@@ -145,7 +145,8 @@ local cmd=$1 tag=$2 key=$3
             if (( 40 < ${#temp_var} )); then
                 echo ${temp_var}| openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 2> /dev/null
             else
-                cat $HOME/.key_$tag | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 
+                if [[ -f $HOME/.key_$tag ]]; then cat $HOME/.key_$tag | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 
+                else warn "key missing or server is incorrect";fi
                 declare -g "ENCODE_$tag=$( echo $key | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey )"
             fi
        ;;list|debug)  #list up keycode for debugging
@@ -154,7 +155,8 @@ local cmd=$1 tag=$2 key=$3
        ;;enf) #encrypt to ~/.key_$tag
             echo $( echo $key | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey ) > $HOME/.key_$tag
        ;;def) ##decrypt from ~/.key_$tag & save to variable ENCODE_$tag
-            cat $HOME/.key_$tag | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 
+            if [[ -f $HOME/.key_$tag ]]; then cat $HOME/.key_$tag | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 
+            else warn "key missing or server is incorrect";fi
     esac
 }
 

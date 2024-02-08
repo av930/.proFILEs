@@ -62,6 +62,7 @@ function CMD(){
 alias pro="cd ${proFILEdir}"
 alias tools="cd ${proFILEdir}/tools"
 alias src="cd ~/Docker_MountDIR"
+alias mirr="cd ~/mirror"
 
 
 ###############################

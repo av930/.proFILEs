@@ -22,9 +22,6 @@ else source ${proFILEdir}/tools/prelibrary; fi
 ## custom builtin variable setting
 ACCOUNT=vc.integrator
 PATH_MIRROR="/data001/${ACCOUNT}"/mirror
-VGIT="vgit.lge.com"
-LAMP="lamp.lge.com"
-GERRIT=( "${VGIT}/na:29420" "${VGIT}/eu:29430" "${VGIT}/as:29440" "${VGIT}/adas:29550" "${VGIT}/devops_test:29999" "${LAMP}/review:29418" )
 
 
 ##------------------------ alias & oneline func ------------------------------
@@ -86,7 +83,9 @@ EOF
 }
 
 
-
+VGIT="vgit.lge.com"
+LAMP="lamp.lge.com"
+GERRIT=( "${VGIT}/na:29420" "${VGIT}/eu:29430" "${VGIT}/as:29440" "${VGIT}/adas:29550" "${VGIT}/devops_test:29999" "${LAMP}/review:29418" )
 function ret_server() {
 ## ---------------------------------------------------------------------------
 ## search target from source and return
@@ -119,13 +118,14 @@ function getserver() {
     esac
 
     for _item in ${GERRIT[@]};do
-        if [[ ${_item##*/} =~ "$search_key" ]]; then
-            ret_server $return_type ${_item}
+        if [[ "${_item##*/}" =~ "${search_key}" ]]; then
+            ret_server "${return_type}" "${_item}"
             return 0
         fi
     done
     #default server, if not [[ ${_item##*/} =~ "$search_key" ]]
-    ret_server $return_type ${GERRIT[4]}
+    #ret_server $return_type ${GERRIT[0]}
+    #not found, return null
 }
 
 
@@ -293,7 +293,7 @@ EOL
                 done
                                 
     ;; help|*)   cat <<- EOF
-				usage) repp mani info
+				usage) repp mani info                                     #show manifest info,structure,log,diff
 				usage) repp mani gen <outfile>
 				   ex) repp mani gen current.xml                          #default out: ${REPPFILE_XML}
 				usage) repp mani change <groups|upstream|dest-branch|etc> <str> <filter>
@@ -401,7 +401,7 @@ function reppshow(){
 # print information(changes, recent commits) of current repository#
     ##topic/working branch
     bar inline "repo branch: check if working branch existed (WAIT: It takes time) "
-    repo branch
+    repo branch 2> /dev/null
 
     ##run command "repo info"
     bar outline "it takes time to get information..."
@@ -409,7 +409,7 @@ function reppshow(){
 
     ##remove colored output with 1) sed command, 2) --color option
     #repo status -j8 |sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" >> ${REPPFILE_STATUS}
-    repo --no-pager --color=never status -j8 >> ${REPPFILE_STATUS}
+    repo --no-pager --color=never status -j8 >> ${REPPFILE_STATUS} 2> /dev/null
 
     ##list up repo commit, remote, branch, project, path
     reppfind |more -60
@@ -444,6 +444,7 @@ function reppgo() {
 				usage) repp go mani         # go manifest dir
 				usage) repp go git          # go current git root dir
 				usage) repp go repo         # show menu to select similar-depth repo project
+				usage) repp go <dir>        # show git path and move there
 EOF
                 return 1
       ;;repo)
@@ -472,8 +473,8 @@ function gittgo() {
 				usage) gitt go mani         # go manifest dir
 				usage) gitt go git          # go current git root dir
 				usage) gitt go              # same to above
-				usage) gitt go <dir>        # show git path including 'dir' and can move
-				   ex) gitt go build        # show git path including 'build' and move to select
+				usage) gitt go <dir>        # listup git path including 'dir' and move to select
+				   ex) gitt go build        # lustup git path including 'build' and move to select
 EOF
                 return 0
       ;;root)   cd "${REPP_ROOT:-${GITT_PATH}}"; if [ "${current_dir}" = "${PWD}" ]; then warn "path is not changed" && return 1; else return 0; fi
@@ -484,7 +485,7 @@ EOF
     if ! repp_initvar; then warn "your are not in repo"; return 1; fi 
     if [ ! -f ${REPPFILE_CSV} ]; then reppfind $cmd; fi
 
-    local INPUT=( $(cat ${REPPFILE_CSV} |grep ${cmd}| awk -v FS="\|" '{print $5}'| sort) )
+    local INPUT=( $(cat ${REPPFILE_CSV} |grep ${cmd}| awk -v FS="\|" '{print $6}'| sort) )
     if [ -n "${INPUT}" ];
     then 
         run_menu "${INPUT[@]}"; cd "${REPP_ROOT}/${menu_selected##* }"; 
@@ -1137,7 +1138,7 @@ function reppconnect(){
        help)    cat <<-EOF
 			  usage) repp connect [server]  [user]          [gitproject]   [branch]
 			 -----------------------------------------------------------------
-			default) repp connect remotes   $ACCOUNT        manifests    current
+			default) repp connect ${REPP_REMOTE} $ACCOUNT   ${REPP_PROJECT}    ${REPP_BRANCH}
 			     ex) repp connect na        testaccount     tiger/tools  tiger_release
 			     ex) repp connect na        joongkeun.kim   tiger/tools  tiger_release
 			     ex) repp connect na        testaccount     tiger/tools
@@ -1149,16 +1150,18 @@ EOF
     ;;     *) :
     esac
 
+    reppcheck_initvar reppgittrevv
+
     local user oriserver server gitproject branch port
     local temp_p=$(expr "${REPP_URL}" : ".*[0-9]/\(.*\)\..*")
-    [ -z "$4" ] && info "use default branch: ${GITT_BRANCH:-${REPP_BRANCH}}"        ;branch=${4:-${GITT_BRANCH:-${REPP_BRANCH}}}
-    [ -z "$3" ] && info "use default git project: ${GITT_PROJECT:-${REPP_PROJECT}}" ;gitproject=${3:-${GITT_PROJECT:-${REPP_PROJECT}}}
-    [ -z "$2" ] && info "use default account: $USER"                                ;user=${2:-$USER}
-    [ -z "$1" ] && info "use default server: ${GITT_REMOTE:-${REPP_REMOTE}}"        ;oriserver=${1:-${GITT_REMOTE:-${REPP_REMOTE}}}
+    [ -z "$4" ] && info "use default branch: ${GITT_BRANCH:-${REPP_BRANCH}}"        ;branch=${4:-${GITT_BRANCH:-${REPP_BRANCH}}} ;
+    [ -z "$3" ] && info "use default git project: ${GITT_PROJECT:-${REPP_PROJECT}}" ;gitproject=${3:-${GITT_PROJECT:-${REPP_PROJECT}}} ;
+    [ -z "$2" ] && info "use default account: $USER"                                ;user=${2:-$USER} ;
+    [ -z "$1" ] && info "use default server: ${GITT_REMOTE:-${REPP_REMOTE}}"        ;oriserver=${1:-${GITT_REMOTE:-${REPP_REMOTE}}} ;
     server=$( getserver ${oriserver} subdomain ); port=$(getserver ${oriserver} port)
 
 
-    dlog [$user][$oriserver][$server][$gitproject][$branch]
+    dlog [$user][$server][$oriserver][$gitproject][$branch]
     clog "should be this format:" "[testaccount][$oriserver][$server][$gitproject][$branch]"
 
     under "step1: check gerrit permission for ${user} from WEB(HTTP) by account admin[${ACCOUNT}]\n"
@@ -1221,7 +1224,8 @@ function repp_initvar(){
         pushd ${REPP_PATH}
         REPP_REMOTE=$(getserver $(git remote -v |grep fetch | grep -oP '(?<=:)[0-9]+(?=/)') remote)
         #REPP_PROJECT=$(git remote -v |grep fetch | sed -E 's#.*[0-9]+(.*).git.*$#\1#')
-        REPP_PROJECT=$(git config --get-regexp remote.*.url  |head -1|cut -d' ' -f2)
+        #REPP_PROJECT=$(git config --get-regexp remote.*.url  |head -1|cut -d' ' -f2)
+        REPP_PROJECT=$(git config --get-regexp remote.* |grep -Ee "(projectname|url)" |head -1|grep -Po '\w/\K.\w+[^?]+')
         REPP_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')  #GITT_BRANCH
         REPP_REVIEW=$(git config --get-regexp remote.*.review|cut -d' ' -f2|head -1)        #GITT_REVIEW
         REPP_URL=$(git config --get-regexp remote.$(git remote|head -1).url|cut -d' ' -f2|head -1) #GITT_URL
@@ -1265,6 +1269,7 @@ function gitt_initvar(){
     local temp
 
     if ! gittcheck_isgitproject; then
+        GITT_REMOTE=; GITT_PROJECT=; GITT_BRANCH=; GITT_PATH=; GITT_URL=; GITT_REVIEW=;
         return 1
     fi
 
@@ -1837,10 +1842,11 @@ function revvcheck_server(){
     then port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)'); server=$(getserver ${port} http)
     else port=$(getserver ${server} port); server=$(getserver ${server} http);
     fi
+    $DEBUG ["$server"]["$port"]
 
     REVV_VER=$(curl -su ${ACCOUNT}:${key} ${server}/a/config/server/version |sed '1d'| jq -cC '.')
     if ! [[ "${REVV_VER}" =~ [2-9].[0-9].[0-9]* ]]; then REVV_VER='NA'; err "gerrit is not working, please check"; return 1; fi
-    
+
     if [ "${flag}" = "log" ]; then 
         bar inline "step1.1-gerritserver: [remote] check if gerrit server is active (checked by $ACCOUNT)"
         clog try "check gerrit service is online from web"
@@ -1924,6 +1930,7 @@ function revvcheck_permission(){
     fi
     if [ -z "${oriproject}" ];then info "guide) repp connect help" && return 1;fi
 
+    ##[ "${oriproject}" = "${REPP_PROJECT}" ] && server=origin #change remote name for manifest git to origin
     #curl -su vc.integrator:'UUmF3ZYZofW1JqRwEFe4g1tHbs1hLoVuVVKrxpvG0g' http://vgit.lge.com/as/a/projects/honda%2Flinux%2Fbuild_tsu/check.access?account=7986\&ref=refs%2fheads%2fmaster\&perm=read
     bar inline "step1.3-gerritserver: [remote] check if ${user} can access git project (checked by $ACCOUNT)"
     clog try "check git name path is correct and can access"
@@ -1931,21 +1938,21 @@ function revvcheck_permission(){
     ret=$(echo "${log}" |sed '1d'| jq -c '.')
     ! [[ "${ret#*:}" =~ 200 ]] && err "check gerrit project error: ${log}" && return 1
     echo "ok. gerrit account[${REVV_USER}] can access by[read]: ${oriproject}"
-    
+
     
     bar inline "step1.4-gerritserver: [remote] check if ${user} can access branch on the project (checked by $ACCOUNT)"
-    clog try "check branch name path is correct and can access [case sensitive]"
+    clog try "check git/branch is correct and can access it [case sensitive]"
     dlog "commit" "read,submit,push,pushMerge,revert,forgeCommitter,forgeAuthor,editTopicName,label-Code-Review"
     dlog "branchtag" "create,delete,createTag,createSignedTag"
     dlog "server" "priority,streamEvents,administrateServer"
     [ -z "${branch}" ] && branch="master"
     [ -z "${perm}" ] && perm="read"
-    log=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject}/check.access?account=${REVV_USERID}\&ref=refs%2fheads%2f${branch}\&perm=${perm})
+    log=$(set -x; curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject}/check.access?account=${REVV_USERID}\&ref=refs%2fheads%2f${branch}\&perm=${perm})
     readarray -d $'\n' -t ret < <(echo "${log}" |sed '1d'| jq -rM '.message,.status')
-    ! [[ "${ret[1]}" =~ 200 ]] && err "check gerrit project error: ${log}" && return 1
+    ! [[ "${ret[1]}" =~ 200 ]] && { err "check gerrit project error: ${log}"; return 1;}
     ##get username & accountID from gerrit
     echo "ok. gerrit branch[${branch}] existed and can accessed with[${perm}] permission by[${REVV_USER}]" 
-    
+
     return 0
 }
 
@@ -2528,7 +2535,7 @@ case "$1" in
     ;;    find)     reppcheck_initvar gitt      &&  gittfind "${@:2}"
     ;;    diff)     reppcheck_initvar gitt      &&  gittdiff "${@:2}"
     ;;   reset)     reppcheck_initvar gitt      &&  gittreset "${@:2}"
-    ;;   debug)     reppcheck_initvar gitt      &&  gittdebug "${@:2}"
+    ;;   debug)                                     gittdebug "${@:2}"
     ;;       *)     bar outline "call native git"       
                     git "${@}";;                        
 esac                                                    
@@ -2575,8 +2582,8 @@ case "$1" in
     ;; sync)        reppcheck_initvar repp              &&  reppsync "${@:2}"
     ;; reset)       reppcheck_initvar repp              &&  reppreset "${@:2}"
     ;; version)     reppcheck_initvar repp              &&  reppversion "${@:2}"
-    ;; connect)     reppcheck_initvar reppgittrevv      &&  reppconnect "${@:2}"
-    ;; debug)       reppcheck_initvar reppgittrevv      &&  reppdebug "${@:2}"
+    ;; connect)                                             reppconnect "${@:2}"
+    ;; debug)       reppcheck_initvar repprevv          &&  reppdebug "${@:2}"
     ;; *)           bar outline "result of native repo";    repo "${@}"
 esac
 return $ret
@@ -2632,7 +2639,7 @@ function reppdebug(){
     source <(cat <<\EOL
         bar inline "GITT_VARIABLE && REPP_VARIABLE for all repository"
         for var in \
-        '${GITT_PROJECT}' '${GITT_REMOTE}' '${GITT_BRANCH}' '${GITT_REVIEW}' '${GITT_URL}' '${GITT_PATH}' \
+        '${GITT_REMOTE}' '${GITT_PROJECT}' '${GITT_BRANCH}' '${GITT_PATH}' '${GITT_REVIEW}' '${GITT_URL}' \
         '${REPP_PATH}' '${REPP_ROOT}' '${REPP_REMOTE}' '${REPP_PROJECT}' '${REPP_BRANCH}' '${REPP_URL}' '${REPP_REPOURL}' '${REPP_MIRROR}' '${REPP_GROUPS}' '${REPP_COUNT}' \
         '${REPPFILE_STATUS}' '${REPPFILE_COMMIT}' '${REPPFILE_CSV}' '${REPPFILE_XML}' '${REPPFILE_MANI}'
         do
@@ -2663,6 +2670,10 @@ function gittdebug(){
 #reppdebug & gittdebug
 #repo forall -c 'echo ${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}'
 
+    if gittcheck_isgitproject; then
+        reppcheck_initvar gitt
+    fi
+
     source <(cat <<\EOL
         bar inline "GITT_VARIABLE && REPP_VARIABLE for this git"
         for var in \
@@ -2672,7 +2683,7 @@ function gittdebug(){
         done
 
         bar inline "[${GITT_PROJECT}] print REPO variable using repo"
-        showRUN repo forall . -c 'echo ${REPO_I}/${REPO_COUNT}, ${REPO_LREV}, ${REPO_REMOTE}, ${REPO_RREV}, ${REPO_PROJECT}, ${REPO_PATH}, ${REPO_OUTERPATH}, ${REPO_INNERPATH}'
+        showRUN repo forall ${GITT_PROJECT:+.} -c 'echo ${REPO_I}/${REPO_COUNT}, ${REPO_LREV}, ${REPO_REMOTE}, ${REPO_RREV}, ${REPO_PROJECT}, ${REPO_PATH}, ${REPO_OUTERPATH}, ${REPO_INNERPATH}'
 
 EOL
 )
