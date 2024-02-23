@@ -221,7 +221,7 @@ function build(){
     printf "${red}========== "${FUNCNAME[0]}" ========== ${NCOL}\n"
     local today=$(date +"%y%m%d_%H")
 
-    tmpfile=$(ls -tA1 *ockerfile*)
+    tmpfile=$(ls -tA1 *ockerfile* | head -1)
     printf "\n\nplease input your own input or use default !!!\n"
     read -p "input Dockerfile [FileName| Enter:${tmpfile:=Dockerfile}]: " cntr_file
     read -p "input Image [Name(lowercase)| Enter:$today]: " cntr_img
