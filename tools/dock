@@ -226,7 +226,7 @@ function build(){
     read -p "input Dockerfile [FileName| Enter:${tmpfile:=Dockerfile}]: " cntr_file
     read -p "input Image [Name(lowercase)| Enter:$today]: " cntr_img
 
-    if [ "$cntr_file" = "" ];then cntr_file="Dockerfile"; fi
+    if [ "$cntr_file" = "" ];then cntr_file="${tmpfile:=Dockerfile}"; fi
     tmppath=$(readlink -f $cntr_file);
     if [ "${tmppath%/*}" = "${HOME}" ];then
         printf "${red}This jois is not permitted in $HOME directory.${NCOL}\n" 
