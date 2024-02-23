@@ -214,15 +214,16 @@ function hello(){
 function build(){
 ## ---------------------------------------------------------------------------
 
-    local tmppath
+    local tmppath tmpfile
     printf "\nplease refer current images when building images\n"    
     list images
 
     printf "${red}========== "${FUNCNAME[0]}" ========== ${NCOL}\n"
-    local today=$(date +"%y%m%d%H")
+    local today=$(date +"%y%m%d_%H")
 
+    tmpfile=$(ls -tA1 *ockerfile*)
     printf "\n\nplease input your own input or use default !!!\n"
-    read -p "input Dockerfile [FileName| Enter:Dockerfile]: " cntr_file
+    read -p "input Dockerfile [FileName| Enter:${tmpfile:=Dockerfile}]: " cntr_file
     read -p "input Image [Name(lowercase)| Enter:$today]: " cntr_img
 
     if [ "$cntr_file" = "" ];then cntr_file="Dockerfile"; fi
@@ -304,7 +305,7 @@ function stoprm(){
     local target
     [ -z "${param}" ] && list ps --all
     printf "${red}========== "stop & remove container" ========== ${NCOL}\n"
-    echo "Multiple container can be input with space ex) cntr1 cntr2 cntr3"
+    echo "Multiple container can be input with space ex) cntr1 cntr2 cntr3 ..."
     read -p "must input Container [Name| ID]: " target; 
     docker stop ${target}
     docker rm ${target}
@@ -323,6 +324,7 @@ function rmi(){
     printf "${red}========== "$cmd" ========== ${NCOL}\n"
     printf "[docker rmi] command will be executed!! otherwise use [dock stop]\n"
     
+    echo "Multiple image can be input with space ex) img1 img2 img3 ..."    
     read -p "must input Image ID/Repository or enter [ImageID| Repository]: " cntr_img
     docker rmi ${cntr_img}
 
