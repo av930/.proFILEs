@@ -241,15 +241,15 @@ function build(){
 function start(){
 ## ---------------------------------------------------------------------------
     $DEBUG "$LINENO:[$cntr_cmd] [$cntr_name] [$cntr_port] [$cntr_img]"
-    list
+    list images
 
-    local recent_name=$(docker images --format '{{.Repository}}' |sed -n '1p'| sed 's/.*\///p')
+    local recent_name=$(docker images --format '{{.Repository}}')
 
     printf "\n\nPlease Input Image, ID is more accurate!!!\n"
     read -p "input Image ID/Repository [ImageID| Repository| Enter:$recent_name]: " cntr_img
-    read -p "input Container [Name| Enter:$recent_name]: " cntr_name
+    read -p "input Container [Name| Enter:${recent_name##*/}]: " cntr_name
     if [ "$cntr_img" = "" ];then cntr_img=${recent_name}; fi
-    if [ "$cntr_name" = "" ];then cntr_name=${recent_name}; fi
+    if [ "$cntr_name" = "" ];then cntr_name=${recent_name##*/}; fi
 
     if [ "$1" = "run" ];then
         printf "${red}========== "$1" ========== ${NCOL}\n"
@@ -413,7 +413,7 @@ function copy(){
 ## ---------------------------------------------------------------------------
     if [ -z "${cntr_name}" ];then 
         list ps --all
-	read -p "must input Container [Name| ID]: " cntr_name;
+    read -p "must input Container [Name| ID]: " cntr_name;
     fi
     echorun docker exec -t $cntr_name /bin/bash -c 'tree -aL 2 /data001/vc.integrator'
     printf "\n${yellow}==== docker copy sample commands ====${NCOL}\n"
