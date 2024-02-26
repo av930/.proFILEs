@@ -4,6 +4,7 @@ user.gitconfig*
 tempdir/*
 .idea/*
 bin/_*
+bin/TRACE_FILE
 
 
 # Compiled source #
