@@ -109,7 +109,7 @@ function list_repo(){
     local i=0 printlist
     # Read the files of a directory
     echo "curl -su 'admin':${KEY_ADMIN}  ${repo_url}/artifactory/api/docker/devops-docker/v2/_catalog"
-    listimg=( $(curl -su 'admin':${KEY_ADMIN}  ${repo_url}/artifactory/api/docker/devops-docker/v2/_catalog  |sed -n '2p' | sed 's/.*\[\(.*\)\].*/\1/'| tr -d '[\[\]",]') )
+    listimg=( $(curl -su 'admin':${KEY_ADMIN}  ${repo_url}/artifactory/api/docker/devops-docker/v2/_catalog |sed -n '2p' | sed 's/.*\[\(.*\)\].*/\1/'| tr -d '[\[\]",]') )
     printlist=$(declare -p listimg | sed 's/.*(\(.*\)).*/\1/')
     printf "%s\n" ${printlist}
 
@@ -235,11 +235,14 @@ function hello(){
     local tmppath
 
     printf "${red}========== "${FUNCNAME[0]}" ========== ${NCOL}\n"
+
     DOC_F=dockerfile.hello
-    echo "make simplest dockerfile for test"
-    echo "FROM ubuntu:18.04" > $DOC_F
-    echo 'ENTRYPOINT ["/bin/bash", "-c"]' >> $DOC_F
-    echo 'CMD "echo HelloWorld!"' >> $DOC_F
+    if ! [ -f "$DOC_F" ]; then 
+        echo "make simplest dockerfile for test"
+        echo "FROM ubuntu:18.04" > $DOC_F
+        echo 'ENTRYPOINT ["/bin/bash", "-c"]' >> $DOC_F
+        echo 'CMD "echo HelloWorld!"' >> $DOC_F
+    fi
 
     tmppath=$(readlink -f $DOC_F);
     if [ "${tmppath%/*}" = "${HOME}" ];then
@@ -481,7 +484,7 @@ ${green}
     get image and start : pull(image)>> start(container)>> exec(attach)>> stop(container)>> remove(image)
     make test image & start: hello(image)>> start(container)>> exec(attach)>> ...
     attach legacy container: list(img&cntr)>> exec(attach)>> ...
-    find img in artifactory: find(search)>> ...
+    get dockerfile from git: down(dockerfile)>> ...
 
 ${yellow}
     command category:
@@ -500,10 +503,10 @@ ${NCOL} "
 }
 
 MENU=(
-    'list(img&cntr)' 'images(list img)' 'ps(list cntr)' 'build(dockerfile)'  
+    'list(img&cntr)' 'images(list img)' 'ps(list cntr)' 'build(dockerfile)'
     'start(run++ img)' 'exec(attach cntr)' 'hello(testimg)' 'run(just run)' 
-    'stop(&rm ctnr)' 'remove(img)' 'clean(prune all)' 'debug(log)' 'find(search)'
-    'pull(from arti)' 'push(to arti)' 'down(dockerfile)' 'copy(fromto host)' 'help'
+    'stop(&rm ctnr)' 'remove(img)' 'clean(prune all)' 'debug(log)' 'find(in arti)'
+    'pull(from arti)' 'push(to arti)' 'down(dockerfile)' 'copy(between host)' 'help'
 )
 
 function handler_menu(){
