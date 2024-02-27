@@ -1358,7 +1358,7 @@ function revv_initvar(){
     #default initial gerrit API key is na (vgit_na).
 
     key_id=$(getserver ${GITT_REMOTE:-${REPP_REMOTE}} sub)
-    key=$(ende_code dev ${key_id})
+    key=$(ende_code de ${key_id})
 
     if (( 40 > ${#key} )); then
         warn "if problem continue, check gerrit http key value in [~/.key_${key_id}] \n
@@ -1886,7 +1886,7 @@ function revvcheck_server(){
     local server=$1
     local flag=$2
     local key_id=$(getserver ${server} sub)
-    local key=$(ende_code dev ${key_id})
+    local key=$(ende_code de ${key_id})
 
     #local port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)')
     if [ -z "${server}" ];
@@ -1921,7 +1921,7 @@ function revvcheck_account(){
     local user=$2
     local flag=$3
     local key_id=$(getserver ${server} sub)
-    local key=$(ende_code dev ${key_id})
+    local key=$(ende_code de ${key_id})
     local ret=()
 
     #local port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)')
@@ -1969,7 +1969,7 @@ function revvcheck_permission(){
     local perm=$5
     local flag=$6
     local key_id=$(getserver ${server} sub)
-    local key=$(ende_code dev ${key_id})
+    local key=$(ende_code de ${key_id})
     local log ret
 
     revvcheck_account ${server} ${user}
@@ -2017,7 +2017,7 @@ function revvinfo(){
 # $3 gitproject
 # $4 branch
     local server=$(getserver ${1:-na} http)
-    local key=$(ende_code dev $1)
+    local key=$(ende_code de $1)
     local usercmd=${2-${ACCOUNT}}
     local gitproject=${3//'/'/'%2F'}
     #local branch=$4
@@ -2045,7 +2045,7 @@ function revvaccount(){
     local cmd=$1
     local subcmd=$2
     local server=$(getserver ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
-    local key=$(ende_code dev $(getserver ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub))
+    local key=$(ende_code de $(getserver ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub))
     local source=${3:-$USER}
     local target=$4
     local extra=$5
@@ -2118,7 +2118,7 @@ function revvproject(){
     local cmd=$1
     local subcmd=$2
     local server=$(getserver ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
-    local key=$(ende_code dev $(getserver ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub))
+    local key=$(ende_code de $(getserver ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub))
     local source=${3:-$USER}
     local parent=$4
     local extra=$5
@@ -2234,7 +2234,7 @@ function revvbranch(){
     local cmd=$1
     local subcmd=$2
     local server=$(getserver ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
-    local key=$(ende_code dev $(getserver ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub))
+    local key=$(ende_code de $(getserver ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub))
     local source=${3:-$USER}
     local target=$4
     local extra=$5
@@ -2296,7 +2296,7 @@ function revvforall(){
     local cmd=$1
     local target=$2 #no need * for all file in gerrit, remove
     local source=$3
-    local key=$(ende_code dev $(getserver ${GITT_REMOTE:-${REPP_REMOTE}} sub))
+    local key=$(ende_code de $(getserver ${GITT_REMOTE:-${REPP_REMOTE}} sub))
 
     case $cmd in
         help) cat <<-EOF
@@ -2385,7 +2385,7 @@ function revvshowcmd(){
 # $4 branch
     local cmd=$1
     local server=$(getserver ${cmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
-    local key=$(ende_code dev $(getserver ${GITT_REMOTE:-${REPP_REMOTE}} sub))
+    local key=$(ende_code de $(getserver ${GITT_REMOTE:-${REPP_REMOTE}} sub))
     local usercmd=${2-${USER}}
     local oriproject=${3:-${GITT_PROJECT:-${REPP_PROJECT}}}
     local gitproject=${oriproject//'/'/'%2F'}
@@ -2478,7 +2478,7 @@ function revvdebug(){
 # $3 gitproject
 # $4 branch
     local server=$(getserver ${1:-na} http)
-    local key=$(ende_code dev $2)
+    local key=$(ende_code de $2)
     local cmd=${2-${ACCOUNT}}
     local gitproject=${3//'/'/'%2F'}
     #local branch=$4
