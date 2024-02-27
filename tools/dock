@@ -37,6 +37,46 @@ cntr_cmd=$1; cntr_name=$2; cntr_port=$3; cntr_img=$4; cntr_file='';
 
 ##--------------------------- Menu Functions --------------------------------
 ##============================================================================
+function ende_code(){
+## ---------------------------------------------------------------------------
+# en/decoding as variable: code env <keyname> <key>; code de <keyname>
+# en/decoding as file: code enf <keyfile> <key>; code de <keyfile>
+local temp temp_var
+local cmd=$1 tag=$2 key=$3
+    case $cmd in
+       env|env) [ -z "${key}" ] && ende_code help
+         ;; de) [ -z "${tag}" ] && ende_code help
+    esac
+
+    case $cmd in
+         env) #encrypt to ENCODE_$tag
+            declare -g "ENCODE_$tag=$( echo $key | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey )"
+       ;; en) #encrypt to ~/.key_$tag
+            echo $( echo $key | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey ) > $HOME/.key_$tag
+       ;; de) #decrypt from ENCODE_$tag, if error, decrypt from ~/.key_$tag
+            temp=ENCODE_$tag; temp_var=${!temp} #must be indirect reference
+            if (( 40 < ${#temp_var} )); then
+                echo ${temp_var}| openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 2> /dev/null
+            else
+                if [[ -f $HOME/.key_$tag ]]; then cat $HOME/.key_$tag | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 
+                else warn "key missing or server is incorrect";fi
+                declare -g "ENCODE_$tag=$( echo $key | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey )"
+            fi
+       ;;list|debug)  #list up keycode for debugging
+            declare -p |grep ENCODE 
+       ;;help|*) info "variable is live during session, file is live permanent"
+            echo "en/decoding as variable: ende_code env <keyname> <key>, ende_code de <key_id>"
+            echo "en/decoding as file    : ende_code enf <keyfile> <key>, ende_code de <key_id>"
+            echo "ex) save file for vgit : ende_code enf ejladf69a79 arti"
+            echo "ex) save var for lamp  : ende_code env ejladf69a79 arti"
+            echo "ex) read key from lamp : ende_code de arti" 
+            echo .
+            echo "<<${GREEN} list of current registered key >>${NOL}"
+            echo "$(ls -al ~/.key_*)" 
+             
+    esac
+}
+
 function echorun(){
 ## ---------------------------------------------------------------------------
 # ex) echo docker images # must call without quote
@@ -68,8 +108,8 @@ function list_repo(){
 ## ---------------------------------------------------------------------------
     local i=0 printlist
     # Read the files of a directory
-    echo "curl -s -u 'admin'  ${repo_url}/artifactory/api/docker/devops-docker/v2/_catalog"
-    listimg=( $(curl -s -u 'admin'  ${repo_url}/artifactory/api/docker/devops-docker/v2/_catalog  |sed -n '2p' | sed 's/.*\[\(.*\)\].*/\1/'| tr -d '[\[\]",]') )
+    echo "curl -su 'admin':${KEY_ADMIN}  ${repo_url}/artifactory/api/docker/devops-docker/v2/_catalog"
+    listimg=( $(curl -su 'admin':${KEY_ADMIN}  ${repo_url}/artifactory/api/docker/devops-docker/v2/_catalog  |sed -n '2p' | sed 's/.*\[\(.*\)\].*/\1/'| tr -d '[\[\]",]') )
     printlist=$(declare -p listimg | sed 's/.*(\(.*\)).*/\1/')
     printf "%s\n" ${printlist}
 
@@ -94,6 +134,8 @@ function docker_hub(){
         pull)
             list_repo
             read -p "must input image name [Number]: " input_img
+            curl -su 'admin':${KEY_ADMIN}  ${repo_url}/artifactory/api/docker/devops-docker/v2/${listimg[${input_img}]}/tags/list |jq -C
+            
             read -t 5 -p "default tag is latest otherwise input tag[2s]:" input_tag
             if [ -z "$input_img" ]; then echo you have to input image number; return; fi
             echorun docker pull ${repo_url}/devops-docker/${listimg[${input_img}]}:${input_tag:=latest}
@@ -540,5 +582,6 @@ function ____dock(){
 ## Main
 ##============================================================================
 # check if called from source or not.
+KEY_ADMIN=$(ende_code de arti)
 (return 0 2>/dev/null) && sourced=1 || sourced=0
 if [ $sourced -eq 0 ]; then handle_commands $@;else echo "plz run without source." && return; fi

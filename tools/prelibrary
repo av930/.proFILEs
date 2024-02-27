@@ -122,25 +122,21 @@ function checkifSHA(){
 
 function ende_code(){
 ## ---------------------------------------------------------------------------
-# en/decoding as variable: code env <keyname> <key>; code dev <keyname>
-# en/decoding as file: code enf <keyfile> <key>; code def <keyfile>
+# en/decoding as variable: code env <keyname> <key>; code de <keyname>
+# en/decoding as file: code enf <keyfile> <key>; code de <keyfile>
 local temp temp_var
 local cmd=$1 tag=$2 key=$3
     case $cmd in
-    env|enf) [ -z "${key}" ] && ende_code help
+            en) [ -z "${key}" ] && ende_code help
     ;; dev|def) [ -z "${tag}" ] && ende_code help
     esac
 
     case $cmd in
-        help) info "variable is live during session, file is live permanent"
-            echo "en/decoding as variable: ende_code env <keyname> <key>, ende_code dev <keyname>"
-            echo "en/decoding as file    : ende_code enf <keyfile> <key>, ende_code def <keyfile>"
-        echo "ex) save file for vgit : ende_code enf vgit ejladf69a79f8d79fdsqd02"
-        echo "ex) save var for lamp  : ende_code env lamp ejladf69a79f8d79fdsqd02"
-             
-       ;;env) #encrypt to ENCODE_$tag
+         env) #encrypt to ENCODE_$tag
             declare -g "ENCODE_$tag=$( echo $key | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey )"
-       ;;dev) #decrypt from ENCODE_$tag
+       ;; en) #encrypt to ~/.key_$tag
+            echo $( echo $key | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey ) > $HOME/.key_$tag
+       ;; de) #decrypt from ENCODE_$tag, if error, decrypt from ~/.key_$tag
             temp=ENCODE_$tag; temp_var=${!temp} #must be indirect reference
             if (( 40 < ${#temp_var} )); then
                 echo ${temp_var}| openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 2> /dev/null
@@ -151,12 +147,16 @@ local cmd=$1 tag=$2 key=$3
             fi
        ;;list|debug)  #list up keycode for debugging
             declare -p |grep ENCODE 
-      
-       ;;enf) #encrypt to ~/.key_$tag
-            echo $( echo $key | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey ) > $HOME/.key_$tag
-       ;;def) ##decrypt from ~/.key_$tag & save to variable ENCODE_$tag
-            if [[ -f $HOME/.key_$tag ]]; then cat $HOME/.key_$tag | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 
-            else warn "key missing or server is incorrect";fi
+       ;;help|*) info "variable is live during session, file is live permanent"
+            echo "en/decoding as variable: ende_code env <keyname> <key>, ende_code de <key_id>"
+            echo "en/decoding as file    : ende_code enf <keyfile> <key>, ende_code de <key_id>"
+            echo "ex) save file for vgit : ende_code env vgit ejladf69a79f8d79fdsqd02"
+            echo "ex) save var for lamp  : ende_code env lamp ejladf69a79f8d79fdsqd02"
+            echo "ex) read key from lamp : ende_code de lamp" 
+            
+            echo "list of current registered key"
+            echo "$(ls -al ~/.key_*)" 
+             
     esac
 }
 
