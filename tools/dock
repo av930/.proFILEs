@@ -243,11 +243,12 @@ function start(){
     $DEBUG "$LINENO:[$cntr_cmd] [$cntr_name] [$cntr_port] [$cntr_img]"
     list images
 
-    local recent_name=$(docker images --format '{{.Repository}}')
+    local recent_name=$(docker images --format '{{.Repository}}'|head -1)
 
     printf "\n\nPlease Input Image, ID is more accurate!!!\n"
     read -p "input Image ID/Repository [ImageID| Repository| Enter:$recent_name]: " cntr_img
     read -p "input Container [Name| Enter:${recent_name##*/}]: " cntr_name
+
     if [ "$cntr_img" = "" ];then cntr_img=${recent_name}; fi
     if [ "$cntr_name" = "" ];then cntr_name=${recent_name##*/}; fi
 
@@ -302,17 +303,21 @@ function stoprm(){
 ## ---------------------------------------------------------------------------
     local cmd=$1
     local param="${@:2}"
-    local target
     [ -z "${param}" ] && list ps --all
-    printf "${red}========== "stop & remove container" ========== ${NCOL}\n"
+    printf "${red}========== stop & remove container ========== ${NCOL}\n"
     echo "Multiple container can be input with space ex) cntr1 cntr2 cntr3 ..."
-    read -p "must input Container [Name| ID]: " target; 
-    docker stop ${target}
-    docker rm ${target}
+    read -p "must input Container [Name| ID]: "
+    if [ -n "${REPLY}" ]; then 
+    docker stop ${REPLY}
+    docker rm ${REPLY}
     list ps --all
+    fi
     
-    read -p "continue to remove volume? [Name or ID| ctrl+c:exit]: " target
-    docker volume rm --force ${target}
+    if [ -n "$(docker volume ls -q)" ]; then 
+    read -p "continue to remove volume? [Name or ID| ctrl+c:exit]: "
+    docker volume rm --force ${REPLY}
+    fi
+    printf "\n\n"
 }
 
 
@@ -325,13 +330,13 @@ function rmi(){
     printf "[docker rmi] command will be executed!! otherwise use [dock stop]\n"
     
     echo "Multiple image can be input with space ex) img1 img2 img3 ..."    
-    read -p "must input Image ID/Repository or enter [ImageID| Repository]: " cntr_img
-    docker rmi ${cntr_img}
+    read -p "must input Image ID/Repository or enter [ImageID| Repository]: "
+    docker rmi ${REPLY}
 
     if [ $? -ne 0 ]; then
-        read -p "docker rmi ${cntr_img} --force [Enter:${cntr_img}| Ctrl+C]: "
+        read -p "docker rmi ${REPLY} --force [Enter:${REPLY}| Ctrl+C]: "
         if [ "$REPLY" = "" ]; then
-            docker rmi ${cntr_img} --force
+            docker rmi ${REPLY} --force
         fi
     fi
 }
