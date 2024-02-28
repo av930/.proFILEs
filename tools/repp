@@ -660,8 +660,7 @@ EOF
     ;; @rev)      clog "<REPO_LREV>";        awk -v FS="|" '{print $1}' ${REPPFILE_CSV} |pCount
     ;; @group)    clog "<REPO_GROUP>";       awk -v FS="|" '{print $2}' ${REPPFILE_CSV} |sort |uniq |pCount
     ;; @remote)   clog "<REPO_REMOTE>";      awk -v FS="|" '{print $3}' ${REPPFILE_CSV} |sort |uniq |pCount
-    ;; @branch)   clog "<REPO_UPSTREAM,REPO_DEST_BRANCH,REPO_RREV>";        
-                                             awk -v FS="|" '{print $4"|"$5"|"$6}' ${REPPFILE_CSV} |sort |uniq |column -s'|' -t --table-columns REPO_UPSTREAM,REPO_DEST_BRANCH,REPO_RREV
+    ;; @branch)                              awk -v FS="|" '{print $4"|"$5"|"$6}' ${REPPFILE_CSV} |sort |uniq |column -s'|' -t --table-columns '<REPO_UPSTREAM,REPO_DEST_BRANCH,REPO_RREV>${NCOL}'  |pCount -1
     ;; @project)  clog "<REPO_PROJECT>";     awk -v FS="|" '{print $7}' ${REPPFILE_CSV} |sort |pCount
     ;; @path)     clog "<REPO_PATH>";        awk -v FS="|" '{print $8}' ${REPPFILE_CSV} |sort |pCount
     ;; '')        cat ${REPPFILE_CSV}| column -s'|' -t --table-columns REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_UPSTREAM,REPO_DEST_BRANCH,REPO_RREV,REPO_PROJECT,REPO_PATH |pCount -1
