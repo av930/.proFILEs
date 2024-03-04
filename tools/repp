@@ -248,7 +248,7 @@ CHANGE
 				postfilter : cat ${REPPFILE_XML} | sed -E 's#${item}="([^"]*${filter}[^"]*)"#${item}="\1${str}"#'
 CHANGE
 
-    ;;  diff)   bar inline "compare 2 different manifests"
+    ;;  diff)   bar inline "compare 2 different manifests what project is changed"
                 reppget_repcmd
                 clog 'ex)' 'repp mani diff <old manifest.xml> <new manifest.xml>'    
                 clog 'ex)' 'repp mani diff event/230426_mig.xml event/230712_upstream.xml'    
@@ -257,12 +257,12 @@ CHANGE
                 if [ -z "${item}" ]; then 
                     read -p $'\n\nchoose old manifest compare to current: ' opt 
                     clog "\ninput old [${opt}]" "will be compared to current manifest [${REPPFILE_MANI}]"
-                    clog "otherwise" "ctrl+c to break, and run 'repp mani diff ${opt} <manifest to compare>'"
+                    clog "Otherwise" "ctrl+c to break, and run 'repp mani diff ${opt} <manifest to compare>'"
                 fi
                 echo 
-                read -p $'\ninfo: repo sync all branch is needed (without -c option) [enter:continue| ctrl+c:break] '
-                repo sync -qj5
-                repo --no-pager diffmanifests --no-color --raw ${item:-${opt}} ${str:-${REPPFILE_MANI}} --pretty-format='%h| %ci| %an| %s' > repp.diff
+                read -p $'\ninfo: repo sync all branch is needed (without -c option) [y:ok continue| other:go without sync| ctrl+c:break] '
+                [ "$REPLY" = "y" ] && repo sync -qj5
+                repo --no-pager diffmanifests --no-color --raw ${item:=${opt}} ${str:=${REPPFILE_MANI}} --pretty-format='%h| %ci| %an| %s' > ${REPP_DIR}/repp.diff
                 showRUN repo diffmanifests ${item:-${opt}} ${str:-${REPPFILE_MANI}} --pretty-format='%Cred%h %Cgreen(%ci) %C(blue)<%an>%Creset %s' 
                 
                 cat <<-EOL
@@ -274,18 +274,20 @@ CHANGE
 		       changed projects( OK compare) : path-same, project-same, branch-changed 
 EOL
     ;;  diffcheck)
-                bar inline "check result of difference 2 manifests"
+                bar inline "after repp mani check, if branch changed, find missing commits (this is useful in migration)"
                 local cpath cbrold cbrnew cremote cproject ccommitid deployed
-                IFS=' '; cat repp.diff | sed -e 's/\x1b\[[0-9;]*m//g'| while read -r -a line; do
+                IFS=' '; cat ${REPP_DIR}/repp.diff | sed -e 's/\x1b\[[0-9;]*m//g'| while read -r -a line; do
+                #echo "${line[@]}"
                     case ${line[0]} in 
-                         C) 
+                         C) #compare case changed project
+                            #3rd is remote, 7th is project,  
                             cpath="${line[1]}"; cbrold="${line[2]}"; cbrnew="${line[3]}"
-                            cremote=$(cat ${REPPFILE_CSV} |grep ${cpath} | cut -d'|' -f2)
-                            cproject=$(cat ${REPPFILE_CSV} |grep ${cpath} | cut -d'|' -f4|xargs)
+                            #cremote=$(cat ${REPPFILE_CSV} |grep ${cpath} | cut -d'|' -f3)
+                            cremote=$(cat ${REPPFILE_CSV} |grep ${cpath} |awk -v FS="|" '{print $3}')
+                            cproject=$(cat ${REPPFILE_CSV} |grep ${cpath} | awk -v FS="|" '{print $8}'|xargs)
                             
                         ;;R) 
                             ccommitid="${line[1]/|/}"
-                            ##echo "${cremote}> ${cproject}> ${cbrnew}> ${ccommitid}"                            
                             ##get change_id and find commmit in new branch, it is deployed.
                             deployed=$( revv commit $(getserver ${cremote} path) ${ccommitid} | sed '1d'|  jq -cC '.[].branch' | grep "${cbrnew}" )
                             [ -z "${deployed}" ] && info "[missing commits] ${cremote}> ${cproject}> ${cbrnew}> ${ccommitid}"
@@ -455,7 +457,7 @@ EOF
                 else INPUT=( $(find ${HOME} -maxdepth 4 -name ".repo" 2> /dev/null |head -60))
                      run_menu "${INPUT[@]}";  cd "${menu_selected}/.."
                 fi
-      ;;repp)   cd ${REPP_ROOT}/.repp
+      ;;repp)   cd ${REPP_DIR}
       ;;  '')   gittgo root
       ;;   *)   gittgo $cmd
     esac
@@ -487,7 +489,7 @@ EOF
     if ! repp_initvar; then warn "your are not in repo"; return 1; fi 
     if [ ! -f ${REPPFILE_CSV} ]; then reppfind $cmd; fi
 
-    local INPUT=( $(cat ${REPPFILE_CSV} |grep ${cmd}| awk -v FS="\|" '{print $6}'| sort) )
+    local INPUT=( $(cat ${REPPFILE_CSV} |grep ${cmd}| awk -v FS="\|" '{print $8}'| sort) )
     if [ -n "${INPUT}" ];
     then 
         run_menu "${INPUT[@]}"; cd "${REPP_ROOT}/${menu_selected##* }"; 
@@ -554,6 +556,7 @@ function reppmanidb(){
     ## generate json from manifest, #suppress all log for generation json
     local mani_out=()
     ( repo manifest -r --json -o ${REPPFILE_JSON} ) &> /dev/null 
+    
     ## get <default> from json
     readarray -d'|' -t itemdefault < <(cat  ${REPPFILE_JSON} |jq -j '.default|.revision,"|",.groups,"|",.remote,"|",.upstream,"|",."dest-branch","|",.name,"|",.path,"|"')
     #declare -p itemdefault
@@ -604,6 +607,10 @@ function reppmanidb(){
     local prnmsg='%6.6s|%12.12s|%8.8s|%-32.32s|%-74.74s|%.80s'
     printf "%s\n" "${mani_out[@]}" >  ${REPPFILE_CSV}
     printf "${prnmsg}\n" ${mani_out[*]//|/ } >  ${REPPFILE_TXT}
+    
+    ## RREV is created by upper logic
+    ##NEEDTO improve: each field $1 $2 ... should be replaced $N_LREV $N_GROUP ...
+    #N_LREV=0 N_GROUP=1 N_REMOTE=2 N_UPSTREAM=3 N_DEST_BRANCH=4 N_REPO_RREV=5 N_PROJECT=6 N_PATH=7
     
     ## generate db by repo 
     { repo forall -j1 -c 'prnmsg="%6.6s|%s|%s|%s|%s|%s|%s|%s|"
@@ -1266,7 +1273,6 @@ function repp_initvar(){
 # find input-path up and down,
 
     local ret=1
-    local REPP_DIR
     ## move to repo root
     reppfind_repodir .repo/manifests 5 
     ## set variable REPP if manifest dir exists
@@ -2337,7 +2343,7 @@ function revvforall(){
 EOF
             return 0
     ;; setgit)  info "setgit is delivered to 'repo forall <git list>', this setting is sustain until reset it"
-                echo "flow) cat ${REPPFILE_CSV} |awk -F'|' {'print \$4'} > project.list"
+                echo "flow) cat ${REPPFILE_CSV} |awk -F'|' {'print \$7'} > project.list"
                 echo "flow) revv forall setgit \$(cat project.list) #select gits" 
                 echo "flow) revv forall Pbranch master #do job for any selected gits"
                 echo "flow) revv forall setgit #reset, remove selected git setting" 

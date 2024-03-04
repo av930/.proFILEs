@@ -80,7 +80,7 @@ local cmd=$1 tag=$2 key=$3
 function echorun(){
 ## ---------------------------------------------------------------------------
 # ex) echo docker images # must call without quote
-    echo "\$ $@" ; "$@";
+    echo "\$ $@" ; eval "$*";
 }
 
 function download_dockerfile(){
@@ -249,7 +249,7 @@ function hello(){
         echo "You must move your [$DOC_F] to other dir not in HOME. " && exit 0;
     fi
     ## use DOCKER_BUILDKIT, under docker version 25.0.3
-    echorun DOCKER_BUILDKIT=1 docker build -f $DOC_F -t $DOC_F .
+    echorun DOCKER_BUILDKIT=1 docker build --progress=plain -f $DOC_F -t $DOC_F .
     echo "please find generated dockerfile ${DOC_F}: "
     echo
     readlink -f $DOC_F
@@ -280,7 +280,10 @@ function build(){
 
     fi
     if [ "$cntr_img" = "" ];then cntr_img=$today; fi
-    DOCKER_BUILDKIT=1 docker build -f ${cntr_file} -t ${cntr_img,,} . "$@" |& tee -a log.docker
+    echorun DOCKER_BUILDKIT=1 docker build --progress=plain -f ${cntr_file} -t ${cntr_img,,} . "$@" |& tee -a log.docker
+    
+    
+    printf "docker build log is saved to ./log.docker"
 }
 
 
@@ -448,7 +451,7 @@ function clean(){
     printf "current total docker container is: " && docker ps --all -q | wc -l
     printf "current total docker images is: "    && docker images --all -q | wc -l
 
-    exit 0
+    return 0
 }
 
 
