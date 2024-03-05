@@ -237,10 +237,28 @@ bind -c resize = eval 'resize -1' 'command -c resize'
 # screen -t vim             1 vim
 # screen -t google          20 $BROWSER http://www.google.com
 # screen -t vmstat       0   vmstat 10
-
 ## enter scroll mode and F1/F2 scroll up & down
 bindkey -k k1 eval "copy" "stuff ^u"
 bindkey -k k2 eval "copy" "stuff ^d"
 bindkey -m -k k1 stuff ^u
 bindkey -m -k k2 stuff ^d
-bindkey -k k3 eval "clear" "scrollback 0" "scrollback 40000"
+bindkey -k k5 eval "clear" "scrollback 0" "scrollback 40000"
+
+## mouse scroll up & down
+termcapinfo xterm* ti@:te@
+
+# additional info for MobaXterm F1~F9 control
+#terminfo * k1=\EOP
+#terminfo * k2=\EOQ
+terminfo * k3=\EOR
+terminfo * k4=\EOS
+#terminfo * k5=\E[15~
+#terminfo * k6=\E[17~
+#terminfo * k7=\E[18~
+#terminfo * k8=\E[19~
+#terminfo * k9=\E[20~
+#terminfo * F1=\E[23~
+#terminfo * F2=\E[24~
+bindkey -k k3 eval "copy" "stuff ^u"
+bindkey -k k4 eval "copy" "stuff ^d"
+

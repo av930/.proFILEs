@@ -1259,8 +1259,7 @@ function reppfind_repodir(){
         cd $T
         ;;
     *)  ## found multiple dir in sub dir
-        warn "subdir [%s]\n" ${#REPP_PATH_ALL[@]}
-        warn "%s\n" ${REPP_PATH_ALL[@]};
+        warn "subdir [#%s]:%s\n" ${#REPP_PATH_ALL[@]} ${REPP_PATH_ALL[@]};
         REPP_PATH=''
         ;;
     esac
