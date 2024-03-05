@@ -555,7 +555,7 @@ function reppmanidb(){
 
     ## generate json from manifest, #suppress all log for generation json
     local mani_out=()
-    ( repo manifest -r --json -o ${REPPFILE_JSON} ) &> /dev/null 
+    repo manifest -r --json -o ${REPPFILE_JSON}  &> /dev/null 
     
     ## get <default> from json
     readarray -d'|' -t itemdefault < <(cat  ${REPPFILE_JSON} |jq -j '.default|.revision,"|",.groups,"|",.remote,"|",.upstream,"|",."dest-branch","|",.name,"|",.path,"|"')
