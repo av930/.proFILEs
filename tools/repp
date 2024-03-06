@@ -340,7 +340,8 @@ function reppget_repcmd(){
     fi
 
     if [ -n "$REPP_GROUPS" ] && [[ ! "${EXTRA_OPTION}" =~ "--groups" ]] ;then EXTRA_OPTION="--groups=$REPP_GROUPS "; fi
-    if [ -n "$REPP_MIRROR" ] && [[ ! "${EXTRA_OPTION}" =~ "--reference" ]] ;then EXTRA_OPTION+="--reference=$REPP_MIRROR"; fi
+    if [ -n "$REPP_REF" ]    && [[ ! "${EXTRA_OPTION}" =~ "--reference" ]] ;then EXTRA_OPTION+="--reference=$REPP_REF "; fi
+    if [ -n "$REPP_MIRR" ]   && [[ ! "${EXTRA_OPTION}" =~ "--mirror" ]] ;then EXTRA_OPTION+="--mirror "; fi
 
     
     if [ "$1" = "info" ];then
@@ -555,7 +556,9 @@ function reppmanidb(){
 
     ## generate json from manifest, #suppress all log for generation json
     local mani_out=()
+    [ -d ${REPP_DIR} ] || mkdir ${REPP_DIR}
     repo manifest -r --json -o ${REPPFILE_JSON}  &> /dev/null 
+    [ -f ${REPPFILE_JSON} ] || ( warn "you are using old repo, so run first 'repp version toggle' ")
     
     ## get <default> from json
     readarray -d'|' -t itemdefault < <(cat  ${REPPFILE_JSON} |jq -j '.default|.revision,"|",.groups,"|",.remote,"|",.upstream,"|",."dest-branch","|",.name,"|",.path,"|"')
@@ -617,7 +620,7 @@ function reppmanidb(){
     printf "${prnmsg}\n" "${REPO_LREV}" "all,default" "${REPO_REMOTE}" "${REPO_UPSTREAM}" "${REPO_DEST_BRANCH}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"'|sort > ${REPPFILE_CSV}.cmp; } 2>/dev/null 
     
     ## compare both only rrev
-    if ! diff -q <(awk -v FS="|" '{print $1 $3 $6 $7 $8}' ${REPPFILE_CSV}) <(awk -v FS="|" '{print $1 $3 $6 $7 $8}' ${REPPFILE_CSV}.cmp) &>/dev/null ; then 
+    if ! diff -q -B <(awk -v FS="|" '{print $1 $3 $6 $7 $8}' ${REPPFILE_CSV}) <(awk -v FS="|" '{print $1 $3 $6 $7 $8}' ${REPPFILE_CSV}.cmp) &>/dev/null ; then 
     local tempfile=$(mktemp)
     warn "the json file of ${REPP_PATH}/${REPPFILE_MANI} has problem"
     read -p "current manifest has error, it's DB could generated :[enter:continue| ctrl+c:break]"; 
@@ -1292,8 +1295,9 @@ function repp_initvar(){
         #REPP_URL=$(git remote -v |grep fetch |awk '{print $2}')
         #REPP_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
         REPP_REPOURL=$(cat ../repo/.git/config |grep url|sed 's/.*= \(.*\)/\1/')
-        #REPP_MIRROR=$(cat ../manifests.git/config |grep reference|sed 's/.*= \(.*\)/\1/')
-        REPP_MIRROR=$(git config --get-regexp repo.reference |head -1|cut -d' ' -f2)
+        #REPP_REF=$(cat ../manifests.git/config |grep reference|sed 's/.*= \(.*\)/\1/')
+        REPP_REF=$(git config --get-regexp repo.reference |head -1|cut -d' ' -f2)
+        REPP_MIRR=$(git config --get-regexp mirror |head -1|cut -d' ' -f2)
         REPP_GROUPS=$(git config --get-regexp manifest.groups |head -1|cut -d' ' -f2)
         REPP_COUNT=$($REPP_PATH/../repo/repo list |wc -l)
 
@@ -2692,7 +2696,7 @@ function reppdebug(){
         bar inline "GITT_VARIABLE && REPP_VARIABLE for all repository"
         for var in \
         '${GITT_REMOTE}' '${GITT_PROJECT}' '${GITT_BRANCH}' '${GITT_PATH}' '${GITT_REVIEW}' '${GITT_URL}' \
-        '${REPP_PATH}' '${REPP_ROOT}' '${REPP_REMOTE}' '${REPP_PROJECT}' '${REPP_BRANCH}' '${REPP_URL}' '${REPP_REPOURL}' '${REPP_MIRROR}' '${REPP_GROUPS}' '${REPP_COUNT}' \
+        '${REPP_PATH}' '${REPP_ROOT}' '${REPP_REMOTE}' '${REPP_PROJECT}' '${REPP_BRANCH}' '${REPP_URL}' '${REPP_REPOURL}' '${REPP_REF}' '${REPP_GROUPS}' '${REPP_COUNT}' \
         '${REPPFILE_STATUS}' '${REPPFILE_COMMIT}' '${REPPFILE_CSV}' '${REPPFILE_XML}' '${REPPFILE_MANI}'
         do
            dlog "$var\t" $(eval echo $var)
@@ -2774,7 +2778,7 @@ esac
 ##============================================================================
 REVV_VER=
 GITT_REMOTE= &&GITT_PROJECT= &&GITT_BRANCH= &&GITT_REVIEW= &&GITT_URL= &&GITT_PATH=
-REPP_PATH= &&REPP_ROOT= &&REPP_REMOTE= &&REPP_PROJECT= &&REPP_URL= &&REPP_BRANCH= &&REPP_REPOURL= &&REPP_MIRROR= &&REPP_GROUPS= &&REPP_COUNT= &&REPP_CMD=
+REPP_PATH= &&REPP_ROOT= &&REPP_REMOTE= &&REPP_PROJECT= &&REPP_URL= &&REPP_BRANCH= &&REPP_REPOURL= &&REPP_REF= &&REPP_GROUPS= &&REPP_COUNT= &&REPP_CMD=
 REPP_REMOTELIST=()
 REPP_REVIEWLIST=()
 REPP_PATH_ALL=()
@@ -2785,4 +2789,3 @@ else  ##if sourced
     echo "[WELCOME] repp & gitt utility is applied for current shell"
     ##hide local function, need to implements
 fi
-
