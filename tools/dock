@@ -39,13 +39,14 @@ cntr_cmd=$1; cntr_name=$2; cntr_port=$3; cntr_img=$4; cntr_file='';
 ##============================================================================
 function ende_code(){
 ## ---------------------------------------------------------------------------
-# en/decoding as variable: code env <keyname> <key>; code de <keyname>
-# en/decoding as file: code enf <keyfile> <key>; code de <keyfile>
+# encoding as variable: code env <keyname> <key>
+# encoding as file: code en <keyfile> <key>
+# decode de <keyfile>
 local temp temp_var
 local cmd=$1 tag=$2 key=$3
     case $cmd in
-       env|env) [ -z "${key}" ] && ende_code help
-         ;; de) [ -z "${tag}" ] && ende_code help
+            en) [ -z "${key}" ] && ende_code help
+    ;; dev|def) [ -z "${tag}" ] && ende_code help
     esac
 
     case $cmd in
@@ -64,14 +65,17 @@ local cmd=$1 tag=$2 key=$3
             fi
        ;;list|debug)  #list up keycode for debugging
             declare -p |grep ENCODE 
-       ;;help|*) info "variable is live during session, file is live permanent"
-            echo "en/decoding as variable: ende_code env <keyname> <key>, ende_code de <key_id>"
-            echo "en/decoding as file    : ende_code enf <keyfile> <key>, ende_code de <key_id>"
-            echo "ex) save file for vgit : ende_code enf ejladf69a79 arti"
-            echo "ex) save var for lamp  : ende_code env ejladf69a79 arti"
-            echo "ex) read key from lamp : ende_code de arti" 
-            echo .
-            echo "<<${GREEN} list of current registered key >>${NOL}"
+       ;;help|*)
+            [ "$cmd" = help ] || err "please check your command"
+            info "variable is live during session, file is live permanent"
+            echo "en/decoding as variable: dock ende_code env <keyname> <key>, ende_code de <key_id>"
+            echo "en/decoding as file    : dock ende_code en <keyfile> <key>, ende_code de <key_id>"
+            echo "ex) save file for vgit : dock ende_code env vgit ejladf69a79f8d79fdsqd"
+            echo "ex) save var for lamp  : dock ende_code en  lamp ejladf69a79f8d79fdsqd"
+            echo "ex) save var for arti  : dock ende_code en  arti ejladf69a79f8d79fdsqd"
+            echo "ex) read key from lamp : dock ende_code de  lamp" 
+            
+            echo "list of current registered key"
             echo "$(ls -al ~/.key_*)" 
              
     esac
@@ -106,6 +110,13 @@ function download_dockerfile(){
 
 function list_repo(){
 ## ---------------------------------------------------------------------------
+    if [ -z "${KEY_ADMIN}" ]; then 
+        echo "input artifactory password first !!!"
+        echo "permanant usage: 'dock ende_code en  arti <KEY>' !!!"
+        echo "temporary usage: 'dock ende_code env arti <KEY>' !!!"
+        exit 1
+    fi
+    
     local i=0 printlist
     # Read the files of a directory
     echo "curl -su 'admin':${KEY_ADMIN}  ${repo_url}/artifactory/api/docker/devops-docker/v2/_catalog"
@@ -571,6 +582,7 @@ local ret=0
           down) download_dockerfile  "${@:2}"                               ;;
         copy) copy "${@:2}"                                                 ;;
         info|status) info "${@:2}"                                          ;;
+        ende_code) "${@:1}"                                                 ;;
         help) help "${@:2}"                                                 ;;
         "") handler_menu "${@}"                                             ;;
         *) docker "${@}"
@@ -591,5 +603,6 @@ function ____dock(){
 ##============================================================================
 # check if called from source or not.
 KEY_ADMIN=$(ende_code de arti)
+
 (return 0 2>/dev/null) && sourced=1 || sourced=0
 if [ $sourced -eq 0 ]; then handle_commands $@;else echo "plz run without source." && return; fi
