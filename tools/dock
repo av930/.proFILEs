@@ -352,15 +352,16 @@ function stoprm(){
 ## ---------------------------------------------------------------------------
     local cmd=$1
     local param="${@:2}"
+    local cntr_name
     [ -z "${param}" ] && list ps --all
     printf "${red}========== stop & remove container ========== ${NCOL}\n"
     echo "Multiple container can be input with space ex) cntr1 cntr2 cntr3 ..."
-    read -p "must input Container [Name| ID]: "
-    if [ -n "${REPLY}" ]; then 
-    docker stop ${REPLY}
-    docker rm ${REPLY}
+    read -p "must input Container [Name| ID]: " cntr_name
+    [ -z "${cntr_name}" ] && return
+    docker stop ${cntr_name}
+    read -p "remove container?  [enter:continue| ctrl+c:exit]: "
+    docker rm ${cntr_name}
     list ps --all
-    fi
     
     if [ -n "$(docker volume ls -q)" ]; then 
     read -p "continue to remove volume? [Name or ID| ctrl+c:exit]: "
