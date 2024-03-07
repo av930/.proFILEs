@@ -60,7 +60,7 @@ local cmd=$1 tag=$2 key=$3
                 echo ${temp_var}| openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 2> /dev/null
             else
                 if [[ -f $HOME/.key_$tag ]]; then cat $HOME/.key_$tag | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 
-                else warn "key missing or server is incorrect";fi
+                else echo "key missing or server is incorrect";fi
                 declare -g "ENCODE_$tag=$( echo $key | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey )"
             fi
        ;;list|debug)  #list up keycode for debugging
@@ -227,16 +227,12 @@ function list(){
     list_cmd=$1
     case $list_cmd in
         ##width: display column width, minus left align, string replace
-        images) formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|' ${@:2};;
-        ps) if [ "$2" = "--size" ]; then 
-                echo "Wait 10s... to get size of container!!"
-                formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.Size}}|{{.ID}}|{{.Names}}|{{.Image}}|' ${@:2}; 
-            else 
-                formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.ID}}|{{.Names}}|{{.Image}}|' ${@:2}; 
-            fi;;
-        *)  formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|' ${@:1}; 
-            formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.Names}}|{{.Image}}|' ${@:1}; 
-            ;;
+        images) formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|' ${@:2}
+        ;;  ps) if [ "$2" = "--size" ]; then echo "Wait 10s... to get size of container!!"
+                     formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.Size}}|{{.ID}}|{{.Names}}|{{.Image}}|' ${@:2}; 
+                else formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.ID}}|{{.Names}}|{{.Image}}|' ${@:2};        fi
+        ;;   *) formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|' ${@:1}; 
+                formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.Names}}|{{.Image}}|' ${@:1}; 
     esac
 }
 
@@ -369,14 +365,15 @@ function stoprm(){
     echo "Multiple container can be input with space ex) cntr1 cntr2 cntr3 ..."
     read -p "must input Container [Name| ID]: " cntr_name
     [ -z "${cntr_name}" ] && return
-    docker stop ${cntr_name}
+    echorun docker stop ${cntr_name}
+    
     read -p "remove container?  [enter:continue| ctrl+c:exit]: "
-    docker rm ${cntr_name}
+    echorun docker rm ${cntr_name}
     list ps --all
     
     if [ -n "$(docker volume ls -q)" ]; then 
     read -p "continue to remove volume? [Name or ID| ctrl+c:exit]: "
-    docker volume rm --force ${REPLY}
+    echorun docker volume rm --force ${REPLY}
     fi
     printf "\n\n"
 }
@@ -456,8 +453,12 @@ function clean(){
     printf "current total docker container is: " && docker ps --all -q | wc -l
     printf "current total docker images is: "    && docker images --all -q | wc -l
 
-    #ask confirm in docker system prune
+    #ask by confirm in docker system prune
     docker system prune --all
+    
+    echo "docker image prune --filter [label|until]"
+    echo "docker image prune --filter="label=maintainer=joongkeun.kim@lge.com" #created image label with"
+    echo "docker image prune --filter "until=120m" #created image for recent 120 min"
     
     printf "\nprune is done\n"
     printf "current total docker container is: " && docker ps --all -q | wc -l
