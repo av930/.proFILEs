@@ -558,7 +558,9 @@ function reppmanidb(){
     local mani_out=()
     [ -d ${REPP_DIR} ] || mkdir ${REPP_DIR}
     repo manifest -r --json -o ${REPPFILE_JSON}  &> /dev/null 
-    [ -f ${REPPFILE_JSON} ] || ( warn "you are using old repo, so run first 'repp version toggle' ")
+    if (( "$(reppversion ver 2>/dev/null)" > 220 )) && ! [ -f ${REPPFILE_JSON} ]; then
+    warn "you are in mirror repo, so run first 'repp version toggle' "
+    fi
     
     ## get <default> from json
     readarray -d'|' -t itemdefault < <(cat  ${REPPFILE_JSON} |jq -j '.default|.revision,"|",.groups,"|",.remote,"|",.upstream,"|",."dest-branch","|",.name,"|",.path,"|"')
@@ -1262,7 +1264,8 @@ function reppfind_repodir(){
         cd $T
         ;;
     *)  ## found multiple dir in sub dir
-        warn "subdir [#%s]:%s\n" ${#REPP_PATH_ALL[@]} ${REPP_PATH_ALL[@]};
+        under "found repo in subdir [count: ${#REPP_PATH_ALL[@]}]\n" 
+        printf "%s\n" "${REPP_PATH_ALL[@]// /\n}"
         REPP_PATH=''
         ;;
     esac
