@@ -136,7 +136,7 @@ function docker_hub(){
     printf "${red}========== "$1" ========== ${NCOL}\n"
 
     echorun docker login ${repo_url}/artifactory-devops-docker.jfrog.io
-    echo "arti url: ${repo_url}/ui/repos/tree/General/devops-docker"
+    echo "arti url: http://${repo_url}/ui/repos/tree/General/devops-docker"
 
     case "${1%%(*}" in
         find)

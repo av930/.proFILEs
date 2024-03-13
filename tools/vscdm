@@ -93,13 +93,15 @@ cat << PREFACE
  -------------------------------------------------------------------------------------------------
  o step: vscdm list >> vscdm [product] all >> vscdm [product] build
  모델찾기
- ex) vscdm help                    ## 명령어 설명을 보여준다.
- ex) vscdm                         ## 개발하는 모델을 보여준다. 기본값 최근 1년안에 수정한 모든모델 
- ex) vscdm 3month                  ## 최근 3달동안 수정한 모델만 보여준다. day, month, year 지원
- ex) vscdm HONDA                   ## honda 라는 string을 가진 모든 모델
+ ex) vscdm help                           ## 명령어 설명을 보여준다.
+ ex) vscdm                                ## 개발하는 모델을 보여준다. 기본값 최근 1년안에 수정한 모든모델 
+ ex) vscdm 3month                         ## 최근 3달동안 수정한 모델만 보여준다. day, month, year 지원
+ ex) vscdm HONDA                          ## honda 라는 string을 가진 모든 모델
  내용보기
- ex) vscdm HONDA_25_5MY build      ## HONDA_25_5MY의 build 관련 설정을 보여준다.
- ex) vscdm HONDA_25_5MY all        ## HONDA_25_5MY의 모든 설정을 보여준다.
+ ex) vscdm HONDA_25_5MY build             ## HONDA_25_5MY의 build 관련 설정을 보여준다.
+ ex) vscdm HONDA_25_5MY all               ## HONDA_25_5MY의 모든 설정을 보여준다.
+ ex) vscdm HONDA_25_5MY all -[cCrMS]      ## 출력 format을 변경하기 위해 jq option을 넣을수 있다.
+     vscdm HONDA_25_5MY all -rM > a.txt   ## json포멧이 아닌 a.txt파일로 출력한다.
 ===================================================================================================
 PREFACE
 printf ${NCOL}
@@ -166,6 +168,7 @@ function read_config(){
     product=${1:=${product}}
     #product=${1:=${product:?"vscdm [empty-product]"}}
     local field=$2
+    local option=$3
     local source=$(mktemp)
     local target=$(mktemp)
 
@@ -182,10 +185,7 @@ QUERY
     cat ${source}| cut -d'{' -f2- | rev |cut -d'}' -f2- |rev >> ${target}
     echo '}' >> ${target}
     ## choose print format
-    case $field in
-        build*|review*|commit*) cat ${target} |jq -cC ".${field}"
-        ;; ''|*) cat ${target} |jq -C ".${field}"
-    esac
+    cat ${target} |jq ${option:=-C} ".${field}"
 }
 
 
@@ -213,16 +213,16 @@ product=$1
 local ret=0
 local SEP='~'
 local field=$2
-local target=$3
+local option=$3
     echo "${product}${SEP}${field}" 
     case "${product}${SEP}${field}" in
-                 *${SEP}build) read_config  ${product} "build_data"
-        ;;     *${SEP}project) read_config  ${product} "proj_config"
-        ;;     *${SEP}release) read_config  ${product} "release_cfg"
-        ;;        *${SEP}file) read_config  ${product} "file_system_config"
-        ;;      *${SEP}review) read_config  ${product} "reviewers"
-        ;;      *${SEP}commit) read_config  ${product} "commit_msg_rule"
-        ;;         *${SEP}all) read_config  ${product} 
+                 *${SEP}build) read_config  ${product} "build_data" ${option}
+        ;;     *${SEP}project) read_config  ${product} "proj_config" ${option}
+        ;;     *${SEP}release) read_config  ${product} "release_cfg" ${option}
+        ;;        *${SEP}file) read_config  ${product} "file_system_config" ${option}
+        ;;      *${SEP}review) read_config  ${product} "reviewers" ${option}
+        ;;      *${SEP}commit) read_config  ${product} "commit_msg_rule" ${option}
+        ;;         *${SEP}all) read_config  ${product} '' ${option}
         ;;       *${SEP}clone) : #clone_config ${product} ""
         ;;        help${SEP}*) handler_menu "${@}"
         ;;     ${SEP}|*${SEP}) read_product ${product} 
