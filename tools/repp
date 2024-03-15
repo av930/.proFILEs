@@ -47,7 +47,7 @@ source <(cat <<\EOF
     #git config --global alias.diffi "difftool --extcmd 'icdiff'"
      git config --global alias.diffi "!_gitdiff() { git difftool --extcmd 'icdiff'; }; _gitdiff"
     #git config --global alias.diffi '!_gitdiff() { git difftool --extcmd "icdiff $@"; }; _gitdiff' --replace-all
-    #git config --global alias.clear !_gitclear() { git reset --hard $1; git clean -xdf; }; _gitclear
+     git config --global alias.clear "!_gitclear() { git reset --hard $1; git clean -xdf; }; _gitclear"
 EOF
 ) 2> /dev/null
 

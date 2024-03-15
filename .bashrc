@@ -185,7 +185,7 @@ alias kil='_kil(){ _bar "kill -SIGTERM -- -[PGID]"; kill -SIGTERM -- -$1 ;}; _ki
 alias ls='ls --color=auto'
 alias lls='_bar size-base; ls -agohrS'
 alias llt='_bar time-base; ls -agohrt'
-alias lld="_bar time-base dir-only; ls -rtlp | grep -E '(*/|->)' "
+alias lld='_lld(){ _bar "time-base dir-only"; ls -arthlp -d $1*/; }; _lld'
 alias ll='_bar time-base all-file; ls -alrthF --color=auto --show-control-chars'
 alias dir='ls -al -F --color=auto| grep /'
 alias grep='grep --color=auto'
