@@ -325,6 +325,10 @@ function start(){
         ((i=i+10))
     done
 
+    read -p "input Port [Port Number| Enter:${cntr_port}]: " 
+    [ -n "${REPLY}" ] && cntr_port="${REPLY}"
+    
+
     # create dirs&files in advanced, if not, these dir&file is created for root account.
     sudo -u ${account} mkdir -p ${home_dir}/Docker_MountDIR ${home_dir}/mirror ${home_dir}/.jfrog
     touch ${home_dir}/.ssh ${home_dir}/.profile ${home_dir}/.bashrc ${home_dir}/.gitconfig 
