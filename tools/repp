@@ -6,7 +6,7 @@
 ###---------------------------------------------------------- DEBUG OPTION
 #DEBUG=["echo -e"|:], : means no-operation
 ## DEBUG=[ : | "printf ${RED}%s${NCOL}\n" ]
-DEBUG=: 
+DEBUG=:
 #DEBUG="printf ${RED}%s${NCOL}\n"
 
 PATH_FULL=$(realpath "$BASH_SOURCE")
@@ -136,13 +136,13 @@ function reppshow_manifesttree(){
 # read file and print line "include" keyword
 # $1 manifest file name
 # $2 treedepth to display sub manifest
-    local file 
+    local file
     local manifest=$(mktemp)
     local path='|--|--|--|--|--|--'
     local treedepth=${2:-0}
 
     cat $1| sed '/<!--.*-->/d' | sed '/<!--/,/-->/d' > ${manifest}
-    
+
     ##print name of manifest
     printf "%s$1 \n" "${path::${treedepth}}"
 
@@ -153,7 +153,7 @@ function reppshow_manifesttree(){
     cat ${manifest}| sed -n 's/.*revision="\([^ |\t]*\)".*/\1/p'| grep -e '^[a-f0-9]*$'| head -10| xargs -n1 -I {} printf "%60s {}\n"
 
     ##sub manifests
-    cat ${manifest}| sed -n 's/.*include name="\(.*\)".*/\1/p' | \
+    cat ${manifest}| sed -nE 's/.*include name="([^"]*)".*/\1/p' | \
     while read -r file; do
         if [ -n "${file}" ];then reppshow_manifesttree ${file} ${treedepth}; fi
     done
@@ -250,50 +250,50 @@ CHANGE
 
     ;;  diff)   bar inline "compare 2 different manifests what project is changed"
                 reppget_repcmd
-                clog 'ex)' 'repp mani diff <old manifest.xml> <new manifest.xml>'    
-                clog 'ex)' 'repp mani diff event/230426_mig.xml event/230712_upstream.xml'    
+                clog 'ex)' 'repp mani diff <old manifest.xml> <new manifest.xml>'
+                clog 'ex)' 'repp mani diff event/230426_mig.xml event/230712_upstream.xml'
                 ## listup xml by date
                 [ -z "${item}" ] && ( git log --since=3-weeks --first-parent --date=format:'%Y-%m-%d (%a) %H:%M:%S' --pretty=format:'%Cgreen%cd [%t]%Creset' --name-status| awk 'NF==1{date=$1}NF>1 && !seen[$2]++{print date,$0}' FS=$'\t' )
-                if [ -z "${item}" ]; then 
-                    read -p $'\n\nchoose old manifest compare to current: ' opt 
+                if [ -z "${item}" ]; then
+                    read -p $'\n\nchoose old manifest compare to current: ' opt
                     clog "\ninput old [${opt}]" "will be compared to current manifest [${REPPFILE_MANI}]"
                     clog "Otherwise" "ctrl+c to break, and run 'repp mani diff ${opt} <manifest to compare>'"
                 fi
-                echo 
+                echo
                 read -p $'\ninfo: repo sync all branch is needed (without -c option) [y:ok continue| other:go without sync| ctrl+c:break] '
                 [ "$REPLY" = "y" ] && repo sync -qj5
                 repo --no-pager diffmanifests --no-color --raw ${item:=${opt}} ${str:=${REPPFILE_MANI}} --pretty-format='%h| %ci| %an| %s' > ${REPP_DIR}/repp.diff
-                showRUN repo diffmanifests ${item:-${opt}} ${str:-${REPPFILE_MANI}} --pretty-format='%Cred%h %Cgreen(%ci) %C(blue)<%an>%Creset %s' 
-                
+                showRUN repo diffmanifests ${item:-${opt}} ${str:-${REPPFILE_MANI}} --pretty-format='%Cred%h %Cgreen(%ci) %C(blue)<%an>%Creset %s'
+
                 cat <<-EOL
 		guide)   added projects(NOT compare) : path-added,   project-added   (in ${str} manifest)
 		       removed projects(NOT compare) : path-removed, project-removed (in {item} manifest)
-		       missing projects(NOT compare) : path-same,    project-changed          
+		       missing projects(NOT compare) : path-same,    project-changed
 		  unreachable revisions(NOT compare) : need to 'repo sync' (without -c, fetch all project revision)
 		          skip projects(NOT compare) : path-same, project-same, branch-same (No diff, SKIP)
-		       changed projects( OK compare) : path-same, project-same, branch-changed 
+		       changed projects( OK compare) : path-same, project-same, branch-changed
 EOL
     ;;  diffcheck)
                 bar inline "after repp mani check, if branch changed, find missing commits (this is useful in migration)"
                 local cpath cbrold cbrnew cremote cproject ccommitid deployed
                 IFS=' '; cat ${REPP_DIR}/repp.diff | sed -e 's/\x1b\[[0-9;]*m//g'| while read -r -a line; do
                 #echo "${line[@]}"
-                    case ${line[0]} in 
+                    case ${line[0]} in
                          C) #compare case changed project
-                            #3rd is remote, 7th is project,  
+                            #3rd is remote, 7th is project,
                             cpath="${line[1]}"; cbrold="${line[2]}"; cbrnew="${line[3]}"
                             #cremote=$(cat ${REPPFILE_CSV} |grep ${cpath} | cut -d'|' -f3)
                             cremote=$(cat ${REPPFILE_CSV} |grep ${cpath} |awk -v FS="|" '{print $3}')
                             cproject=$(cat ${REPPFILE_CSV} |grep ${cpath} | awk -v FS="|" '{print $8}'|xargs)
-                            
-                        ;;R) 
+
+                        ;;R)
                             ccommitid="${line[1]/|/}"
                             ##get change_id and find commmit in new branch, it is deployed.
                             deployed=$( revv commit $(getserver ${cremote} path) ${ccommitid} | sed '1d'|  jq -cC '.[].branch' | grep "${cbrnew}" )
                             [ -z "${deployed}" ] && info "[missing commits] ${cremote}> ${cproject}> ${cbrnew}> ${ccommitid}"
                     esac
                 done
-                                
+
     ;; help|*)   cat <<- EOF
 				usage) repp mani info                                     #show manifest info,structure,log,diff
 				usage) repp mani db                                       #force regenerate db by current manifest not reusing
@@ -302,9 +302,9 @@ EOL
 				usage) repp mani change <groups|upstream|dest-branch|etc> <str> <filter>
 				   ex) repp mani change remote vgit_new                   #change "any string" to "vgit_new" in all remote field
 				   ex) repp mani change remote vgit_new vgit_as           #change only from "vgit_as" to "vgit_new" in remote field
-				usage) repp mani diff event/old.xml <new.xml>             #compare old manifest to new manifest 
+				usage) repp mani diff event/old.xml <new.xml>             #compare old manifest to new manifest
 				   ex) repp mani diff event/compare.xml                   #compare history event/compare.xml to current.xml
-				   ex) repp mani diff default.xml event/230712_mig.xml    #compare history from 2 different manifests 
+				   ex) repp mani diff default.xml event/230712_mig.xml    #compare history from 2 different manifests
 				   ex) repp mani diff                                     #can choose manifest in recent 3 weeks, comparing to current manifest
 				usage) repp mani diffcheck                                #post analysis after 'repp mani diff' for missed commits checking
 EOF
@@ -343,7 +343,7 @@ function reppget_repcmd(){
     if [ -n "$REPP_REF" ]    && [[ ! "${EXTRA_OPTION}" =~ "--reference" ]] ;then EXTRA_OPTION+="--reference=$REPP_REF "; fi
     if [ -n "$REPP_MIRR" ]   && [[ ! "${EXTRA_OPTION}" =~ "--mirror" ]] ;then EXTRA_OPTION+="--mirror "; fi
 
-    
+
     if [ "$1" = "info" ];then
         bar inline "repo-init cmd"
         REPP_CMD="repo init -u $REPP_URL -b $REPP_BRANCH -m ${REPPFILE_MANI} ${EXTRA_OPTION} --repo-url=${REPP_REPOURL}"
@@ -422,8 +422,8 @@ function reppshow(){
     #bar inline "repo info: git repo/source path /branch rev saved to [ ${REPPFILE_STATUS} ]"
     #echo "repo info" >> ${REPPFILE_STATUS}
     #repo info |sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" >> ${REPPFILE_STATUS}
-    
-    bar inline "repo status: uncommitted changes list saved to [ ${REPPFILE_STATUS} ]"    
+
+    bar inline "repo status: uncommitted changes list saved to [ ${REPPFILE_STATUS} ]"
     info "\${REPPFILE_STATUS} you can use this file to check dirty commits left"
 }
 
@@ -487,13 +487,13 @@ EOF
     ;;git|'')   cd "${GITT_PATH}"; if [ "${current_dir}" = "${PWD}" ]; then warn "path is not changed" && return 1; else return 0; fi
     esac
 
-    if ! repp_initvar; then warn "your are not in repo"; return 1; fi 
+    if ! repp_initvar; then warn "your are not in repo"; return 1; fi
     if [ ! -f ${REPPFILE_CSV} ]; then reppfind $cmd; fi
 
     local INPUT=( $(cat ${REPPFILE_CSV} |grep ${cmd}| awk -v FS="\|" '{print $8}'| sort) )
     if [ -n "${INPUT}" ];
-    then 
-        run_menu "${INPUT[@]}"; cd "${REPP_ROOT}/${menu_selected##* }"; 
+    then
+        run_menu "${INPUT[@]}"; cd "${REPP_ROOT}/${menu_selected##* }";
         if [ "${current_dir}" = "${PWD}" ]; then warn "path is not changed" && return 1; else return 0; fi
     else warn "you must find path manaully"; return 1
     fi
@@ -545,9 +545,9 @@ function reppmanidb(){
 # $1 path or project
 # usage: reppfind [path|project]
 
-    [ -f "${REPPFILE_CSV}" ] && { 
-        $DEBUG "\${REPPFILE_CSV}:${REPPFILE_CSV} reused above file or you can remove and refresh repository info";  
-        return 0; 
+    [ -f "${REPPFILE_CSV}" ] && {
+        $DEBUG "\${REPPFILE_CSV}:${REPPFILE_CSV} reused above file or you can remove and refresh repository info";
+        return 0;
     }
     if (( "$(reppversion ver 2>/dev/null)" < 230 )); then
         reppversion toggle
@@ -557,28 +557,30 @@ function reppmanidb(){
     ## generate json from manifest, #suppress all log for generation json
     local mani_out=()
     [ -d ${REPP_DIR} ] || mkdir ${REPP_DIR}
-    repo manifest -r --json -o ${REPPFILE_JSON}  &> /dev/null 
+    repo manifest -r --json -o ${REPPFILE_JSON}  &> /dev/null
     if (( "$(reppversion ver 2>/dev/null)" > 220 )) && ! [ -f ${REPPFILE_JSON} ]; then
         err "you are in mirror repo, use source repo not mirror "
     fi
-    
+
     ## get <default> from json
     readarray -d'|' -t itemdefault < <(cat  ${REPPFILE_JSON} |jq -j '.default|.revision,"|",.groups,"|",.remote,"|",.upstream,"|",."dest-branch","|",.name,"|",.path,"|"')
     #declare -p itemdefault
 
     ## save to array
     readarray -t multiline < <(cat  ${REPPFILE_JSON}|jq -jr '.project[]|.revision,"|",.groups,"|",.remote,"|",.upstream,"|",."dest-branch","|",.name,"|",.path,"|\n"'|sort)
+    
+    echo "takes time for the 1st time"
     ## read one line from multiline array
     local line
     for line in "${multiline[@]}"; do
         $DEBUG ${line}
-        
+
         ##read one item from line by '|'
         local index=0 itemlrev itemrrev SEP='~'
         local lineout=''
         while read -d'|' item; do
-            $DEBUG "[%s] %s\n" "${index}" "${item}" 
-            ## remove return 
+            $DEBUG "[%s] %s\n" "${index}" "${item}"
+            ## remove return
             item=${item//$'\r'}
             case ${item} in
                 null)           item=${itemdefault[index]};
@@ -588,19 +590,19 @@ function reppmanidb(){
                 #revision: if ok, truncate digit to 6
                   0)      [ "${item}" = "null" ] && { err "${lineout}[${index}]"; return 1; }; itemlrev=${item}; item=${item:0:6};
                 #group : assign default value
-                #;;1)      item="" 
-                ;;1)      [ "${item}" = "null" ] && item="all,default" 
+                #;;1)      item=""
+                ;;1)      [ "${item}" = "null" ] && item="all,default"
                 #remote, name, path: if null, stop
                 ;;2|5|6)  [[ "${item}" = "null" ]] && { warn "${lineout}[${index}]"; }
-                #upstream: 
+                #upstream:
                 ;;3)      itemrrev=${item}
                 #dest-branch: select dest-branch as rrev
-                ;;4) 
-                          if   [ "${item}" = "${itemrrev}" ]; then { item="${item}|${item/null/${itemlrev}}"; } 
+                ;;4)
+                          if   [ "${item}" = "${itemrrev}" ]; then { item="${item}|${item/null/${itemlrev}}"; }
                           elif [ "${item}" = "null" ];        then { item="${item}|${itemlrev}"; warn "pull/push address is different (${line})"; }
                           else { item="${item}|${item}"; warn "pull/push address is different (${line})"; }
                           fi
-            esac            
+            esac
             index=$(( ++index ))
             lineout+="${item:+"${item}|"}"
         done <<< "${line}"
@@ -612,28 +614,28 @@ function reppmanidb(){
     local prnmsg='%6.6s|%12.12s|%8.8s|%-32.32s|%-74.74s|%.80s'
     printf "%s\n" "${mani_out[@]}" >  ${REPPFILE_CSV}
     printf "${prnmsg}\n" ${mani_out[*]//|/ } >  ${REPPFILE_TXT}
-    
+
     ## RREV is created by upper logic
     ##NEEDTO improve: each field $1 $2 ... should be replaced $N_LREV $N_GROUP ...
     #N_LREV=0 N_GROUP=1 N_REMOTE=2 N_UPSTREAM=3 N_DEST_BRANCH=4 N_REPO_RREV=5 N_PROJECT=6 N_PATH=7
-    
-    ## generate db by repo 
+
+    ## generate db by repo
     { repo forall -j1 -c 'prnmsg="%6.6s|%s|%s|%s|%s|%s|%s|%s|"
-    printf "${prnmsg}\n" "${REPO_LREV}" "all,default" "${REPO_REMOTE}" "${REPO_UPSTREAM}" "${REPO_DEST_BRANCH}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"'|sort > ${REPPFILE_CSV}.cmp; } 2>/dev/null 
-    if (( "$(reppversion ver 2>/dev/null)" > 220 )) && ! [ -f ${REPPFILE_JSON} ]; then 
+    printf "${prnmsg}\n" "${REPO_LREV}" "all,default" "${REPO_REMOTE}" "${REPO_UPSTREAM}" "${REPO_DEST_BRANCH}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"'|sort > ${REPPFILE_CSV}.cmp; } 2>/dev/null
+    if (( "$(reppversion ver 2>/dev/null)" > 220 )) && ! [ -f ${REPPFILE_JSON} ]; then
         err "you are in mirror repo, temporary ${REPPFILE_CSV} is generated by force, it may show incorrect information"
-        cp ${REPPFILE_CSV}.cmp ${REPPFILE_CSV}; 
-    fi 
-    
+        cp ${REPPFILE_CSV}.cmp ${REPPFILE_CSV};
+    fi
+
     ## compare both only rrev
-    if ! diff -q -B <(awk -v FS="|" '{print $1 $3 $6 $7 $8}' ${REPPFILE_CSV}) <(awk -v FS="|" '{print $1 $3 $6 $7 $8}' ${REPPFILE_CSV}.cmp) &>/dev/null ; then 
+    if ! diff -q -B <(awk -v FS="|" '{print $1 $3 $6 $7 $8}' ${REPPFILE_CSV}) <(awk -v FS="|" '{print $1 $3 $6 $7 $8}' ${REPPFILE_CSV}.cmp) &>/dev/null ; then
     local tempfile=$(mktemp)
     warn "the json file of ${REPP_PATH}/${REPPFILE_MANI} has problem"
-    read -p "current manifest has error, it's DB could be manually generated :[enter:continue| ctrl+c:break]"; 
+    read -p "current manifest has error, it's DB could be manually generated :[enter:continue| ctrl+c:break]";
     paste -d'|' <(awk -v FS="|" '{print $1"|"$2"|"$3}' ${REPPFILE_CSV}) <(awk -v FS="|" '{print $4"|"$5"|"$6"|"$7"|"$8}' ${REPPFILE_CSV}.cmp) > tempfile
     mv tempfile ${REPPFILE_CSV}
     fi
-    
+
     #cat ${REPPFILE_JSON}|jq -cC '.project[]|{groups,remote,upstream,"dest-branch",revision,name,path}'
     #cat ${REPPFILE_JSON}|jq -jr '.project[]|.groups,"|",.remote,"|",.upstream,"|",."dest-branch","|",.revision,"|",.name,"|",.path,"\n"'
     #cat ${REPPFILE_JSON}|jq -jr '.project[]|.groups," ",.remote," ",.upstream," ",."dest-branch"," ",.revision," ",.name," ",.path,"\n"'
@@ -693,7 +695,7 @@ EOF
                   #printf "\e[1;33m${prnmsg} \e[0m\n" "REPO_LREV" "REPO_GROUP" "REPO_REMOTE" "REPO_RREV" "REPO_PROJECT" "REPO_PATH"
                   #filter in grep, width in colume, highlight in grep
                   cat ${REPPFILE_CSV}| grep -i ${cmd}| column -s'|' -t --table-columns REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_UPSTREAM,REPO_DEST_BRANCH,REPO_RREV,REPO_PROJECT,REPO_PATH | grep --color=always -iE "(^|${cmd})" |pCount -1
-                  #printf "${prnmsg}\n" $( cat ${REPPFILE_CSV} | grep -i --color=always ${cmd}| sed 's/|/ /g' ) | pCount 
+                  #printf "${prnmsg}\n" $( cat ${REPPFILE_CSV} | grep -i --color=always ${cmd}| sed 's/|/ /g' ) | pCount
     esac
 }
 
@@ -741,7 +743,7 @@ EOF
                 clog "infix:" "repo forall -pc 'git push \${REPO_REMOTE} HEAD:refs/heads/\${1}' ${name:-<branch-name>}"
                 clog "prefix :" "repo forall -pc 'git push \${REPO_REMOTE} HEAD:refs/heads/\${1}_\${REPO_RREV}' ${name:-<branch-prefix>}"
                 clog "postfix:" "repo forall -pc 'git push \${REPO_REMOTE} HEAD:refs/heads/\${REPO_RREV}_\${1}' ${name:-<branch-postfix>}"
-                echo 
+                echo
                 clog "ex) infix only current git" "repo forall . -pc 'git push \${REPO_REMOTE} HEAD:refs/heads/\${1}' ${name:-<branch-name>}"
                 clog "ex) infix for several git " "repo forall xxx/yyy ppp/qqq/rrr -pc 'git push \${REPO_REMOTE} HEAD:refs/heads/\${1}' ${name:-<branch-name>}"
     ;;  remove|delete)
@@ -760,7 +762,7 @@ EOF
                 bar inline "2. md5sum of remote all tracking branch in all repository"
                 repo forall -c 'git ls-remote -h ${REPO_REMOTE} refs/heads/${REPO_RREV} | cut -f1' |md5sum
                 #repo forall -c 'git ls-remote -h ${REPO_REMOTE} refs/heads/$1 | cut -f1' ${name:-${REPP_BRANCH}} |md5sum
-                
+
                 info "you can use 'repp branch compare' to get which git is different"
     ;;  compare)
                 bar inline "generate branch info local, remote tracking branch, and specific remote branch"
@@ -892,16 +894,16 @@ EOF
         # -[[:digit:]] ) ##same to '*[0-9])'
         #           njobs=${cmd}
         #    -*)    opts="${cmd} ${opts}"
-        ;;    *)    
-                    info "default cmd: repo sync --no-tags --no-clone-bundle --fail-fast -cj8"
+        ;;    *)
                     clog "-m" "event/branch_migration.xml  # use input manifest.xml (to check if manifest work before commit) "
                     clog "-d" "                            # back to manifest revision"
                     clog "-f" "                            # force sync with overwriting"
                     clog "--jobs-network=" "8              # count of network thread [default 1]"
                     clog "--auto-gc" "                     # with garbage collection [default no]"
+                    info "default cmd: repo sync --no-tags --no-clone-bundle --fail-fast -cj8"
 
-                    read -p  $'\n\nPlease input option to repo sync [enter:auto| opts:-qcj4| ctrl+c:exit]: ' opts;
-                    if [ -z $opts ]; then njobs=${NJOBS}; fi        
+                    read -p  $'\n\nPlease add option to repo sync [enter:auto| opts:-qcj4| ctrl+c:exit]: ' opts;
+                    if [ -z $opts ]; then njobs=${NJOBS}; fi
     esac
 
     showRUN repo ${preopt} sync --no-tags --no-clone-bundle --fail-fast -cj${njobs:-8} ${opts}
@@ -936,7 +938,7 @@ EOF
                     ## git reset --hard;   #reset to local lastest commit status.
                     ## git clean -xdf      #remove uncommitted change
                     showRUNQ y repo forall -cj${NJOBS} 'git reset --hard @{upstream}; git clean -xdf'
-                    
+
                     #showRUN repo sync -dlvj${NJOBS} --force-remove-dirty
                     info "\nfinish reset all repositories, and reset FETCH_HEAD"
         ;;project)  info "you can repo sync without conflicting legacy objects"
@@ -973,14 +975,14 @@ if [ -d "${repo_launcher_backup}" ];
 then ## restore
     [ -L "${repo_launcher}" ] && rm -f ${repo_launcher} || ( err "cannot restore, plz check"; return 1 )
     mv ${repo_launcher_backup} ${repo_launcher}
-    
+
     ## restore PATH
     [[ -v PATH_OLD ]] && PATH=${PATH_OLD}
-    
+
 else ## backup & change
     mv ${repo_launcher} ${repo_launcher_backup}
     ln -s ${repo_executor} ${repo_launcher}
-    
+
     ## add path for priority
     ## if variable is not defined, backup PATH, ban re-enterd
     [[ -v PATH_OLD ]] || PATH_OLD=$PATH
@@ -996,7 +998,7 @@ function reppversion(){
 # $1 manifests file (default is current manifests)
     local file_log=$(mktemp)
     python3 $(which repo) --version > ${file_log}
-    
+
     local VER cmd="$1"
     case $cmd in
              help) cat <<-EOF
@@ -1005,7 +1007,7 @@ function reppversion(){
 			usage) repp version                # show repo, git, python version
 EOF
         ;;    ver) ## only 3digit length version code is valid to compare old version
-                   VER=$(cat ${file_log} | grep "repo version"  |tr -dc '[:digit:]')   
+                   VER=$(cat ${file_log} | grep "repo version"  |tr -dc '[:digit:]')
                    echo ${VER:0:3} && return 0
         ;; toggle) reppvertoggle; return 0
     esac
@@ -1079,7 +1081,7 @@ function reppssh_server(){
     local user=$3
     local passwd=$4
     local cmd=${@:5}
-    
+
 
     under "ssh access [${server}] port [${port}]  ${user})"
     clog cmd "${cmd}"
@@ -1142,8 +1144,8 @@ function reppcheck_server(){
     ssh $user@$server -p $port gerrit ls-projects --prefix ${gitproject}
 SSH_COMMAND
 )
-    [ -n "$ret" ] &&  echo "gitproject existed and accessed [${gitproject}]" || err "check git project is existed or permission allowed [${gitproject}]"    
-    
+    [ -n "$ret" ] &&  echo "gitproject existed and accessed [${gitproject}]" || err "check git project is existed or permission allowed [${gitproject}]"
+
     bar inline "step2.5-branch: check remote if ${user} can access the branch on the project (checked by ${user})"
     clog try "check branch name path is correct and can access"
     #ssh $user@$server -p $port gerrit ls-projects --prefix ${gitproject} -b ${branch}
@@ -1156,7 +1158,7 @@ SSH_COMMAND
 
     under "you can check 'READ' accessibility for all branch & repository (wait 30s) (checked by ${user})\n"
     read -p "check accessibility for all repository  [enter:continue| ctrl+c:exit]: "
-    
+
     ssh -q ${user}@10.158.7.50 -p 22 bash <<'SSH_COMMAND'
     mkdir -p ~/repo.test && cd ~/repo.test
     repo init -u ssh://vgit.lge.com:29440/honda/linux/manifest -b tsu_25.5my_release 2> /dev/null
@@ -1164,7 +1166,7 @@ SSH_COMMAND
     repo forall -qc bash -c '
     GERRIT=( "vgit_na:29420" "vgit_eu:29430" "vgit_as:29440" "vgit_adas:29550" "vgit_devops_test:29999" "lamp_review:29418" )
     for _item in ${GERRIT[@]};do
-        if [ ${_item%:*} = "${REPO_REMOTE}" ]; then 
+        if [ ${_item%:*} = "${REPO_REMOTE}" ]; then
             [ -z "$(ssh $REPO__${USER}@$0 -p ${_item#*:} gerrit ls-projects --prefix ${REPO_PROJECT} -b ${REPO_RREV} --limit 1)" ] && printf "[ERROR] project:%-50s path:%s" "${REPO_PROJECT}" "${REPO_PATH}"
         fi
     done
@@ -1201,7 +1203,7 @@ function reppconnect(){
 # $2 port
 # $3 password
     reppcheck_initvar reppgittrevv
-    
+
     local cmd="$1"
     case ${cmd} in
        help)    cat <<-EOF
@@ -1211,7 +1213,7 @@ function reppconnect(){
 			     ex) repp connect na        testaccount     tiger/tools  tiger_release
 			     ex) repp connect na        joongkeun.kim   tiger/tools  tiger_release
 			     ex) repp connect na        testaccount     tiger/tools
-			     ex) repp connect na        testaccount     
+			     ex) repp connect na        testaccount
 			     ex) repp connect na        testaccount
 			     ex) repp connect
 EOF
@@ -1235,7 +1237,7 @@ EOF
     showRUN revvcheck_server ${oriserver} log
     showRUN revvcheck_account ${oriserver} ${user} log
     showRUN revvcheck_permission ${oriserver} ${user} ${gitproject} ${branch} read
-        
+
     under "step2: check git permission for ${user} from SERVER(SSH) user[${user}]\n"
     showRUN reppcheck_server ${server} ${user} ${port} ${gitproject} ${branch}
     #showRUN reppcheck_server ${buildserver} ${port} ${user} ${repo init cmd}
@@ -1269,7 +1271,7 @@ function reppfind_repodir(){
         cd $T
         ;;
     *)  ## found multiple dir in sub dir
-        under "found repo in subdir [count: ${#REPP_PATH_ALL[@]}]\n" 
+        under "found repo in subdir [count: ${#REPP_PATH_ALL[@]}]\n"
         printf "%s\n" "${REPP_PATH_ALL[@]// /\n}"
         REPP_PATH=''
         ;;
@@ -1284,7 +1286,7 @@ function repp_initvar(){
 
     local ret=1
     ## move to repo root
-    reppfind_repodir .repo/manifests 5 
+    reppfind_repodir .repo/manifests 5
     ## set variable REPP if manifest dir exists
     if [ -d "${REPP_PATH}" ];then
         pushd ${REPP_PATH}
@@ -1299,7 +1301,7 @@ function repp_initvar(){
         REPP_ROOT=${REPP_PATH%/.repo*}
         REPP_DIR=${REPP_ROOT}/.repp
         [ -f ${REPP_ROOT} ] || mkdir -p ${REPP_DIR}
-        
+
         #REPP_URL=$(git remote -v |grep fetch |awk '{print $2}')
         #REPP_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
         REPP_REPOURL=$(cat ../repo/.git/config |grep url|sed 's/.*= \(.*\)/\1/')
@@ -1326,7 +1328,7 @@ function repp_initvar(){
         $DEBUG "you are not in repo project, please check !";
     fi
     return $ret
-    
+
 }
 
 function gitt_initvar(){
@@ -1346,7 +1348,7 @@ function gitt_initvar(){
     #git config --get-regexp remote.$GITT_REMOTE |sort|grep -Ee "(projectname|url)"
     #git config --get-regexp remote.*.projectname|cut -d' ' -f2
     temp=$(git config --get-regexp remote.* |grep -Ee "(projectname|url)" |head -1|grep -Po '\w/\K.\w+[^?]+')
-    if [ -n "${GITT_PROJECT}" ] && [ "${temp}" = "${GITT_PROJECT}" ]; then 
+    if [ -n "${GITT_PROJECT}" ] && [ "${temp}" = "${GITT_PROJECT}" ]; then
         return 0; #git path not changed, so break
     fi
     GITT_PROJECT=${temp}
@@ -1354,9 +1356,9 @@ function gitt_initvar(){
 
     #NEEDTO WORK: find more secure way to get current branch revision
     GITT_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
-    [ -z "${GITT_BRANCH}" ] && GITT_BRANCH=$(git branch -ar |grep -e '->' |sed -E 's#.*[/|>](.*)$#\1#') 
+    [ -z "${GITT_BRANCH}" ] && GITT_BRANCH=$(git branch -ar |grep -e '->' |sed -E 's#.*[/|>](.*)$#\1#')
     [ -z "${GITT_BRANCH}" ] && GITT_BRANCH=$(git branch -ar |grep -e 'm/' |sed -E 's#.*[/|>](.*)$#\1#')
-    [ -z "${GITT_BRANCH}" ] && warn "'repo start <workingbranch> --all' is recommended" 
+    [ -z "${GITT_BRANCH}" ] && warn "'repo start <workingbranch> --all' is recommended"
     [ -z "${GITT_BRANCH}" ] && ( err "check your branch with 'git branch'
     repo start <working branch> --all       # make working branch
     source repp                             # reload repp script"
@@ -1386,7 +1388,7 @@ function revv_initvar(){
         err "please check correct account&key is saved in ~/.key_${key_id} in $HOME dir"
         ret=1
     fi
-    
+
     return $ret
 }
 
@@ -1397,9 +1399,9 @@ function reppcheck_initvar(){
 
     local cmd=$1
     ## --------------------------------------------------------
-    if [[ "${cmd}" =~ "repp" ]]; then   
-        if ! repp_initvar ; 
-        then warn "you are not in repo project" && return 1;  
+    if [[ "${cmd}" =~ "repp" ]]; then
+        if ! repp_initvar ;
+        then warn "you are not in repo project" && return 1;
         fi
         [[ "${cmd}" =~ "mani" ]] || reppmanidb
     fi
@@ -1408,7 +1410,7 @@ function reppcheck_initvar(){
         if ! gitt_initvar ; then warn "you are not in git project" && return 1;  fi
     fi
     ## --------------------------------------------------------
-    if [[ "${cmd}" =~ "revv" ]]; then   
+    if [[ "${cmd}" =~ "revv" ]]; then
         if ! revv_initvar ; then warn "you don't have a permission, please check" && return 1;  fi
     fi
     return 0
@@ -1446,7 +1448,7 @@ EOF
 
     ;; *) gittbranch help
     ;; esac
-    
+
 }
 
 
@@ -1473,7 +1475,7 @@ function gittinfo(){
     case $(git config --get-regexp remote|cut -d' ' -f2) in
       help)             echo "site customization"
     ;;*github.com*)     GIT_SITE=$(printf "https://%s" ${GITT_URL}|sed -E 's#^.*github.com:(.*.git)$#http://github.com/\1#')
-    ;;*vgit.lge.com:*) 
+    ;;*vgit.lge.com:*)
         case ${GITT_URL} in #remove starting string 'vgit.lge.com:29420/'
            *vgit.lge.com:29420*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'na' ${review_gerrit}/${GITT_URL##*0/} )
         ;; *vgit.lge.com:29430*) GIT_SITE=$(printf "http://vgit.lge.com/%s/%s" 'eu' ${review_gerrit}/${GITT_URL##*0/} )
@@ -1531,7 +1533,7 @@ function gittshow(){
 
     bar inline "file name only (press 'q' to stop)"
     #git log --color=always --pretty="short" --name-only ${reply} --pretty=format:'%Cred%h -%C(yellow)%s %Cgreen(%ci) %C(blue)<%an>%Creset' |more -60
-    git log --color=always --pretty="short" --name-only ${reply} --pretty=format:'%Cred%H %Cgreen(%ci) %n%C(yellow)%s %C(blue)<%an>%Creset' 
+    git log --color=always --pretty="short" --name-only ${reply} --pretty=format:'%Cred%H %Cgreen(%ci) %n%C(yellow)%s %C(blue)<%an>%Creset'
 
     clog "to see only modified file & contents, not add/delete files:" "git log -p --color=always --pretty=oneline --diff-filter=M ${reply}"
 }
@@ -1727,13 +1729,13 @@ function gittbranch(){
 				 info) gitt diff                                # see gitt diff to compare branch
 EOF
     ;; create|new)  if [ -z "${name}" ]; then err "branch name must be input" && return 1;fi
-                if [[ "${target}" =~ 'empty' ]]; then 
+                if [[ "${target}" =~ 'empty' ]]; then
                     info "to create branch with empty commit"
                     echo "git switch --orphan <new-branch-name> #switch to new empty branch"
                     echo "git commit --allow-empty -m 'Initial commit to create branch' #add empty commit"
                     echo "git push ssh://vgit.lge.com:29440/honda/con/autosar HEAD:refs/heads/<branch-name>"
                 fi
-                
+
                 bar inline "create branch: new branch will be created from current HEAD"
                 showRUNQ y git push ${GITT_REMOTE} HEAD:refs/heads/${name}
 
@@ -1776,7 +1778,7 @@ EOF
     echo "ex) git log --owner=".*${keyword}.*" ${area}"
     checkifSHA ${keyword} &&  git log -1 ${keyword}
     showRUN git log --committer=".*${keyword}.*" ${area}
-    
+
 
     under "find string(${keyword}) in commit message of history (${area:-all}) with file-changes\n"
     showRUN git log -i --name-status -F --grep="${keyword}" ${area}
@@ -1785,7 +1787,7 @@ EOF
     echo "ex) git grep -e regexp1 --or -e regexp2"
     echo "ex) git grep -e regexp1 --and -e regexp2"
     showRUN git grep -n "${keyword}" ${area}
-    
+
     under "find function(${keyword}) in file history(${area:-all}) \n"
     read -p "[enter:continue| ctrl+c:break]"
     showRUN git log -L :${keyword}:${area}
@@ -1868,7 +1870,7 @@ function gittreset(){
     local cmd=$1
     case ${cmd} in
         clear)   showRUNQ y "git reset --hard @{upstream} && git clean -xdf"
-  
+
     ;; help|*)   cat <<-EOF
 				usage) gitt reset clear #remove all changes and reset with comfirm 'y'
 				usage) gitt reset       #show detail reset commands below, run manully.
@@ -1914,7 +1916,7 @@ function revvcheck_server(){
     REVV_VER=$(curl -su ${ACCOUNT}:${key} ${server}/a/config/server/version |sed '1d'| jq -cC '.')
     if ! [[ "${REVV_VER}" =~ [2-9].[0-9].[0-9]* ]]; then REVV_VER='NA'; err "gerrit is not working, please check"; return 1; fi
 
-    if [ "${flag}" = "log" ]; then 
+    if [ "${flag}" = "log" ]; then
         bar inline "step1.1-gerritserver: [remote] check if gerrit server is active (checked by $ACCOUNT)"
         clog try "check gerrit service is online from web"
         echo "ok. gerrit is working ${REVV_VER}"
@@ -1948,12 +1950,12 @@ function revvcheck_account(){
 
     readarray -d',' -t ret < <(curl -su ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${user}|sed '1d'| jq -c '.[]|{_account_id,username,name,email}'|sed  's/[{}"]//g')
     ! [[ "${ret[*]}" =~ "${user}" ]] && err "there is no account [${user}] in gerrit" && return 1
-    
+
     ##get username & accountID from gerrit
     REVV_USERID="${ret[0]#*:}"
     REVV_USER="${ret[1]#*:}"
-    
-    if [ "${flag}" = "log" ]; then 
+
+    if [ "${flag}" = "log" ]; then
         bar inline "step1.2-gerritserver: [remote] check if ${user} can access gerrit (checked by $ACCOUNT)"
         clog try "check current account is in gerrit system"
         echo "ok. gerrit account existed: ${ret[@]}"
@@ -1970,12 +1972,12 @@ function revvcheck_permission(){
 # usage)  revvcheck_permission as joongkeun.kim honda/con/autosar tsu_26my_release create
 # $1: target user
 # $2: target review system
-# $3: gitproject 
+# $3: gitproject
 # $4: branch
 # $5: permission(https://gerrit-review.googlesource.com/Documentation/access-control.html#access_categories)
 #     Abandon,Create(Create Reference),Delete(Delete Reference),Forge Author, Forge Committer,Forge Server,Owner,Push,Direct Push
 #     Push Merge Commits,Create Annotated Tag,Read,Rebase,Revert,Submit,Submit (On Behalf Of),Edit Hashtags,Edit Topic Name
-#     
+#
 
     local server=$1
     local user=$2
@@ -1989,7 +1991,7 @@ function revvcheck_permission(){
     local log ret
 
     revvcheck_account ${server} ${user}
-    
+
     #local port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)')
     if [ -z "${server}" ];
     then port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)'); server=$(getserver ${port} http)
@@ -2006,7 +2008,7 @@ function revvcheck_permission(){
     ! [[ "${ret#*:}" =~ 200 ]] && err "check gerrit project error: ${log}" && return 1
     echo "ok. gerrit account[${REVV_USER}] can access by[read]: ${oriproject}"
 
-    
+
     bar inline "step1.4-gerritserver: [remote] check if ${user} can access branch on the project (checked by $ACCOUNT)"
     clog try "check git/branch is correct and can access it [case sensitive]"
     dlog "commit" "read,submit,push,pushMerge,revert,forgeCommitter,forgeAuthor,editTopicName,label-Code-Review"
@@ -2018,7 +2020,7 @@ function revvcheck_permission(){
     readarray -d $'\n' -t ret < <(echo "${log}" |sed '1d'| jq -rM '.message,.status')
     ! [[ "${ret[1]}" =~ 200 ]] && { err "check gerrit project error: ${log}"; return 1;}
     ##get username & accountID from gerrit
-    echo "ok. gerrit branch[${branch}] existed and can accessed with[${perm}] permission by[${REVV_USER}]" 
+    echo "ok. gerrit branch[${branch}] existed and can accessed with[${perm}] permission by[${REVV_USER}]"
 
     return 0
 }
@@ -2078,7 +2080,7 @@ function revvaccount(){
 			usage) revv user      na joongkeun.kim                             # check account is existed and its groups
 			   ex) revv user      na joon                                      # check all accounts named joon
 			usage) revv sshkey    na joongkeun.kim                             # get registered SSH-KEY
-			usage) revv group     na sa515m_developer                          # check group existance and list sub-groups & all members            
+			usage) revv group     na sa515m_developer                          # check group existance and list sub-groups & all members
 			   ex) revv group     na sa515m_                                   # find groups named sa515m_
 			usage) revv groupadd  na sa515m_developer joongkeun.kim            # add member to group
 			usage) revv groupdel  na sa515m_reviewer  joongkeun.kim            # delete member from group
@@ -2160,51 +2162,51 @@ EOF
             bar inline "check if project already existed"
             local temp=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} |sed '1d' | jq -cC '.name')
             if [ -n "${temp}" ]
-            then err "[${temp}] already legacy project existed" && return 1; 
+            then err "[${temp}] already legacy project existed" && return 1;
             else clog "passed, no legacy project" "ok, continue to create"
             fi
-            
+
             if [ -n "${parent}" ]; then
                 temp=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${parent//'/'/'%2F'} |sed '1d' | jq -cC '.name')
                 if [ -z "${temp}" ]; then err "but no parent project, stop to create"; return 1; fi
             fi
-            
+
             bar inline "add new project inherited All-projects(default), and create emtpy master"
             curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} -H "Content-Type:application/json" \
                  --data "{"description":"revvcreate","parent":"${parent:-'All-Projects'}", "create_empty_commit":true }" -X PUT |sed '1d' > $file
             clog "result for creaing project: "
-            cat $file| jq -C . 
+            cat $file| jq -C .
 
     ;;projectdel~*)
             bar inline "check if project already existed"
             local temp=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} |sed '1d' | jq -cC '.name')
             if [ -n "${temp}" ]
-            then clog "[${temp}] already legacy project existed" "ok, please remove manually" 
+            then clog "[${temp}] already legacy project existed" "ok, please remove manually"
             else err "no existing project, stopped" && return 1
             fi
-    
+
             bar inline "'removing project' by CLI is not supported in gerrit"
             dlog "so only provide url link, you cand remove git project there"
             dlog "[guide] To delete project (visit):" "${server}/admin/repos/${source},commands"
             printf "\n\n"
-            
+
     ;;projectparent~*)
             bar inline "check if project already existed"
             local temp=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} |sed '1d' | jq -cC '.name')
             [ -z "${temp}" ] && { clog "[${temp}] already legacy project not existed"; return 1; }
-            
+
             if [ -n "${parent}" ]; then
                 temp=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${parent//'/'/'%2F'} |sed '1d' | jq -cC '.name')
                 if [ -z "${temp}" ]; then err "but no parent project, stop to create"; return 1; fi
             fi
-            
+
             bar inline "changing parent of project"
             [ -z "${parent}" ] && (warn "git created whose parent is All-project(default)" && return 0)
             curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/parent -H "Content-Type: application/json" --data "{\"parent\":\"${parent}\"}" -X PUT > $file
             clog "result for changing parent: "
             cat $file| sed '1d'| jq . | more -60
-            printf "\n\n"            
-            
+            printf "\n\n"
+
     ;;  project~*)
             dlog "[gerrit url] gerrit cli:" "curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} | sed '1d'| jq  -cC '.[]'"
 
@@ -2213,19 +2215,19 @@ EOF
             curl -su ${ACCOUNT}:${key} ${server}/a/projects/?m=${source} |sed '1d' > $file
             clog "matching project: "  $(cat $file| jq -c 'keys[]')
             cat $file| jq --arg jq_var ${VGIT} -c '"src: http://" + $jq_var + .[].web_links[].url'
-            
+
             bar inline "parent-project info"
             curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} |sed '1d' | jq -cC '.|{name,parent}'
             curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/access |sed '1d' > $file
             cat $file| jq --arg jq_var "${server}/admin/repos/" -c '"config: " + $jq_var + .inherits_from.name'
-            
+
             bar inline "grand parent-project info"
             cat $file| jq -cC '.inherits_from|{name,parent}'
             cat $file| jq --arg jq_var "${server}/admin/repos/" -c '"config: " + $jq_var + .inherits_from.parent'
-            
+
             bar inline "permission group name"
             cat $file| jq -cC .groups[]
-            
+
             read -p "enter to continue"
             bar inline "permission info for each group"
             cat $file| jq -C .local
@@ -2283,13 +2285,13 @@ EOF
     ;;   branch~*)
             bar inline "find branches by name"
             curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/?m=${target} | sed '1d'| jq  -cC '.[]|{ref,revision}' | more -60
-            
+
     ;;   commit~*)
             local change_id=$(curl -su ${ACCOUNT}:${key} ${server}/a/changes/${source} |grep -oP '(?<=change_id": ").*(?=")')
-            if [ -z "${change_id}" ]; then 
+            if [ -z "${change_id}" ]; then
                 err "NOT Found: change_id for commit_id[${source}]"
                 echo "this commit is not registered in gerrit system. ex) direct pushed"
-                return 1; 
+                return 1;
             fi
             curl -su ${ACCOUNT}:${key} ${server}/a/changes/?q=${change_id}
     ;;*)    err "please check command ex)revv branch help"
@@ -2355,9 +2357,9 @@ EOF
             return 0
     ;; setgit)  info "setgit is delivered to 'repo forall <git list>', this setting is sustain until reset it"
                 echo "flow) cat ${REPPFILE_CSV} |awk -F'|' {'print \$7'} > project.list"
-                echo "flow) revv forall setgit \$(cat project.list) #select gits" 
+                echo "flow) revv forall setgit \$(cat project.list) #select gits"
                 echo "flow) revv forall Pbranch master #do job for any selected gits"
-                echo "flow) revv forall setgit #reset, remove selected git setting" 
+                echo "flow) revv forall setgit #reset, remove selected git setting"
 
                 echo "flag_forall=${@:2} #print selected gits" ; #setgit is all next cmd from @:2
                 source  <(echo 'flag_forall="${@:2}"'); return 0
@@ -2382,7 +2384,7 @@ EOF
     set +o noglob
     #supress show result msg, only E|NONE type show log.
     case ${cmd::1} in  P|O|D) return 0; esac
-    
+
     read -p $'\n\nshow result log: [ctrl+c: exit | enter: continue]? '
     bar inline ""
     cat ${tempr} |grep --color=always FAIL | tee /dev/tty | wc -l
@@ -2600,11 +2602,11 @@ case "$1" in
     ;;    diff)     reppcheck_initvar gitt      &&  gittdiff "${@:2}"
     ;;   reset)     reppcheck_initvar gitt      &&  gittreset "${@:2}"
     ;;   debug)                                     gittdebug "${@:2}"
-    ;;       *)     bar outline "call native git"       
-                    git "${@}";;                        
-esac                                                    
-return $ret                                             
-}                                                       
+    ;;       *)     bar outline "call native git"
+                    git "${@}";;
+esac
+return $ret
+}
 
 
 
@@ -2735,6 +2737,7 @@ function reppinstall(){
 #install basic package for repp
 cat << GUIDE
 sudo apt install icdiff
+sudo apt install jq
 
 echo dpkg -l | grep -i util-linux ##find a nearest version
 2. wget https://mirrors.edge.kernel.org/pub/linux/utils/util-linux/v2.31/util-linux-2.31.tar.gz
