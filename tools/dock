@@ -567,12 +567,12 @@ $'\n\e[00;35m=== Please input command! [Number:menu, Ctrl+c:exit] === : \e[0m'
 
     select CHOICE in "${MENU[@]}"
     do
-        handle_commands "${CHOICE%%(*}";
+        dockmenu "${CHOICE%%(*}";
     done    
 }
 
 
-function handle_commands(){
+function dockmenu(){
 ## ---------------------------------------------------------------------------
 local ret=0
     case "$1" in
@@ -605,7 +605,7 @@ local ret=0
 function ____dock(){
 ## ---------------------------------------------------------------------------
     echo "this is called from sourced dock script"
-    handle_commands $@
+    dockmenu $@
 }
 
 ##============================================================================
@@ -615,4 +615,4 @@ function ____dock(){
 KEY_ADMIN=$(ende_code de arti)
 
 (return 0 2>/dev/null) && sourced=1 || sourced=0
-if [ $sourced -eq 0 ]; then handle_commands $@;else echo "plz run without source." && return; fi
+if [ $sourced -eq 0 ]; then dockmenu $@;else echo "plz run without source." && return; fi
