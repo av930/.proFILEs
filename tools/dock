@@ -87,7 +87,7 @@ function echorun(){
     echo "\$ $@" ; eval "$*";
 }
 
-function download_dockerfile(){
+function dockdown(){
 ## ---------------------------------------------------------------------------
     local clone_path printlist
     file_tar=$(mktemp)
@@ -129,7 +129,7 @@ function list_repo(){
 
 
 
-function docker_hub(){
+function dockerhub(){
 ## ---------------------------------------------------------------------------
     local repo_path=${repo_url}/devops-docker
     local path input_img input_tag
@@ -154,7 +154,7 @@ function docker_hub(){
             ;;
         push)
             list_repo
-            list images
+            docklist images
             read -p "must input Image [Name}: " cntr_img
             read -p "must input Repository path with tag [ex) vw/cockpit, vw/cockpit:latest, honda/26my/farm, honda/26my/farm:v1.0 ]: " path
             if [ "$cntr_img" = "" ];then echo "image is mandatory"; return 1; fi
@@ -221,7 +221,7 @@ function formatprint(){
 }
 
 
-function list(){
+function docklist(){
 ## ---------------------------------------------------------------------------
     $DEBUG "[$1] [$2] [$3]"
     list_cmd=$1
@@ -237,7 +237,7 @@ function list(){
 }
 
 
-function hello(){
+function dockhello(){
 ## ---------------------------------------------------------------------------
     local tmppath
 
@@ -264,12 +264,12 @@ function hello(){
 }
 
 
-function build(){
+function dockbuild(){
 ## ---------------------------------------------------------------------------
 
     local tmppath tmpfile
     printf "\nplease refer current images when building images\n"    
-    list images
+    docklist images
 
     printf "${red}========== "${FUNCNAME[0]}" ========== ${NCOL}\n"
     local today=$(date +"%y%m%d_%H")
@@ -294,10 +294,10 @@ function build(){
 }
 
 
-function start(){
+function dockstart(){
 ## ---------------------------------------------------------------------------
     $DEBUG "$LINENO:[$cntr_cmd] [$cntr_name] [$cntr_port] [$cntr_img]"
-    list images
+    docklist images
 
     local recent_name=$(docker images --format '{{.Repository}}'|head -1)
 
@@ -359,17 +359,17 @@ function start(){
         -v ${home_dir}/Docker_MountDIR:${home_dir}/Docker_MountDIR:rw           \
         ${cntr_img} /bin/bash -c 'sudo service ssh start && /bin/bash'
 
-        #if [ $? -eq 0 ]; then list ps; fi
+        #if [ $? -eq 0 ]; then docklist ps; fi
     return 0
 }
 
 
-function stoprm(){
+function dockstoprm(){
 ## ---------------------------------------------------------------------------
     local cmd=$1
     local param="${@:2}"
     local cntr_name
-    [ -z "${param}" ] && list ps --all
+    [ -z "${param}" ] && docklist ps --all
     printf "${red}========== stop & remove container ========== ${NCOL}\n"
     echo "Multiple container can be input with space ex) cntr1 cntr2 cntr3 ..."
     read -p "must input Container [Name| ID]: " cntr_name
@@ -378,7 +378,7 @@ function stoprm(){
     
     read -p "remove container?  [enter:continue| ctrl+c:exit]: "
     echorun docker rm ${cntr_name}
-    list ps --all
+    docklist ps --all
     
     if [ -n "$(docker volume ls -q)" ]; then 
     read -p "continue to remove volume? [Name or ID| ctrl+c:exit]: "
@@ -388,11 +388,11 @@ function stoprm(){
 }
 
 
-function rmi(){
+function dockrmi(){
 ## ---------------------------------------------------------------------------
     local cmd=$1
 
-    list images
+    docklist images
     printf "${red}========== "$cmd" ========== ${NCOL}\n"
     printf "[docker rmi] command will be executed!! otherwise use [dock stop]\n"
     
@@ -410,10 +410,10 @@ function rmi(){
 
 
 
-function exec(){
+function dockexec(){
 ## ---------------------------------------------------------------------------
 
-    list ps --all
+    docklist ps --all
     printf "${red}========== "${FUNCNAME[0]}" ========== ${NCOL}\n"
     local recent_name=$(docker ps --format '{{.Names}}' |sed -n '1p'| sed 's/.*\///p')
 
@@ -432,10 +432,10 @@ function exec(){
 }
 
 
-function debug(){
+function dockdebug(){
 ## ---------------------------------------------------------------------------
     local reply
-    list ps --all
+    docklist ps --all
     printf "${red}========== "${FUNCNAME[0]}" ========== ${NCOL}\n"
     read -p "must input Container [Name]: " cntr_name
     printf '%s\n' \
@@ -449,7 +449,7 @@ function debug(){
 }
 
 
-function clean(){
+function dockclean(){
 ## ---------------------------------------------------------------------------
     temp_img=$(docker ps | awk "/${cntr_name}/ {print \$2}" | grep -v ID)
     echo    "############### [WARNING] ###############"
@@ -477,7 +477,7 @@ function clean(){
 }
 
 
-function info(){
+function dockinfo(){
 ## ---------------------------------------------------------------------------
     read -p "docker info  [enter:continue| ctrl+c:exit]: "
     docker info
@@ -485,10 +485,10 @@ function info(){
 }
 
 
-function copy(){
+function dockcopy(){
 ## ---------------------------------------------------------------------------
     if [ -z "${cntr_name}" ];then 
-        list ps --all
+        docklist ps --all
     read -p "must input Container [Name| ID]: " cntr_name;
     fi
     echorun docker exec -t $cntr_name /bin/bash -c 'tree -aL 2 /data001/vc.integrator'
@@ -501,7 +501,7 @@ function copy(){
     exit 0
 }
 
-function help(){
+function dockhelp(){
 ## ---------------------------------------------------------------------------
 echo -e "
 ${green}
@@ -576,27 +576,27 @@ function handle_commands(){
 ## ---------------------------------------------------------------------------
 local ret=0
     case "$1" in
-        list) list "${@:2}"                                                 ;;
-          images|ps) list "${@:1}"                                          ;;
-          image) list images "${@:2}"                                       ;;
-        build) build "${@:2}"                                               ;;
-          hello) hello;                                                     ;;
-        start) start;                                                       ;;
-          run) start run                                                    ;;
-          exec) exec                                                        ;;
-          debug) debug                                                      ;;
-        stop|rm) stoprm "${@:1}"                                            ;;
-          rmi|remove) rmi                                                   ;;
-          clean) clean;                                                     ;;
-        pull|push|find) docker_hub "${@:1}"                                 ;;
-          down) download_dockerfile  "${@:2}"                               ;;
-        copy) copy "${@:2}"                                                 ;;
-        info|status) info "${@:2}"                                          ;;
-        ende_code) "${@:1}"                                                 ;;
-        help) help "${@:2}"                                                 ;;
-        "") handler_menu "${@}"                                             ;;
-        *) docker "${@}"
-          return $ret;;
+        list)           docklist "${@:2}"                                     ;;
+          images|ps)    docklist "${@:1}"                                     ;;
+          image)        docklist images "${@:2}"                              ;;
+        build)          dockbuild "${@:2}"                                    ;;
+          hello)        dockhello;                                            ;;
+        start)          dockstart;                                            ;;
+          run)          dockstart run                                         ;;
+          exec)         dockexec                                              ;;
+          debug)        dockdebug                                             ;;
+        stop|rm)        dockstoprm "${@:1}"                                   ;;
+          rmi|remove)   dockrmi                                               ;;
+          clean)        dockclean;                                            ;;
+        pull|push|find) dockerhub "${@:1}"                                    ;;
+          down)         dockdown  "${@:2}"                                    ;;
+        copy)           dockcopy "${@:2}"                                     ;;
+        info|status)    dockinfo "${@:2}"                                     ;;
+        ende_code)      "${@:1}"                                              ;;
+        help)           dockhelp "${@:2}"                                     ;;
+        "")             handler_menu "${@}"                                   ;;
+        *)              docker "${@}"                             
+                                                                  ;return $ret;;
     esac
 }
 
