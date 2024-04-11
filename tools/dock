@@ -187,7 +187,7 @@ function formatprint(){
 
     readarray -t arrayline < <("$@")
     arrayline=("${cmd[*]/%/|}" "${arrayline[@]}")
-    #declare -p arrayline
+    declare -p arrayline
 
     ##read one line from array "${arrayline[@]}"
     for line in "${arrayline[@]}"; do
@@ -202,7 +202,7 @@ function formatprint(){
                 CreatedAt)              width=-16; item=${item%:*};; #remove second
                 Status)                 width=12;  item=${item/#Restarting*/NotWorking};; #change status Restarting to Notworking
                 Ports)                  width=5;   temp=${item##*:}; item=${temp%->*};list_port+=(${item}) ;; #display port shortly
-                Size)                   width=20;   item=${item/virtual/vir} ;;
+                Size)                   width=20;  item=${item/virtual/vir} ;;
                 #Container size takes time too long, dont use size in docker ps
                 #remove virtual memory
                 Image|Repository)       width=18;  [[ $list_cmd != images ]] && item=${item##*/} ;; #remove Image path to make it short
@@ -232,7 +232,7 @@ function docklist(){
     case $list_cmd in
         ##width: display column width, minus left align, string replace
         images) formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|' ${@:2}
-        ;; vol) formatprint docker volume ls --format '{{.Driver}}|{{.Name}}|{{.Mountpoint}}' ${@:2}
+        ;; vol) formatprint docker volume ls --format '{{.Driver}}|{{.Name}}|{{.Mountpoint}}|' ${@:2}
         ;;  ps) 
               if [ "$2" = "--size" ]; then echo "Wait 10s... to get size of container!!"
                 formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.Size}}|{{.ID}}|{{.Names}}|{{.Image}}|' ${@:2}; 
