@@ -206,11 +206,11 @@ function formatprint(){
                 #Container size takes time too long, dont use size in docker ps
                 #remove virtual memory
                 Image|Repository)       width=18;  [[ $list_cmd != images ]] && item=${item##*/} ;; #remove Image path to make it short
-                State|Driver)           width=10;; #only display width control
-                Tag)                    width=8;;
+                State)                  width=10;; #only display width control
+                Tag|Driver)             width=8;;
                 Names)                  width=20;;
-                Name)                   width=30;;
-                Mountpoint)             width=70;;
+                Name)                   width=30;; #docker volume name
+                Mountpoint)             width=66;;
                 ID)                     width=13;;
                 *)                      width=16;;
             esac
@@ -232,7 +232,7 @@ function docklist(){
     case $list_cmd in
         ##width: display column width, minus left align, string replace
         images) formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|' ${@:2}
-        ;; vol) formatprint docker volume ls --format '{{.Driver}}|{{.Name}}|{{.Mountpoint}}|' ${@:2}
+        ;; vol) formatprint docker volume ls --format '{{.Driver}}|{{.Mountpoint}}|{{.Name}}|' ${@:2}
         ;;  ps) 
               if [ "$2" = "--size" ]; then echo "Wait 10s... to get size of container!!"
                 formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.Size}}|{{.ID}}|{{.Names}}|{{.Image}}|' ${@:2}; 
