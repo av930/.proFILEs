@@ -206,9 +206,11 @@ function formatprint(){
                 #Container size takes time too long, dont use size in docker ps
                 #remove virtual memory
                 Image|Repository)       width=18;  [[ $list_cmd != images ]] && item=${item##*/} ;; #remove Image path to make it short
-                State)                  width=10;; #only display width control
+                State|Driver)           width=10;; #only display width control
                 Tag)                    width=8;;
                 Names)                  width=20;;
+                Name)                   width=30;;
+                Mountpoint)             width=70;;
                 ID)                     width=13;;
                 *)                      width=16;;
             esac
@@ -223,16 +225,21 @@ function formatprint(){
 
 function docklist(){
 ## ---------------------------------------------------------------------------
+# $1: ps|images
+# $2: --all|--size
     $DEBUG "[$1] [$2] [$3]"
     list_cmd=$1
     case $list_cmd in
         ##width: display column width, minus left align, string replace
         images) formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|' ${@:2}
-        ;;  ps) if [ "$2" = "--size" ]; then echo "Wait 10s... to get size of container!!"
-                     formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.Size}}|{{.ID}}|{{.Names}}|{{.Image}}|' ${@:2}; 
-                else formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.ID}}|{{.Names}}|{{.Image}}|' ${@:2};        fi
-        ;;   *) formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|' ${@:1}; 
-                formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.Names}}|{{.Image}}|' ${@:1}; 
+        ;; vol) formatprint docker volume ls --format '{{.Driver}}|{{.Name}}|{{.Mountpoint}}' ${@:2}
+        ;;  ps) 
+              if [ "$2" = "--size" ]; then echo "Wait 10s... to get size of container!!"
+                formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.Size}}|{{.ID}}|{{.Names}}|{{.Image}}|' ${@:2}; 
+              else 
+                formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.ID}}|{{.Names}}|{{.Image}}|' ${@:2};        fi
+        ;;   *) formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|' ${@:2}; 
+                formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.ID}}|{{.Names}}|{{.Image}}|' ${@:2};
     esac
 }
 
@@ -378,7 +385,7 @@ function dockstoprm(){
     
     read -p "remove container?  [enter:continue| ctrl+c:exit]: "
     echorun docker rm ${cntr_name}
-    docklist ps --all
+    
     
     if [ -n "$(docker volume ls -q)" ]; then 
     read -p "continue to remove volume? [Name or ID| ctrl+c:exit]: "
@@ -596,7 +603,7 @@ local ret=0
         help)           dockhelp "${@:2}"                                     ;;
         "")             handler_menu "${@}"                                   ;;
         *)              docker "${@}"                             
-                                                                  ;return $ret;;
+                                                                   return $ret;;
     esac
 }
 
