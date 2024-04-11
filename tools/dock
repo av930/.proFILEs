@@ -187,7 +187,7 @@ function formatprint(){
 
     readarray -t arrayline < <("$@")
     arrayline=("${cmd[*]/%/|}" "${arrayline[@]}")
-    declare -p arrayline
+    #declare -p arrayline
 
     ##read one line from array "${arrayline[@]}"
     for line in "${arrayline[@]}"; do
@@ -386,8 +386,8 @@ function dockstoprm(){
     read -p "remove container?  [enter:continue| ctrl+c:exit]: "
     echorun docker rm ${cntr_name}
     
-    
     if [ -n "$(docker volume ls -q)" ]; then 
+    docklist vol
     read -p "continue to remove volume? [Name or ID| ctrl+c:exit]: "
     echorun docker volume rm --force ${REPLY}
     fi
