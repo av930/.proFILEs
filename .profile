@@ -51,8 +51,9 @@ readarray -t a <<<"$(hostname -I) $SSH_CONNECTION"
 
 
 CURR_IP=$(get_ip)
-# user specific setting
-TMOUT=100000 #86400 is 24 hours
+## user specific setting
+## ssh connection timeout value, periodically disconnected
+# TMOUT=100000 #86400 is 24 hours
 export proFILEdir proFILEdirOS LC_ALL CURR_IP get_ip TMOUT
 export red RED green GREEN yellow YELLOW blue BLUE cyan CYAN magenta brown NCOL
 
