@@ -81,11 +81,13 @@ local cmd=$1 tag=$2 key=$3
     esac
 }
 
+
 function echorun(){
 ## ---------------------------------------------------------------------------
 # ex) echo docker images # must call without quote
     echo "\$ $@" ; eval "$*";
 }
+
 
 function dockdown(){
 ## ---------------------------------------------------------------------------
@@ -126,7 +128,6 @@ function list_repo(){
 
     if [ "${listimg[0]}" = "errors" ];then echo "please verify your ID/PW"; exit 0;fi
 }
-
 
 
 function dockerhub(){
@@ -229,18 +230,13 @@ function docklist(){
 # $2: --all|--size
     $DEBUG "[$1] [$2] [$3]"
     list_cmd=$1
-    case $list_cmd in
-        ##width: display column width, minus left align, string replace
-        images) formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|' ${@:2}
-        ;; vol) formatprint docker volume ls --format '{{.Driver}}|{{.Mountpoint}}|{{.Name}}|' ${@:2}
-        ;;  ps) 
-              if [ "$2" = "--size" ]; then echo "Wait 10s... to get size of container!!"
-                formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.Size}}|{{.ID}}|{{.Names}}|{{.Image}}|' ${@:2}; 
-              else 
-                formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.ID}}|{{.Names}}|{{.Image}}|' ${@:2};        fi
-        ;;   *) formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|' ${@:2}; 
-                formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.ID}}|{{.Names}}|{{.Image}}|' ${@:2};
-    esac
+    formatprint docker images --format '{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|' ${@:2}; 
+    if [ "$list_cmd" = "ps" ]; then echo "Wait 10s... to get size of container!!"
+        formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.Size}}|{{.ID}}|{{.Names}}|{{.Image}}|' ${@:2}; 
+    else 
+        formatprint docker ps --format '{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.ID}}|{{.Names}}|{{.Image}}|' ${@:2};  
+    fi
+    formatprint docker volume ls --format '{{.Driver}}|{{.Mountpoint}}|{{.Name}}|' ${@:2}
 }
 
 
@@ -416,7 +412,6 @@ function dockrmi(){
 }
 
 
-
 function dockexec(){
 ## ---------------------------------------------------------------------------
 
@@ -508,6 +503,7 @@ function dockcopy(){
     exit 0
 }
 
+
 function dockhelp(){
 ## ---------------------------------------------------------------------------
 echo -e "
@@ -536,10 +532,10 @@ ${NCOL} "
 }
 
 MENU=(
-    'list(img&cntr)' 'images(list img)' 'ps(list cntr)' 'build(dockerfile)'
-    'start(run++ img)' 'exec(attach cntr)' 'hello(testimg)' 'run(just run)' 
-    'stop(&rm ctnr)' 'remove(img)' 'clean(prune all)' 'debug(log)' 'find(in arti)'
-    'pull(from arti)' 'push(to arti)' 'down(dockerfile)' 'copy(between host)' 'help'
+    'list(img&cntr)' 'build(dockerfile)' 'start(run++ img)' 'exec(attach cntr)' 
+    'hello(testimg)' 'run(just run)' 'stop(&rm ctnr)' 'remove(img)' 'clean(prune all)' 
+    'debug(log)' 'find(in arti)' 'pull(from arti)' 'push(to arti)' 'down(dockerfile)' 
+    'copy(between host)' 'help'
 )
 
 function handler_menu(){
@@ -567,7 +563,7 @@ printf ${NCOL}
     #local COLUMNS=30
     #local columns="$(tput cols)"
     #multi-line PS3
-    PS3=$'\e[00;34m------------------------------------------------------------------------------------------\e[0m'\
+PS3=$'\e[00;34m------------------------------------------------------------------------------------------\e[0m'\
 $'\nstep: build/pull(image)>> start(container)>> exec(attach)>> stop(container)>> remove(image)'\
 $'\nstep: hello(image)>> run(container)>> exec(attach)>> ...'\
 $'\n\e[00;35m=== Please input command! [Number:menu, Ctrl+c:exit] === : \e[0m'
@@ -584,8 +580,7 @@ function dockmenu(){
 local ret=0
     case "$1" in
         list)           docklist "${@:2}"                                     ;;
-          images|ps)    docklist "${@:1}"                                     ;;
-          image)        docklist images "${@:2}"                              ;;
+          image|images|ps)    docklist "${@:1}"                               ;;
         build)          dockbuild "${@:2}"                                    ;;
           hello)        dockhello;                                            ;;
         start)          dockstart;                                            ;;
