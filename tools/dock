@@ -100,6 +100,8 @@ function dockdown(){
     printf "\n      %s" "currently supported dockerfiles for projects"
     printf "\n---------------------------------------------------------------------------------------------------\n\n${NCOL}"
 
+    if git -C "$1" rev-parse --is-inside-work-tree &> /dev/null ; then echo "you are in git project, cd other directory, retry 'dock down'"; exit 1; fi
+    
     listpath=( $(git archive --remote=ssh://vgit.lge.com:29420/devops/scm/infra/devenv.git devops_release:dockerfile -o ${file_tar} && tar -tf ${file_tar} | grep '.*/.*/$' ))
     printlist=$(declare -p listpath | sed 's/.*(\(.*\)).*/\1/')
     printf "%s\n" ${printlist}
