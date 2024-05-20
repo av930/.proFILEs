@@ -104,9 +104,13 @@ function dockdown(){
     printlist=$(declare -p listpath | sed 's/.*(\(.*\)).*/\1/')
     printf "%s\n" ${printlist}
     #git archive --remote=ssh://vgit.lge.com:29420/devops/scm/infra/devenv.git devops_release:dockerfile/honda/tsu . | tar -x -C .
-    read -p "input project [Number]: " reply
-    if [ -z "$reply" ]; then echo you have to input image number; return; fi
-    echorun  tar -xvf ${file_tar} ${listpath[${reply}]}
+    
+    read -p "input project [Ctrl+C(break)| Enter(git clone)| Number(download)]: " reply
+    case $reply in
+               '') echorun git clone ssh://vgit.lge.com:29420/devops/scm/infra/devenv.git -b devops_release dockclone
+        ;; *[0-9]) echorun tar -xvf ${file_tar} ${listpath[${reply}]}
+        ;;      *) echo "you have to input image number(download) or enter(clone)"
+    esac
 }
 
 
