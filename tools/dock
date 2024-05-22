@@ -185,7 +185,9 @@ function formatprint(){
 
     #extract only "print format" from commands.
     local cmd=( $(echo "$*" |sed 's/.*format *\({{.*}}|\).*/\1/;s/{{//g;s/}}|//g;s/\./ /g') )
+    local cmd_last="${@: -1}"
     #declare -p cmd
+
     $DEBUG ${#cmd[@]}
 
 
@@ -215,7 +217,7 @@ function formatprint(){
                 Size)                   width=20;  item=${item/virtual/vir} ;;
                 #Container size takes time too long, dont use size in docker ps
                 #remove virtual memory
-                Image|Repository)       width=18;  [[ $list_cmd != images ]] && item=${item##*/} ;; #remove Image path to make it short
+                Image|Repository)       width=18;  [[ ! "$cmd_last" = "--all" ]] && item=${item##*/} ;; #remove Image path to make it short
                 State)                  width=10;; #only display width control
                 Tag|Driver)             width=8;;
                 Names)                  width=20;;
@@ -319,7 +321,7 @@ function dockbuild(){
 function dockstart(){
 ## ---------------------------------------------------------------------------
     $DEBUG "$LINENO:[$cntr_cmd] [$cntr_name] [$cntr_port] [$cntr_img]"
-    docklist images
+    docklist images --all
 
     local recent_name=$(docker images --format '{{.Repository}}'|head -1)
 
@@ -344,16 +346,14 @@ function dockstart(){
     read -p "input Port [Port Number| Enter:${cntr_port}]: " 
     [ -n "${REPLY}" ] && cntr_port="${REPLY}"
 
-set -x 
     list_port=( $(docker ps --format '{{.Ports}}'|sed 's/.*:\([0-9]*\)->.*/\1/') )
-    declare -p list_port
-    local i=7000
-    while (( i < 10000 )); do
-        if [[ ! "${list_port[*]}" =~ "$i" ]]; then cntr_port="$i"; break; fi
-        ((i=i+10))
-    done    
-    
-set +x
+    if [[ "${list_port[*]}" =~ "$cntr_port" ]]; then    
+        local i=7000
+        while (( i < 10000 )); do
+            if [[ ! "${list_port[*]}" =~ "$i" ]]; then cntr_port="$i"; break; fi
+            ((i=i+10))
+        done    
+    fi
 
     # create dirs&files in advanced, if not, these dir&file is created for root account.
     sudo -u ${account} mkdir -p ${home_dir}/Docker_MountDIR ${home_dir}/mirror ${home_dir}/.jfrog
@@ -395,7 +395,7 @@ function dockstoprm(){
     local cmd=$1
     local param="${@:2}"
     local cntr_name vol
-    [ -z "${param}" ] && docklist ps
+    [ -z "${param}" ] && docklist ps --all
     printf "${red}========== stop & remove container ========== ${NCOL}\n"
     echo "Multiple container can be input with space ex) cntr1 cntr2 cntr3 ..."
     read -p "must input Container [Name| ID]: " cntr_name
