@@ -41,7 +41,7 @@ cntr_cmd=$1; cntr_name=$2; cntr_port=$3; cntr_img=$4; cntr_file='';
 
 ##--------------------------- Menu Functions --------------------------------
 ##============================================================================
-function ende_code(){
+function key(){
 ## ---------------------------------------------------------------------------
 # encoding as variable: code env <keyname> <key>
 # encoding as file: code en <keyfile> <key>
@@ -49,8 +49,8 @@ function ende_code(){
 local temp temp_var
 local cmd=$1 tag=$2 key=$3
     case $cmd in
-            en) [ -z "${key}" ] && ende_code help
-    ;; dev|def) [ -z "${tag}" ] && ende_code help
+            en) [ -z "${key}" ] && key help
+    ;; dev|def) [ -z "${tag}" ] && key help
     esac
 
     case $cmd in
@@ -72,12 +72,13 @@ local cmd=$1 tag=$2 key=$3
        ;;help|*)
             [ "$cmd" = help ] || err "please check your command"
             info "variable is live during session, file is live permanent"
-            echo "en/decoding as variable: dock ende_code env <keyname> <key>, ende_code de <key_id>"
-            echo "en/decoding as file    : dock ende_code en <keyfile> <key>, ende_code de <key_id>"
-            echo "ex) save file for vgit : dock ende_code env vgit ejladf69a79f8d79fdsqd"
-            echo "ex) save var for lamp  : dock ende_code en  lamp ejladf69a79f8d79fdsqd"
-            echo "ex) save var for arti  : dock ende_code en  arti ejladf69a79f8d79fdsqd"
-            echo "ex) read key from lamp : dock ende_code de  lamp" 
+            echo "en/decoding as variable: dock key env <keyname> <key>, key de <key_id>"
+            echo "en/decoding as file    : dock key en <keyfile> <key>, key de <key_id>"
+            echo "ex) save file for vgit : dock key env vgit ejladf69a79f8d79fdsqd"
+            echo "ex) save var for lamp  : dock key en  lamp ejladf69a79f8d79fdsqd"
+            echo "ex) save var for arti  : dock key en  arti ejladf69a79f8d79fdsqd"
+            echo "ex) read key from lamp : dock key de  lamp" 
+            echo "scp vc.integrator@10.158.7.50:/data001/vc.integrator/.key_* ~/"
             
             echo "list of current registered key"
             echo "$(ls -al ~/.key_*)" 
@@ -124,8 +125,8 @@ function list_repo(){
 ## ---------------------------------------------------------------------------
     if [ -z "${KEY_ADMIN}" ]; then 
         echo "input artifactory password first !!!"
-        echo "permanant usage: 'dock ende_code en  arti <KEY>' !!!"
-        echo "temporary usage: 'dock ende_code env arti <KEY>' !!!"
+        echo "permanant usage: 'dock key en  arti <KEY>' !!!"
+        echo "temporary usage: 'dock key env arti <KEY>' !!!"
         exit 1
     fi
     
@@ -704,7 +705,7 @@ local ret=0
         cmd)            dockcmd "${@:2}"                                      ;;
         copy)           dockcopy "${@:2}"                                     ;;
         info|status)    dockinfo "${@:2}"                                     ;;
-        ende_code)      "${@:1}"                                              ;;
+        key)            "${@:1}"                                              ;;
         help)           dockhelp "${@:2}"                                     ;;
         "")             handler_menu "${@}"                                   ;;
         *)              docker "${@}"                             
@@ -724,7 +725,7 @@ function ____dock(){
 ## Main
 ##============================================================================
 # check if called from source or not.
-KEY_ADMIN=$(ende_code de arti)
+KEY_ADMIN=$(key de arti)
 
 (return 0 2>/dev/null) && sourced=1 || sourced=0
 if [ $sourced -eq 0 ]; then dockmenu $@;else echo "plz run without source." && return; fi
