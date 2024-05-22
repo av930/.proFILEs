@@ -635,7 +635,7 @@ ${NCOL} "
 
 MENU=(
     'list(img&cntr)' 'build(dockerfile)' 'start(run++ img)' 'exec(attach cntr)' 
-    'hello(testimg)' 'run(just run)' 'stop(&rm ctnr)' 'remove(img)' 'clean(prune all)' 
+    'hello(testimg)' 'run(just run)' 'stop(&rm ctnr)' 'remove(rm img)' 'clean(prune all)' 
     'debug(log)' 'find(in arti)' 'pull(from arti)' 'push(to arti)' 'down(dockerfile)' 
     'cmd(exe docker)' 'copy(between host)' 'help'
 )
@@ -660,20 +660,23 @@ cat << PREFACE
  container) ps/ps --all, start, run, exec, debug, stop/rm
 ===================================================================================================
 PREFACE
-printf ${NCOL}
+printf ${cyan}
 
-    #local COLUMNS=30
-    #local columns="$(tput cols)"
-    #multi-line PS3
+#bash select supports printing menu only vertically
+local COLUMNS=114 #define MENU width
+#local LINES=3    #define MENU line
+#local columns="$(tput cols)"
+#multi-line PS3
+
 PS3=$'\e[00;34m------------------------------------------------------------------------------------------\e[0m'\
 $'\nstep: build/pull(image)>> start(container)>> exec(attach)>> stop(container)>> remove(image)'\
 $'\nstep: hello(image)>> run(container)>> exec(attach)>> ...'\
-$'\n\e[00;35m=== Please input command! [Number:menu, Ctrl+c:exit] === : \e[0m'
-
+$'\n\e[00;35m=== Please input command! [Number:menu, Ctrl+c:exit] === : \e[0m \e[0;36m'
     select CHOICE in "${MENU[@]}"
     do
         dockmenu "${CHOICE%%(*}";
-    done    
+    done
+    PS3=$'\e[0m'
 }
 
 
