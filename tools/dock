@@ -113,7 +113,7 @@ function dockdown(){
     
     read -p "input project [Ctrl+C(break)| Enter(git clone)| Number(download)]: " reply
     case $reply in
-               '') echorun git clone ssh://vgit.lge.com:29420/devops/scm/infra/devenv.git -b devops_release dockclone
+               '') echorun git clone ssh://vgit.lge.com:29420/devops/scm/infra/devenv.git -b devops_release clone_dock
         ;; *[0-9]) echorun tar -xvf ${file_tar} ${listpath[${reply}]}
         ;;      *) echo "you have to input image number(download) or enter(clone)"
     esac
@@ -184,7 +184,6 @@ function formatprint(){
     local index=0 line;
 
     #extract only "print format" from commands.
-    list_port=()
     local cmd=( $(echo "$*" |sed 's/.*format *\({{.*}}|\).*/\1/;s/{{//g;s/}}|//g;s/\./ /g') )
     #declare -p cmd
     $DEBUG ${#cmd[@]}
@@ -212,7 +211,7 @@ function formatprint(){
                 ##width: display column width, minus left align, string replace
                 CreatedAt)              width=-16; item=${item%:*};; #remove second
                 Status)                 width=12;  item=${item/#Restarting*/NotWorking};; #change status Restarting to Notworking
-                Ports)                  width=5;   temp=${item##*:}; item=${temp%->*};list_port+=(${item}) ;; #display port shortly
+                Ports)                  width=5;   temp=${item##*:}; item=${temp%->*} ;; #display port shortly
                 Size)                   width=20;  item=${item/virtual/vir} ;;
                 #Container size takes time too long, dont use size in docker ps
                 #remove virtual memory
@@ -331,7 +330,7 @@ function dockstart(){
 
     printf "\n\nPlease Input Image, ID is more accurate!!!\n"
     read -p "input Image ID/Repository [ImageID| Repository| Enter:$recent_name]: " cntr_img
-    read -p "input Container [Name| Enter:${recent_name##*/}]: " cntr_name
+    read -p "input Container to start [Name| Enter:${recent_name##*/}]: " cntr_name
 
     if [ "$cntr_img" = "" ];then cntr_img=${recent_name}; fi
     if [ "$cntr_name" = "" ];then cntr_name=${recent_name##*/}; fi
@@ -342,15 +341,19 @@ function dockstart(){
         return 0
     fi
 
+    read -p "input Port [Port Number| Enter:${cntr_port}]: " 
+    [ -n "${REPLY}" ] && cntr_port="${REPLY}"
+
+set -x 
+    list_port=( $(docker ps --format '{{.Ports}}'|sed 's/.*:\([0-9]*\)->.*/\1/') )
+    declare -p list_port
     local i=7000
     while (( i < 10000 )); do
         if [[ ! "${list_port[*]}" =~ "$i" ]]; then cntr_port="$i"; break; fi
         ((i=i+10))
-    done
-
-    read -p "input Port [Port Number| Enter:${cntr_port}]: " 
-    [ -n "${REPLY}" ] && cntr_port="${REPLY}"
+    done    
     
+set +x
 
     # create dirs&files in advanced, if not, these dir&file is created for root account.
     sudo -u ${account} mkdir -p ${home_dir}/Docker_MountDIR ${home_dir}/mirror ${home_dir}/.jfrog
@@ -391,22 +394,22 @@ function dockstoprm(){
 ## ---------------------------------------------------------------------------
     local cmd=$1
     local param="${@:2}"
-    local cntr_name
+    local cntr_name vol
     [ -z "${param}" ] && docklist ps
     printf "${red}========== stop & remove container ========== ${NCOL}\n"
     echo "Multiple container can be input with space ex) cntr1 cntr2 cntr3 ..."
     read -p "must input Container [Name| ID]: " cntr_name
     [ -z "${cntr_name}" ] && return
     echorun docker stop ${cntr_name}
-    
+
+    vol=$(docker container inspect -f '{{range .Mounts}}{{if eq .Type "volume"}}{{println .Name}}{{end}}{{end}}' $cntr_name)    
     read -p "remove container?  [enter:continue| ctrl+c:exit]: "
     echorun docker rm ${cntr_name}
-    
-    if [ -n "$(docker volume ls -q)" ]; then 
-    docklist vol
-    read -p "continue to remove volume? [Name or ID| ctrl+c:exit]: "
-    echorun docker volume rm --force ${REPLY}
-    fi
+
+    if [ -n "${vol}" ]; then read -p "remove volume used in $cntr_name ? [continue:enter| ctrl+c:exit]: $vol"
+    [ -z "${REPLY}" ] && echorun docker volume rm --force ${vol}
+    fi    
+
     printf "\n\n"
 }
 
@@ -663,18 +666,19 @@ PREFACE
 printf ${cyan}
 
 #bash select supports printing menu only vertically
-local COLUMNS=114 #define MENU width
-#local LINES=3    #define MENU line
+COLUMNS=114 #define MENU width, must be global variable
+#LINES=3    #define MENU line
 #local columns="$(tput cols)"
 #multi-line PS3
-
-PS3=$'\e[00;34m------------------------------------------------------------------------------------------\e[0m'\
+ASK=$'\e[00;34m------------------------------------------------------------------------------------------\e[0m'\
 $'\nstep: build/pull(image)>> start(container)>> exec(attach)>> stop(container)>> remove(image)'\
 $'\nstep: hello(image)>> run(container)>> exec(attach)>> ...'\
-$'\n\e[00;35m=== Please input command! [Number:menu, Ctrl+c:exit] === : \e[0m \e[0;36m'
+$'\n\e[00;35m=== Please input command! [Number:menu, Ctrl+c:exit] === : \e[0;36m'
+    PS3="$ASK"
     select CHOICE in "${MENU[@]}"
     do
         dockmenu "${CHOICE%%(*}";
+        PS3="$ASK"
     done
     PS3=$'\e[0m'
 }
