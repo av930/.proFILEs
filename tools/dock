@@ -70,18 +70,19 @@ local cmd=$1 tag=$2 key=$3
        ;;list|debug)  #list up keycode for debugging
             declare -p |grep ENCODE 
        ;;help|*)
-            [ "$cmd" = help ] || err "please check your command"
-            info "variable is live during session, file is live permanent"
+            [ "$cmd" = help ] || echo "please check your command"
+            echo "variable is live during session, file is live permanent"
             echo "en/decoding as variable: dock key env <keyname> <key>, key de <key_id>"
             echo "en/decoding as file    : dock key en <keyfile> <key>, key de <key_id>"
             echo "ex) save file for vgit : dock key env vgit ejladf69a79f8d79fdsqd"
             echo "ex) save var for lamp  : dock key en  lamp ejladf69a79f8d79fdsqd"
             echo "ex) save var for arti  : dock key en  arti ejladf69a79f8d79fdsqd"
             echo "ex) read key from lamp : dock key de  lamp" 
-            echo "scp vc.integrator@10.158.7.50:/data001/vc.integrator/.key_* ~/"
-            
+            echo 
+            echo 
             echo "list of current registered key"
-            echo "$(ls -al ~/.key_*)" 
+            ls -al ~/.key_* 
+            echo "scp ${account}@10.158.7.50:/data001/${account}/.key_* ~/"
              
     esac
 }
@@ -213,7 +214,7 @@ function formatprint(){
             case ${cmd[${index}]} in
                 ##width: display column width, minus left align, string replace
                 CreatedAt)              width=-16; item=${item%:*};; #remove second
-                Status)                 width=12;  item=${item/#Restarting*/NotWorking};; #change status Restarting to Notworking
+                Status)                 width=13;  item=${item/#Restarting*/NotWorking};; #change status Restarting to Notworking
                 Ports)                  width=5;   temp=${item##*:}; item=${temp%->*} ;; #display port shortly
                 Size)                   width=20;  item=${item/virtual/vir} ;;
                 #Container size takes time too long, dont use size in docker ps
@@ -417,20 +418,20 @@ function dockstoprm(){
 
 function dockrmi(){
 ## ---------------------------------------------------------------------------
-    local cmd=$1
+    local cmd=$1 list_img
 
-    docklist images
+    docklist images --all
     printf "${red}========== "$cmd" ========== ${NCOL}\n"
     printf "[docker rmi] command will be executed!! otherwise use [dock stop]\n"
     
     echo "Multiple image can be input with space ex) img1 img2 img3 ..."    
-    read -p "must input Image ID/Repository or enter [ImageID| Repository]: "
-    docker rmi ${REPLY}
+    read -p "must input Image ID/Repository or enter [ImageID| Repository]: " list_img
+    docker rmi ${list_img}
 
     if [ $? -ne 0 ]; then
-        read -p "docker rmi ${REPLY} --force [Enter:${REPLY}| Ctrl+C]: "
+        read -p "docker rmi ${REPLY} --force [Enter:${REPLY}| Ctrl+C]: " 
         if [ "$REPLY" = "" ]; then
-            docker rmi ${REPLY} --force
+            docker rmi ${list_img} --force
         fi
     fi
 }
@@ -708,7 +709,7 @@ local ret=0
         key)            "${@:1}"                                              ;;
         help)           dockhelp "${@:2}"                                     ;;
         "")             handler_menu "${@}"                                   ;;
-        *)              docker "${@}"                             
+        *)              docker "${@}"
                                                                    return $ret;;
     esac
 }
