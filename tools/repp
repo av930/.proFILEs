@@ -1014,6 +1014,7 @@ EOF
     #if VER is not integer, in case of error
     [[ ${VER} != ?(-)+([0-9]) ]] && VER=000
 
+    [ -d "${REPP_PATH%/*}/__repo" ] && warn "you are using toggled version" 
     echo "this version is expected to used, please check this version is matched to your local version"
 
     bar inline "expected"
