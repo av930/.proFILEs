@@ -2174,7 +2174,8 @@ EOF
 
             bar inline "add new project inherited All-projects(default), and create emtpy master"
             curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} -H "Content-Type:application/json" \
-                 --data "{"description":"revvcreate","parent":"${parent:-'All-Projects'}", "create_empty_commit":true }" -X PUT |sed '1d' > $file
+                 --data "{\"description\":\"revvcreate\",\"parent\":\"${parent:-'All-Projects'}\", \"create_empty_commit\":true }" \
+                 -X PUT |sed '1d' > $file
             clog "result for creaing project: "
             cat $file| jq -C .
 
