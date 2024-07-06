@@ -555,7 +555,6 @@ function reppmanidb(){
     fi
 
     ## generate json from manifest, #suppress all log for generation json
-    local mani_out=()
     [ -d ${REPP_DIR} ] || mkdir ${REPP_DIR}
     repo manifest -r --json -o ${REPPFILE_JSON}  &> /dev/null
     if (( "$(reppversion ver 2>/dev/null)" > 220 )) && ! [ -f ${REPPFILE_JSON} ]; then
@@ -563,45 +562,50 @@ function reppmanidb(){
     fi
 
     ## get <default> from json
-    readarray -d'|' -t itemdefault < <(cat  ${REPPFILE_JSON} |jq -j '.default|.revision,"|",.groups,"|",.remote,"|",.upstream,"|",."dest-branch","|",.name,"|",.path,"|"')
-    #declare -p itemdefault
+    readarray -d'|' -t item_default < <(cat  ${REPPFILE_JSON} |jq -j '.default|.revision,"|",.groups,"|",.remote,"|",.upstream,"|",."dest-branch","|",.name,"|",.path,"|"')
+    #declare -p item_default
+
+
+    ## get <default> from json
+    readarray -t items_alias < <(cat  ${REPPFILE_JSON} |jq -jr '.remote[]|select(.alias!=null)|.name,"=",.alias')
 
     ## save to array
-    readarray -t multiline < <(cat  ${REPPFILE_JSON}|jq -jr '.project[]|.revision,"|",.groups,"|",.remote,"|",.upstream,"|",."dest-branch","|",.name,"|",.path,"|\n"'|sort)
+    local mani_out=()    
+    readarray -t items_project < <(cat  ${REPPFILE_JSON}|jq -jr '.project[]|.revision,"|",.groups,"|",.remote,"|",.upstream,"|",."dest-branch","|",.name,"|",.path,"|\n"'|sort)
     
-    echo "takes time for the 1st time"
-    ## read one line from multiline array
+    echo "takes time at first, creating .repp dir by analysing manifest"
+    ## read one line from items_project array
     local line
-    for line in "${multiline[@]}"; do
+    for line in "${items_project[@]}"; do
         $DEBUG ${line}
-
         ##read one item from line by '|'
-        local index=0 itemlrev itemrrev SEP='~'
+        local index=0 itemlrev itemrrev 
         local lineout=''
         while read -d'|' item; do
             $DEBUG "[%s] %s\n" "${index}" "${item}"
             ## remove return
             item=${item//$'\r'}
-            case ${item} in
-                null)           item=${itemdefault[index]};
-                ;; *)           [[ "${item}" = "null" ]] && { err "${lineout}[${index}]"; return 1; }
-            esac
+            
+            ##preprocessor, override value from default
+            [ "${item}" = "null" ] && item=${item_default[index]};
+
+            ##process item according to index
             case ${index} in
                 #revision: if ok, truncate digit to 6
-                  0)      [ "${item}" = "null" ] && { err "${lineout}[${index}]"; return 1; }; itemlrev=${item}; item=${item:0:6};
-                #group : assign default value
-                #;;1)      item=""
-                ;;1)      [ "${item}" = "null" ] && item="all,default"
-                #remote, name, path: if null, stop
-                ;;2|5|6)  [[ "${item}" = "null" ]] && { warn "${lineout}[${index}]"; }
+                  0)   [ "${item}" = "null" ] && { err "${lineout}[${index}]"; return 1; }; itemlrev=${item}; item=${item:0:6};
+                #group : assign default value, if value is not defined
+                ;;1)   [ "${item}" = "null" ] && item="all,default"
+                #remote: replace alias by original name
+                ;;2)   [[ "${item}" = "null" ]] && { err "${lineout}[${index}] is null"; }
+                       for alias in ${items_alias[@]};do [ "${item}" = "${alias%=*}" ] && item="${alias#*=}";done 
+                #name, path: if null stop, it is mandatory
+                ;;5|6) [[ "${item}" = "null" ]] && { err "${lineout}[${index}] is null"; }
                 #upstream:
-                ;;3)      itemrrev=${item}
-                #dest-branch: select dest-branch as rrev
-                ;;4)
-                          if   [ "${item}" = "${itemrrev}" ]; then { item="${item}|${item/null/${itemlrev}}"; }
-                          elif [ "${item}" = "null" ];        then { item="${item}|${itemlrev}"; warn "pull/push address is different (${line})"; }
-                          else { item="${item}|${item}"; warn "pull/push address is different (${line})"; }
-                          fi
+                ;;3)   itemrrev=${item}
+                #dest-branch: decide revision from upstream
+                ;;4)   if   [ "${item}" = "${itemrrev}" ]; then [ "${item}" = "null" ] && item="${item}|${itemlrev}" || item="${item}|${itemrrev}"
+                       else item="${item}|${itemrrev}"; warn "pull/push address is different (${line})"; 
+                       fi
             esac
             index=$(( ++index ))
             lineout+="${item:+"${item}|"}"
@@ -700,7 +704,7 @@ EOF
                       grep --color=always -iE "(^|${cmd})" |pCount -1
                   #repo forall . -c 'echo $REPO_LREV\|$REPO_RREV\|$REPO_UPSTREAM\|$REPO_DEST_BRANCH' 2>/dev/null | column -s'|' -t --table-columns REPO_LREV,REPO_RREV,REPO_UPSTREAM,REPO_DEST_BRANCH
     ;; *)         #prnmsg='%6s|%12s|%8s|%-32s|%-74s|%.80s'
-                  clog "to find keyword in all item, use 'repo find @all |grep <keyword>' ";
+                  clog "to find keyword in all item, use 'repp find @all |grep <keyword>' ";
                   #printf "\e[1;33m${prnmsg} \e[0m\n" "REPO_LREV" "REPO_GROUP" "REPO_REMOTE" "REPO_RREV" "REPO_PROJECT" "REPO_PATH"
                   #filter in grep, width in colume, highlight in grep
                   cat ${REPPFILE_CSV}| grep -i ${cmd}|\
