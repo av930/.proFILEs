@@ -663,14 +663,15 @@ function reppfind(){
     local cmd="$1"
     local filter="$2"
     case $3 in
-               '') local opt=99 #no opt
-    ;;     '@rev') local opt=1
+          '@rev') local opt=1
     ;;   '@group') local opt=2
     ;;  '@remote') local opt=3
     ;;  '@branch') local opt=6
     ;; '@project') local opt=7
     ;;    '@path') local opt=8
     ;;     '@all') local opt=0
+    ;;         '') local opt=99 #no opt
+    ;;          *) local opt=9; err "please check 'repp find help'" 
     esac
     
 
@@ -700,13 +701,14 @@ function reppfind(){
 		   ex) repp find @project |grep meta        # print project colume containing 'meta'
 EOF
 
-    ;; @rev)      clog "<REPO_LREV>";     awk -v FS="|" -v vf="$filter" -v vo="$opt" '$1 ~ vf{printf "[%40.40s]  %-100s\n", $1,$vo}' ${REPPFILE_CSV} |pCount
-    ;; @group)    clog "<REPO_GROUP>";    awk -v FS="|" -v vf="$filter" -v vo="$opt" '$2 ~ vf{printf "[%50.50s]  %-100s\n", $2,$vo}' ${REPPFILE_CSV} |sort |uniq |pCount
-    ;; @remote)   clog "<REPO_REMOTE>";   awk -v FS="|" -v vf="$filter" -v vo="$opt" '$3 ~ vf{printf "[%30.30s]  %-100s\n", $3,$vo}' ${REPPFILE_CSV} |sort |uniq |pCount
-    ;; @branch)                           awk -v FS="|" -v vf="$filter" -v vo="$opt" '$4$5$6 ~ vf{printf "[%s] %s\n", $4"|"$5"|"$6"|", $vo}' ${REPPFILE_CSV} |sort |uniq |column -s'|' -t --table-columns '<REPO_UPSTREAM>,<REPO_DEST_BRANCH>,<REPO_RREV>'  |pCount -1
-    ;; @project)  clog "<REPO_PROJECT>";  awk -v FS="|" -v vf="$filter" -v vo="$opt" '$7 ~ vf{printf "[%80.80s]  %-140s\n", $7,$vo}' ${REPPFILE_CSV} |sort |pCount
-    ;; @path)     clog "<REPO_PATH>";     awk -v FS="|" -v vf="$filter" -v vo="$opt" '$8 ~ vf{printf "[%80.80s]  %-140s\n", $8,$vo}' ${REPPFILE_CSV} |sort |pCount
-    ;; @all)      clog "<REPO_ALL>";      awk -v FS="|" -v vf="$filter" -v vo="$opt" '$0 ~ vf{printf "[%s] %s\n"       , $0,"|"$vo}' ${REPPFILE_CSV} |sort |uniq |column -s'|' -t --table-columns REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_UPSTREAM,REPO_DEST_BRANCH,REPO_RREV,REPO_PROJECT,REPO_PATH |pCount -1
+    ;; @rev)      clog "<REPO_LREV>";    awk -v FS="|" -v vf="$filter" -v vo="$opt" '$1 ~ vf{printf "[%40.40s]  %-s\n", $1,$vo}' ${REPPFILE_CSV} |pCount
+    ;; @group)    clog "<REPO_GROUP>";   awk -v FS="|" -v vf="$filter" -v vo="$opt" '$2 ~ vf{printf "[%50.50s]  %-s\n", $2,$vo}' ${REPPFILE_CSV} |sort |uniq |pCount
+    ;; @remote)   clog "<REPO_REMOTE>";  awk -v FS="|" -v vf="$filter" -v vo="$opt" '$3 ~ vf{printf "[%30.30s]  %-s\n", $3,$vo}' ${REPPFILE_CSV} |sort |uniq |pCount
+    ;; @branch)                          awk -v FS="|" -v vf="$filter" -v vo="$opt" '$4$5$6 ~ vf{printf "[%s] %s\n", $4"|"$5"|"$6"|", $vo}' ${REPPFILE_CSV} |sort |uniq |column -s'|' -t --table-columns '<REPO_UPSTREAM>,<REPO_DEST_BRANCH>,<REPO_RREV>'  |pCount -1
+    ;; @project)  clog "<REPO_PROJECT>"; awk -v FS="|" -v vf="$filter" -v vo="$opt" '$7 ~ vf{printf "[%80.80s]  %-s\n", $7,$vo}' ${REPPFILE_CSV} |sort |pCount
+    ;; @path)     clog "<REPO_PATH>";    awk -v FS="|" -v vf="$filter" -v vo="$opt" '$8 ~ vf{printf "[%80.80s]  %-s\n", $8,$vo}' ${REPPFILE_CSV} |sort |pCount
+    ;; @all)                             awk -v FS="|" -v vf="$filter" -v vo="$opt" '$0 ~ vf{printf "[%s] %s\n"    , $0,"|"$vo}' ${REPPFILE_CSV} |sort |uniq |\
+                                         column -s'|' -t --table-columns REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_UPSTREAM,REPO_DEST_BRANCH,REPO_RREV,REPO_PROJECT,REPO_PATH |pCount -1
                   #cat ${REPPFILE_CSV}|column -s'|' -t --table-columns REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_UPSTREAM,REPO_DEST_BRANCH,REPO_RREV,REPO_PROJECT,REPO_PATH |pCount -1      
     ;; '')        #summary view by hiding REPO_GROUP,REPO_UPSTREAM,REPO_DEST_BRANCH from all items
                   cat ${REPPFILE_CSV}|colrm 7 40|\
@@ -2773,19 +2775,20 @@ EOL
 function reppinstall(){
 ## ---------------------------------------------------------------------------
 #install basic package for repp
-cat << GUIDE
-sudo apt install icdiff
-sudo apt install jq
-
-echo dpkg -l | grep -i util-linux ##find a nearest version
-2. wget https://mirrors.edge.kernel.org/pub/linux/utils/util-linux/v2.31/util-linux-2.31.tar.gz
-3. tar zxvf util-linux-2.31.tar.gz
-4. cd util-linux-2.31
-5. ./configure
-6. make column
-7. sudo cp .libs/column /usr/bin/column
-
+if ! command -v icdiff > /dev/null ; then clog "icdiff need to be installed" "sudo apt install icdiff"; fi
+if ! command -v jq > /dev/null ; then clog "jq need to be installed" "sudo apt install icdiff"; fi
+if ! command -v repo > /dev/null ; then clog "repo need to be installed" "sudo apt install icdiff"; fi
+if [[ ! $(column -V 2>/dev/null|grep util-linux) =~ "util-linux" ]] ;then echo "column need to reinstalled"; 
+    cat << GUIDE
+    1. dpkg -l | grep -i util-linux ##find a nearest version
+    2. wget https://mirrors.edge.kernel.org/pub/linux/utils/util-linux/v2.31/util-linux-2.31.tar.gz
+    3. tar zxvf util-linux-2.31.tar.gz
+    4. cd util-linux-2.31
+    5. ./configure
+    6. make column
+    7. sudo cp .libs/column /usr/bin/column
 GUIDE
+fi
 }
 
 
