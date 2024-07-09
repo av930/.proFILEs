@@ -250,21 +250,67 @@ CHANGE
 CHANGE
 
     ;;  diff)   bar inline "compare 2 different manifests what project is changed"
-                reppget_repcmd
                 clog 'ex)' 'repp mani diff <old manifest.xml> <new manifest.xml>'
                 clog 'ex)' 'repp mani diff event/230426_mig.xml event/230712_upstream.xml'
+    
+                reppdiff diff "$item" "$str" "$filter"
+    ;;  diffcheck)  
+                bar inline "after repp mani check, if branch changed, find missing commits (this is useful in migration)"
+                reppdiff check "$item" "$str" "$filter"
+    ;; help|*)   cat <<- EOF
+				usage) repp mani info                                     #show manifest info,structure,log,diff
+				usage) repp mani db                                       #force regenerate db by current manifest not reusing
+				usage) repp mani go                                       #cd to manifest dir
+				usage) repp mani gen <outfile>
+				   ex) repp mani gen current.xml                          #default out: ${REPPFILE_XML}
+				usage) repp mani change <revision|name|path|remote|upstream|dest-branch|groups|dest|src|etc> <str> <filter>
+				   ex) repp mani change                                   #show command how to change manifest in detail, not change directly
+				   ex) repp mani change remote vgit_new                   #show command: change "any string" to "vgit_new" in all remote field
+				   ex) repp mani change remote vgit_new vgit_as           #show command: change only from "vgit_as" to "vgit_new" in remote field
+				usage) repp mani diff event/old.xml <new.xml>             #compare old manifest to new manifest
+				   ex) repp mani diff event/compare.xml                   #compare history event/compare.xml to current.xml
+				   ex) repp mani diff default.xml event/230712_mig.xml    #compare history from 2 different manifests
+				   ex) repp mani diff                                     #can choose manifest in recent 3 weeks, comparing to current manifest
+				usage) repp mani diffcheck                                #post analysis after 'repp mani diff' for missed commits checking
+EOF
+    ;; esac
+}
+
+
+
+function reppdiff(){
+## ---------------------------------------------------------------------------
+# get repo command from exising repo project
+# $1 show repo command (default: save info to each variable such as REPP_URL, REPP_BRANCH, ...)
+
+
+    local cmd=$1
+    local item=$2
+    local str=$3
+    local opt=$4
+
+    reppget_repcmd
+    case ${cmd} in
+        diff)   
                 ## listup xml by date
                 [ -z "${item}" ] && ( git log --since=3-weeks --first-parent --date=format:'%Y-%m-%d (%a) %H:%M:%S' --pretty=format:'%Cgreen%cd [%t]%Creset' --name-status| awk 'NF==1{date=$1}NF>1 && !seen[$2]++{print date,$0}' FS=$'\t' )
                 if [ -z "${item}" ]; then
-                    read -p $'\n\nchoose old manifest compare to current: ' opt
-                    clog "\ninput old [${opt}]" "will be compared to current manifest [${REPPFILE_MANI}]"
-                    clog "Otherwise" "ctrl+c to break, and run 'repp mani diff ${opt} <manifest to compare>'"
+                    under "input format: <old manifest> <new manifest>\n"
+                    echo "    ex) Daily/project_240621.xml mig_240701.xml  #compare both"
+                    echo "    ex) Daily/project_240621.xml                 #compare to current" 
+                    read -p $'\n\ninput: ' opt
+                    
+                    [ -z ${opt#* } ] && clog "\ninput old [${opt}]" "will be compared to current manifest [${REPPFILE_MANI}]" ||\
+                    clog "will be executed:" "repp mani diff ${opt}"
                 fi
                 echo
-                read -p $'\ninfo: repo sync all branch is needed (without -c option) [y:ok continue| other:go without sync| ctrl+c:break] '
-                [ "$REPLY" = "y" ] && repo sync -qj5
-                repo --no-pager diffmanifests --no-color --raw ${item:=${opt}} ${str:=${REPPFILE_MANI}} --pretty-format='%h| %ci| %an| %s' > ${REPP_DIR}/repp.diff
-                showRUN repo diffmanifests ${item:-${opt}} ${str:-${REPPFILE_MANI}} --pretty-format='%Cred%h %Cgreen(%ci) %C(blue)<%an>%Creset %s'
+                warn "if branches are changed between <old manifest> and <new manifest>, you must 'repo sync' without -c option to get all commits !!"
+                read -p '[enter:continue without sync| y:yes branches are changed, sync continue| ctrl+c:break]'
+                [ "$opt" = "y" ] && repo sync -qj5
+                [[ "$opt" =~ " " ]] && [ -z "${opt#* }" ] && str="${opt#* }" || str=${REPPFILE_MANI} 
+                if [ ! -f "${opt% *}" ] || [ ! -f "${str}" ]; then err "file is not existed"; return 1; fi
+                repo --no-pager diffmanifests --no-color --raw ${item:=${opt% *}} ${str} --pretty-format='%h| %ci| %an| %s' > ${REPP_DIR}/repp.diff
+                showRUN repo diffmanifests ${item:=${opt% *}} ${str} --pretty-format='%Cred%h %Cgreen(%ci) %C(blue)<%an>%Creset %s'
 
                 cat <<-EOL
 		guide)   added projects(NOT compare) : path-added,   project-added   (in ${str} manifest)
@@ -274,8 +320,8 @@ CHANGE
 		          skip projects(NOT compare) : path-same, project-same, branch-same (No diff, SKIP)
 		       changed projects( OK compare) : path-same, project-same, branch-changed
 EOL
+                info "diff list is saved to ${REPP_DIR}/repp.diff"
     ;;  diffcheck)
-                bar inline "after repp mani check, if branch changed, find missing commits (this is useful in migration)"
                 local cpath cbrold cbrnew cremote cproject ccommitid deployed
                 IFS=' '; cat ${REPP_DIR}/repp.diff | sed -e 's/\x1b\[[0-9;]*m//g'| while read -r -a line; do
                 #echo "${line[@]}"
@@ -294,24 +340,7 @@ EOL
                             [ -z "${deployed}" ] && info "[missing commits] ${cremote}> ${cproject}> ${cbrnew}> ${ccommitid}"
                     esac
                 done
-
-    ;; help|*)   cat <<- EOF
-				usage) repp mani info                                     #show manifest info,structure,log,diff
-				usage) repp mani db                                       #force regenerate db by current manifest not reusing
-				usage) repp mani go                                       #cd to manifest dir
-				usage) repp mani gen <outfile>
-				   ex) repp mani gen current.xml                          #default out: ${REPPFILE_XML}
-				usage) repp mani change <revision|name|path|remote|upstream|dest-branch|groups|dest|src|etc> <str> <filter>
-				   ex) repp mani change                                   #show command how to change manifest in detail, not change directly
-				   ex) repp mani change remote vgit_new                   #show command: change "any string" to "vgit_new" in all remote field
-				   ex) repp mani change remote vgit_new vgit_as           #show command: change only from "vgit_as" to "vgit_new" in remote field
-				usage) repp mani diff event/old.xml <new.xml>             #compare old manifest to new manifest
-				   ex) repp mani diff event/compare.xml                   #compare history event/compare.xml to current.xml
-				   ex) repp mani diff default.xml event/230712_mig.xml    #compare history from 2 different manifests
-				   ex) repp mani diff                                     #can choose manifest in recent 3 weeks, comparing to current manifest
-				usage) repp mani diffcheck                                #post analysis after 'repp mani diff' for missed commits checking
-EOF
-    ;; esac
+    esac
 }
 
 
@@ -508,36 +537,26 @@ function reppcommit(){
 ## ---------------------------------------------------------------------------
 # print information of repo
 # $1 manifests file (default is current manifests)
-    local count=$1
-    local out
-
-    #echo "[$1][$count][$out]"
-    if [ -z $count ]; then
-    cat <<- EOF
-		usage) enter        # default, show top 20 recent commits among all git recent(-1) commits
-		usage) 4            # show top 4 recent commits among all git recent(-1) commits
-		usage) save         # save all recent(-1) commits to ${REPPFILE_COMMIT}
+    local cmd=$1
+    local base=$2
+    case $cmd in
+        help) cat <<- EOF
+				usage) gitt go root         # go repo root dir
+				usage) gitt go mani         # go manifest dir
+				usage) gitt go git          # go current git root dir
+				usage) gitt go              # same to above
+				usage) gitt go <dir>        # listup git path including 'dir' and move to select
+				   ex) gitt go build        # lustup git path including 'build' and move to select
 EOF
-        read -p "how many commit want to read? [#:number| enter:20| save:savefile| q(ctrl+c):exit]: " count;
-    fi
-
-    case $count in
-        *[0-9]*) out='/dev/stdout';;
-        '') out='/dev/stdout'
-            count=20
-            log "\nonly shows recent maxium 20 first-commits(git log -1) from all repository"
-            ;;
-        *)  out=${REPPFILE_COMMIT}
-            count=${REPP_COUNT}
-            log "\check file [$out], all -1 commits are saved"
-            ;;
+      ;;last)
+            bar outline "repo get newest N of last(-1) commit from each gits"
+            bar inline "date:YMD HMS]       [sha]   [author]      [commit title]                                            [git project                            branch"
+            repo forall -j16 -c 'printf "%-100.100s %-32.32s %-s \n" "$(git log -1 --abbrev=6 --date=format:"%Y-%m-%d %H:%M:%S" --pretty=format:"%ad  %h  [%an] %s")" "${REPO_RREV}" "${REPO_PROJECT}"' | sort -r |head -${base:-50} 
+            #repo forall -c "git log -1 --abbrev=6 --date=format:'%Y-%m-%d %H:%M:%S' --pretty=format:'%ad  %h  [%an] %d %s%n'" |sort -r |head -${base:-50} 
+      ;;diff)
+            reppdiff diff 
     esac
-
-    bar outline "repo get recent commit"
-    bar inline "date:YMD HMS]       [sha]   [author]      [commit title]                                            [git project                            branch"
-    repo forall -j16 -c 'printf "%-100.100s %-80s \n" "$(git log -1 --abbrev=6 --date=format:"%Y-%m-%d %H:%M:%S" --pretty=format:"%ad  %h  [%an] %s")" "[${REPO_PROJECT}  ${REPO_RREV}]"' | sort -r |head -${count:-50} > $out
-    #repo forall -c "git log -1 --abbrev=6 --date=format:'%Y-%m-%d %H:%M:%S' --pretty=format:'%ad  %h  [%an] %d %s%n'" |sort -r |head -${count:-50} > $out
-
+return 0    
 }
 
 
@@ -686,8 +705,9 @@ function reppfind(){
 		 info) \${REPPFILE_CSV} is saved. can be opened by excel menu [data> text> select file> file open wizard]
 		       or can be reformatted by excel menu [data> text to columns> select delimter'|'> finish]
 		usage) repp find                            # show rev,remote,branch,project,path info for all repo
-		usage) repp find <string>                   # list git which has string 'string' in all git info
-		   ex) repp find build                      # list git which has string 'build' in all git info
+		usage) repp find <string>                   # list info of gits which has string <string> in all git info
+		   ex) repp find build                      # list info of gits which has string 'build' in all git info
+           ex) repp find .                          # show info of current git
 		   ex) repp find |grep -v vendor/qct        # list git info not containing 'vendor/qct'
 		   ex) cat \${REPPFILE_CSV}                  # cat output file
 		usage) repp find @all                       # print all raw columns for all repo
@@ -2775,10 +2795,10 @@ EOL
 function reppinstall(){
 ## ---------------------------------------------------------------------------
 #install basic package for repp
-if ! command -v icdiff > /dev/null ; then clog "icdiff need to be installed" "sudo apt install icdiff"; fi
-if ! command -v jq > /dev/null ; then clog "jq need to be installed" "sudo apt install icdiff"; fi
-if ! command -v repo > /dev/null ; then clog "repo need to be installed" "sudo apt install icdiff"; fi
-if [[ ! $(column -V 2>/dev/null|grep util-linux) =~ "util-linux" ]] ;then echo "column need to reinstalled"; 
+if ! command -v icdiff > /dev/null ; then clog "icdiff need to be installed:" "sudo apt install icdiff"; fi
+if ! command -v jq > /dev/null ; then clog "jq need to be installed:" "sudo apt install icdiff"; fi
+if ! command -v repo > /dev/null ; then clog "repo need to be installed:" "sudo apt-get install repo"; fi
+if [[ ! $(column -V 2>/dev/null|grep util-linux) =~ "util-linux" ]] ;then clog "column need to reinstalled:"; 
     cat << GUIDE
     1. dpkg -l | grep -i util-linux ##find a nearest version
     2. wget https://mirrors.edge.kernel.org/pub/linux/utils/util-linux/v2.31/util-linux-2.31.tar.gz
