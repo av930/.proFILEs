@@ -285,42 +285,52 @@ function reppdiff(){
 
 
     local cmd=$1
-    local item=$2
-    local str=$3
-    local opt=$4
+    local src=$2
+    local target=$3
+
+    [[ ! "${PWD}" =~ "${REPP_PATH}" ]] && pushd ${REPP_PATH}
 
     reppget_repcmd
     case ${cmd} in
         diff)   
-                ## listup xml by date
-                [ -z "${item}" ] && ( git log --since=3-weeks --first-parent --date=format:'%Y-%m-%d (%a) %H:%M:%S' --pretty=format:'%Cgreen%cd [%t]%Creset' --name-status| awk 'NF==1{date=$1}NF>1 && !seen[$2]++{print date,$0}' FS=$'\t' )
-                if [ -z "${item}" ]; then
+                ## listup xml by date and get input
+                [ -z "${src}" ] && ( git log --since=3-weeks --first-parent --date=format:'%Y-%m-%d (%a) %H:%M:%S' --pretty=format:'%Cgreen%cd [%t]%Creset' --name-status| awk 'NF==1{date=$1}NF>1 && !seen[$2]++{print date,$0}' FS=$'\t' )
+                if [ -z "${src}" ]; then
                     under "input format: <old manifest> <new manifest>\n"
                     echo "    ex) Daily/project_240621.xml mig_240701.xml  #compare both"
                     echo "    ex) Daily/project_240621.xml                 #compare to current" 
                     read -p $'\n\ninput: ' opt
                     
-                    [ -z ${opt#* } ] && clog "\ninput old [${opt}]" "will be compared to current manifest [${REPPFILE_MANI}]" ||\
-                    clog "will be executed:" "repp mani diff ${opt}"
+                    src=${opt% *}
+                    [ -z ${opt#* } ] && clog "\ninput old [${opt}]" "will be compared to current manifest [${REPPFILE_MANI}]"|| clog "will be executed:" "repp mani diff ${opt}"
                 fi
                 echo
                 warn "if branches are changed between <old manifest> and <new manifest>, you must 'repo sync' without -c option to get all commits !!"
-                read -p '[enter:continue without sync| y:yes branches are changed, sync continue| ctrl+c:break]'
+                read -p '[enter:continue without sync| y:yes branches are changed, sync continue| ctrl+c:break]' 
                 [ "$opt" = "y" ] && repo sync -qj5
-                [[ "$opt" =~ " " ]] && [ -z "${opt#* }" ] && str="${opt#* }" || str=${REPPFILE_MANI} 
-                if [ ! -f "${opt% *}" ] || [ ! -f "${str}" ]; then err "file is not existed"; return 1; fi
-                repo --no-pager diffmanifests --no-color --raw ${item:=${opt% *}} ${str} --pretty-format='%h| %ci| %an| %s' > ${REPP_DIR}/repp.diff
-                showRUN repo diffmanifests ${item:=${opt% *}} ${str} --pretty-format='%Cred%h %Cgreen(%ci) %C(blue)<%an>%Creset %s'
+                
+                ## assign target value
+                if [ -z "$target" ]; then [[ "$opt" =~ " " ]] && [ -z "${opt#* }" ] && target="${opt#* }" || target=${REPPFILE_MANI}; fi
+                
+                ##check if both manifest files exists?
+                if [ ! -f "${src}" ] || [ ! -f "${target}" ]; then err "file is not existed"; return 1; fi
+                repo --no-pager diffmanifests --no-color --raw ${src:=${opt% *}} ${target} --pretty-format='> %s| %h| %an| %ci'|sed -e 's/\[m//g' >${REPP_DIR}/repp.diff.tmp
+                #repo --no-pager diffmanifests --no-color --raw  Daily/POIP_240627.xml default.xml --pretty-format='>%s|%h|%an|%ci'|sed -e 's/\[m//g' >${REPP_DIR}/repp.diff.tmp
+                cat ${REPP_DIR}/repp.diff.tmp| sed -e '/Merge commit/d;/Merge "/d'| while read -r line; do [ "${line:2:1}" = '>' ] && echo "${line/ /|}" || echo -e "|||\n|||\n${line// /|}" ; done > ${REPP_DIR}/repp.diff2
+                cat ${REPP_DIR}/repp.diff2 | column -s'|' -t --table-columns status,subject,commit-id,author,date --table-wrap subject --output-width 200 > ${REPP_DIR}/repp.changes
+                rm -f ${REPP_DIR}/repp.diff.tmp ${REPP_DIR}/repp.diff2
+                showRUN repo diffmanifests ${src:=${opt% *}} ${target} --pretty-format='%Cred%h %Cgreen(%ci) %C(blue)<%an>%Creset %s'
 
                 cat <<-EOL
-		guide)   added projects(NOT compare) : path-added,   project-added   (in ${str} manifest)
-		       removed projects(NOT compare) : path-removed, project-removed (in {item} manifest)
+		guide)   added projects(NOT compare) : path-added,   project-added   (in ${target} manifest)
+		       removed projects(NOT compare) : path-removed, project-removed (in {src} manifest)
 		       missing projects(NOT compare) : path-same,    project-changed
 		  unreachable revisions(NOT compare) : need to 'repo sync' (without -c, fetch all project revision)
 		          skip projects(NOT compare) : path-same, project-same, branch-same (No diff, SKIP)
 		       changed projects( OK compare) : path-same, project-same, branch-changed
 EOL
                 info "diff list is saved to ${REPP_DIR}/repp.diff"
+                info "changenote is saved to ${REPP_DIR}/repp.changes"
     ;;  diffcheck)
                 local cpath cbrold cbrnew cremote cproject ccommitid deployed
                 IFS=' '; cat ${REPP_DIR}/repp.diff | sed -e 's/\x1b\[[0-9;]*m//g'| while read -r -a line; do
@@ -341,6 +351,9 @@ EOL
                     esac
                 done
     esac
+    
+    
+    popd
 }
 
 
@@ -539,14 +552,13 @@ function reppcommit(){
 # $1 manifests file (default is current manifests)
     local cmd=$1
     local base=$2
+    local target=$3
     case $cmd in
         help) cat <<- EOF
-				usage) gitt go root         # go repo root dir
-				usage) gitt go mani         # go manifest dir
-				usage) gitt go git          # go current git root dir
-				usage) gitt go              # same to above
-				usage) gitt go <dir>        # listup git path including 'dir' and move to select
-				   ex) gitt go build        # lustup git path including 'build' and move to select
+				usage) repp commit last N            # show top N commits from each git HEAD 
+				   ex) repp commit last 40           # show top 40 commits form each git lastest HEAD
+				usage) repp commit diff <from> <to>  # show diff commits <from.xml> and <to.xml> 
+				   ex) repp commit diff              # show selectable xml list and show diff between them
 EOF
       ;;last)
             bar outline "repo get newest N of last(-1) commit from each gits"
@@ -554,7 +566,7 @@ EOF
             repo forall -j16 -c 'printf "%-100.100s %-32.32s %-s \n" "$(git log -1 --abbrev=6 --date=format:"%Y-%m-%d %H:%M:%S" --pretty=format:"%ad  %h  [%an] %s")" "${REPO_RREV}" "${REPO_PROJECT}"' | sort -r |head -${base:-50} 
             #repo forall -c "git log -1 --abbrev=6 --date=format:'%Y-%m-%d %H:%M:%S' --pretty=format:'%ad  %h  [%an] %d %s%n'" |sort -r |head -${base:-50} 
       ;;diff)
-            reppdiff diff 
+            reppdiff diff "$base" "$target"
     esac
 return 0    
 }
