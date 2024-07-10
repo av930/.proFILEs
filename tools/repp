@@ -554,21 +554,28 @@ function reppcommit(){
     local base=$2
     local target=$3
     case $cmd in
-        help) cat <<- EOF
-				usage) repp commit last N            # show top N commits from each git HEAD 
-				   ex) repp commit last 40           # show top 40 commits form each git lastest HEAD
-				usage) repp commit diff <from> <to>  # show diff commits <from.xml> and <to.xml> 
-				   ex) repp commit diff              # show selectable xml list and show diff between them
-EOF
-      ;;last)
+        last)
             bar outline "repo get newest N of last(-1) commit from each gits"
             bar inline "date:YMD HMS]       [sha]   [author]      [commit title]                                            [git project                            branch"
             repo forall -j16 -c 'printf "%-100.100s %-32.32s %-s \n" "$(git log -1 --abbrev=6 --date=format:"%Y-%m-%d %H:%M:%S" --pretty=format:"%ad  %h  [%an] %s")" "${REPO_RREV}" "${REPO_PROJECT}"' | sort -r |head -${base:-50} 
             #repo forall -c "git log -1 --abbrev=6 --date=format:'%Y-%m-%d %H:%M:%S' --pretty=format:'%ad  %h  [%an] %d %s%n'" |sort -r |head -${base:-50} 
       ;;diff)
             reppdiff diff "$base" "$target"
+
+      ;;find)
+            for server in na as eu devops_test review; do
+                if revvcommit find ${server} ${base}; then break; fi
+            done 
+      ;;help|*) cat <<- EOF
+				usage) repp commit last N            # show top N commits from each git HEAD 
+				   ex) repp commit last 40           # show top 40 commits form each git lastest HEAD
+				usage) repp commit diff <from> <to>  # show diff commits <from.xml> and <to.xml> 
+				   ex) repp commit diff              # show selectable xml list and show diff between them
+				usage) repp commit find <commit-id>  # find commit review system & local repository
+				   ex) repp commit find ecd867916b   # find commit ecd867916b in all server and print info
+EOF
     esac
-return 0    
+return 0
 }
 
 
@@ -694,7 +701,7 @@ function reppfind(){
     local cmd="$1"
     local filter="$2"
     case $3 in
-          '@rev') local opt=1
+           '@rev') local opt=1
     ;;   '@group') local opt=2
     ;;  '@remote') local opt=3
     ;;  '@branch') local opt=6
@@ -1557,9 +1564,10 @@ function gittinfo(){
         esac
     ;;''|*)             GIT_SITE=$(printf "%s/${review_gerrit}/%s" "$(echo ${GITT_REVIEW}|sed -E 's#(.*)[/]$#\1#')" ${GITT_PROJECT} )
     ;;esac
-    clog "review system site:" ${GIT_SITE}                                     #http review url
-    clog "gitiles: " ${GIT_SITE/"${review_gerrit}"/"plugins/gitiles"}/+/refs/heads/${GITT_BRANCH}                #source from gitiles
-    clog " gerrit: " ${GIT_SITE/"${review_gerrit}/"/"gitweb?p="}.git\;a=shortlog\;h=refs/heads/${GITT_BRANCH}    #source from gerrit
+    clog "review repo url  :" ${GIT_SITE}                                     #http review url
+    clog "review system url:" $( echo "$GIT_SITE" |sed -E "s#http:(.*)admin/repos/(.*)#https:\1q/project:\2+branch:"$GITT_BRANCH"#")
+    clog "source browser gitiles: " ${GIT_SITE/"${review_gerrit}"/"plugins/gitiles"}/+/refs/heads/${GITT_BRANCH}                #source from gitiles
+    clog "source browser gerrit : " ${GIT_SITE/"${review_gerrit}/"/"gitweb?p="}.git\;a=shortlog\;h=refs/heads/${GITT_BRANCH}    #source from gerrit
 
     bar inline "git clone & push commands"
     clog " git clone:" "git clone ${GITT_URL} -b ${GITT_BRANCH}"               #make git clone command
@@ -2158,10 +2166,15 @@ function revvaccount(){
 			usage) revv groupmem  na sa515m_reviewer  joongkeun.kim            # check member is in group and its sub-groups
 EOF
     ;;      user~*)
-            bar inline "check if account is existed & get account info "
+            if [ "$extra" != "none" ]; then
+                bar inline "check if account is existed & get account info "
+            fi
             curl -su ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${source} |sed '1d'| jq '.'
-            bar inline "list group name which account belongs to"
-            curl -su ${ACCOUNT}:${key} ${server}/a/accounts/${source}/groups |sed '1d'| jq -cC '.[]|{name, created_on}' | more -60
+            
+            if [ "$extra" != "none" ]; then
+                bar inline "list group name which account belongs to"
+                curl -su ${ACCOUNT}:${key} ${server}/a/accounts/${source}/groups |sed '1d'| jq -cC '.[]|{name, created_on}' | more -60
+            fi
 
     ;;    sshkey~*)
             info "config: " "${server}/na/settings/#SSHKeys"
@@ -2328,7 +2341,6 @@ function revvbranch(){
     local source=${3:-$USER}
     local target=$4
     local extra=$5
-    local file=$(mktemp)
 
 
     #local branch=$4
@@ -2340,7 +2352,6 @@ function revvbranch(){
 			usage) revv branch    na mustang/tm/src tsu_25.5my_release         # find branch with branch-name
 			usage) revv branchadd na mustang/tm/src tsu_25.5my_release_new     # create branch
 			usage) revv branchdel na mustang/tm/src tsu_25.5my_release_new     # remove branch
-			usage) revv commit    na 57a4eeeca914                              # get change-id from commit-id
 			 info) 'empty branch' can be created by 'revv projectadd' not 'revv branchadd'
 			       therefore if you want 'empty branch', you can reuse 'master branch if it empty' or 'gitt branch create'
 EOF
@@ -2358,15 +2369,68 @@ EOF
             bar inline "find branches by name"
             curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/?m=${target} | sed '1d'| jq  -cC '.[]|{ref,revision}' | more -60
 
-    ;;   commit~*)
+    ;;*)    err "please check command ex)revv branch help"
+    esac
+}
+
+
+
+function revvcommit(){
+## ---------------------------------------------------------------------------
+
+# read information from gerrit
+# $1 account
+# $2 server
+# $3 gitproject
+# $4 branch
+    local cmd=$1
+    local subcmd=$2
+    local server=$(getserver ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
+    local key=$(ende_code de $(getserver ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub))
+    local source=${3:-$USER}
+    local target=$4
+    local extra=$5
+    local file=$(mktemp)
+
+    #local branch=$4
+    case ${cmd} in
+       find)
             local change_id=$(curl -su ${ACCOUNT}:${key} ${server}/a/changes/${source} |grep -oP '(?<=change_id": ").*(?=")')
             if [ -z "${change_id}" ]; then
-                err "NOT Found: change_id for commit_id[${source}]"
-                echo "this commit is not registered in gerrit system. ex) direct pushed"
+                err "NOT Found in $server change_id for commit_id [${source}]"
+                echo "this commit is not in this gerrit system. ex) direct pushed commit or maybe in other servers"
                 return 1;
             fi
-            curl -su ${ACCOUNT}:${key} ${server}/a/changes/?q=${change_id}
-    ;;*)    err "please check command ex)revv branch help"
+            curl -su ${ACCOUNT}:${key} ${server}/a/changes/?q=${change_id}| sed '1d' > ${file}
+            
+            local pro branch changenumber path
+            under "commit & user info from gerrit server\n"
+            changenumber=$(cat ${file} |jq -r .[]._number)
+            [ -z "$changenumber" ] && return 1
+            pro=$(cat ${file} |jq -r .[].project)
+            branch=$(cat ${file} |jq -r .[].branch)
+            submitter=$(cat ${file} |jq -r .[].submitter._account_id)
+
+            clog "gerrit url:" $server/c/$pro/+/$changenumber
+            revvaccount user na $submitter none none
+            
+            cat ${file}| jq '.[]|{project,branch,change_id,_number,subject,status,submitted}'
+            echo 
+            
+            under "commit info from current source\n"
+            path=$REPP_ROOT/$(repo list -p tiger/services/PowerManagerService 2> /dev/null)
+            clog "local git path:" "$path"
+            git -C "$path" show --quiet ${source}
+            
+    ;;*|help)
+            cat <<-EOF
+			usage) revv commit find [na|as|eu|devops_test|review] <commit-id>    # find commit info from server
+			   ex) revv commit find na 57a4eeeca914                              # get change-id from commit-id
+			
+			info) 'review' is lamp-sever, others are vgit server, these servers must be predefined.
+			info) to find in all server, use 'repp commit find 57a4eeec'.
+EOF
+
     esac
 }
 
@@ -2633,7 +2697,7 @@ case "$1" in
     ;;    info)      reppcheck_initvar gittrevv        &&  revvinfo  "${@:2}"
     ;;   debug)      reppcheck_initvar gittrevv        &&  revvdebug "${@:2}"
     ;;  forall)      reppcheck_initvar repprevv        &&  revvforall "${@:2}"
-    ;;  commit)      reppcheck_initvar repprevv        &&  revvbranch "${@:1}"
+    ;;  commit)      reppcheck_initvar repprevv        &&  revvcommit "${@:2}"
     ;; branch*)      reppcheck_initvar repprevv        &&  revvbranch "${@:1}"
     ;;project*)      reppcheck_initvar repprevv        &&  revvproject "${@:1}"
     ;;       *)      reppcheck_initvar repprevv        &&  revvaccount "${@:1}"
