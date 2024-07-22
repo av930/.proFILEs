@@ -219,6 +219,7 @@ bindkey "^q" remove
 ## switch window
 bind k prev
 bind j next
+bind / other
 ## window listup
 bind m windowlist -b
 
