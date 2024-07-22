@@ -504,8 +504,8 @@ EOF
                      run_menu "${INPUT[@]}";  cd "${menu_selected}/.."
                 fi
       ;;repp)   cd ${REPP_DIR}
-      ;;  '')   gittgo root
-      ;;   *)   gittgo $cmd
+      ;;  '')   gitt go root
+      ;;   *)   gitt go $cmd
     esac
 }
 
@@ -553,6 +553,7 @@ function reppcommit(){
     local cmd=$1
     local base=$2
     local target=$3
+    local server
     case $cmd in
         last)
             bar outline "repo get newest N of last(-1) commit from each gits"
@@ -571,8 +572,10 @@ function reppcommit(){
 				   ex) repp commit last 40           # show top 40 commits form each git lastest HEAD
 				usage) repp commit diff <from> <to>  # show diff commits <from.xml> and <to.xml> 
 				   ex) repp commit diff              # show selectable xml list and show diff between them
-				usage) repp commit find <commit-id>  # find commit review system & local repository
+				usage) repp commit find <commit-id>  # find commit all remote review system & local repository
 				   ex) repp commit find ecd867916b   # find commit ecd867916b in all server and print info
+
+				 info) 'repp commit find' same to 'revv commit find <all-servers> <>'
 EOF
     esac
 return 0
@@ -736,16 +739,16 @@ function reppfind(){
 		   ex) repp find @path                      # print path colume for all repo
 		   ex) repp find @remote                    # print all remote
 		   ex) repp find @remote na                 # print remote which including 'na' string
-		   ex) repp find @remote vgit_na @path      # print remote with corresponding project po
+		   ex) repp find @remote vgit_na @path      # print remote with corresponding path
 		   ex) repp find @project |grep meta        # print project colume containing 'meta'
 EOF
 
-    ;; @rev)      clog "<REPO_LREV>";    awk -v FS="|" -v vf="$filter" -v vo="$opt" '$1 ~ vf{printf "[%40.40s]  %-s\n", $1,$vo}' ${REPPFILE_CSV} |pCount
-    ;; @group)    clog "<REPO_GROUP>";   awk -v FS="|" -v vf="$filter" -v vo="$opt" '$2 ~ vf{printf "[%50.50s]  %-s\n", $2,$vo}' ${REPPFILE_CSV} |sort |uniq |pCount
-    ;; @remote)   clog "<REPO_REMOTE>";  awk -v FS="|" -v vf="$filter" -v vo="$opt" '$3 ~ vf{printf "[%30.30s]  %-s\n", $3,$vo}' ${REPPFILE_CSV} |sort |uniq |pCount
+    ;; @rev)      clog "<REPO_LREV>";    awk -v FS="|" -v vf="$filter" -v vo="$opt" '$1 ~ vf{printf "[%-40.40s]  %s\n", $1,$vo}' ${REPPFILE_CSV} |pCount
+    ;; @group)    clog "<REPO_GROUP>";   awk -v FS="|" -v vf="$filter" -v vo="$opt" '$2 ~ vf{printf "[%-50.50s]  %s\n", $2,$vo}' ${REPPFILE_CSV} |sort |uniq |pCount
+    ;; @remote)   clog "<REPO_REMOTE>";  awk -v FS="|" -v vf="$filter" -v vo="$opt" '$3 ~ vf{printf "[%-30.30s]  %s\n", $3,$vo}' ${REPPFILE_CSV} |sort |uniq |pCount
     ;; @branch)                          awk -v FS="|" -v vf="$filter" -v vo="$opt" '$4$5$6 ~ vf{printf "[%s] %s\n", $4"|"$5"|"$6"|", $vo}' ${REPPFILE_CSV} |sort |uniq |column -s'|' -t --table-columns '<REPO_UPSTREAM>,<REPO_DEST_BRANCH>,<REPO_RREV>'  |pCount -1
-    ;; @project)  clog "<REPO_PROJECT>"; awk -v FS="|" -v vf="$filter" -v vo="$opt" '$7 ~ vf{printf "[%80.80s]  %-s\n", $7,$vo}' ${REPPFILE_CSV} |sort |pCount
-    ;; @path)     clog "<REPO_PATH>";    awk -v FS="|" -v vf="$filter" -v vo="$opt" '$8 ~ vf{printf "[%80.80s]  %-s\n", $8,$vo}' ${REPPFILE_CSV} |sort |pCount
+    ;; @project)  clog "<REPO_PROJECT>"; awk -v FS="|" -v vf="$filter" -v vo="$opt" '$7 ~ vf{printf "[%-80.80s]  %s\n", $7,$vo}' ${REPPFILE_CSV} |sort |pCount
+    ;; @path)     clog "<REPO_PATH>";    awk -v FS="|" -v vf="$filter" -v vo="$opt" '$8 ~ vf{printf "[%-80.80s]  %s\n", $8,$vo}' ${REPPFILE_CSV} |sort |pCount
     ;; @all)                             awk -v FS="|" -v vf="$filter" -v vo="$opt" '$0 ~ vf{printf "[%s] %s\n"    , $0,"|"$vo}' ${REPPFILE_CSV} |sort |uniq |\
                                          column -s'|' -t --table-columns REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_UPSTREAM,REPO_DEST_BRANCH,REPO_RREV,REPO_PROJECT,REPO_PATH |pCount -1
                   #cat ${REPPFILE_CSV}|column -s'|' -t --table-columns REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_UPSTREAM,REPO_DEST_BRANCH,REPO_RREV,REPO_PROJECT,REPO_PATH |pCount -1      
@@ -1372,7 +1375,7 @@ function repp_initvar(){
         #REPP_PROJECT=$(git remote -v |grep fetch | sed -E 's#.*[0-9]+(.*).git.*$#\1#')
         #REPP_PROJECT=$(git config --get-regexp remote.*.url  |head -1|cut -d' ' -f2)
         REPP_PROJECT=$(git config --get-regexp remote.* |grep -Ee "(projectname|url)" |head -1|grep -Po '\w/\K.\w+[^?]+')
-        REPP_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')  #GITT_BRANCH
+        REPP_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null| sed 's:.*/::')  #GITT_BRANCH
         REPP_REVIEW=$(git config --get-regexp remote.*.review|cut -d' ' -f2|head -1)        #GITT_REVIEW
         REPP_URL=$(git config --get-regexp remote.$(git remote|head -1).url|cut -d' ' -f2|head -1) #GITT_URL
 
@@ -1433,7 +1436,7 @@ function gitt_initvar(){
 
 
     #NEEDTO WORK: find more secure way to get current branch revision
-    GITT_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u}| sed 's:.*/::')
+    GITT_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null| sed 's:.*/::')
     [ -z "${GITT_BRANCH}" ] && GITT_BRANCH=$(git branch -ar |grep -e '->' |sed -E 's#.*[/|>](.*)$#\1#')
     [ -z "${GITT_BRANCH}" ] && GITT_BRANCH=$(git branch -ar |grep -e 'm/' |sed -E 's#.*[/|>](.*)$#\1#')
     [ -z "${GITT_BRANCH}" ] && warn "'repo start <workingbranch> --all' is recommended"
@@ -1449,8 +1452,11 @@ function gitt_initvar(){
     return 0
 }
 
+
+
 function revv_initvar(){
-    local ret=0
+    local server=$1
+    local ret=0 
     #default initial gerrit API key is na (vgit_na).
 
     key_id=$(getserver ${GITT_REMOTE:-${REPP_REMOTE}} sub)
@@ -1461,7 +1467,7 @@ function revv_initvar(){
         you can generate .key_XXX : ende_code enf ${key_id} <check_key_from_gerrit_account>"
         ret=1
     fi
-
+    
     if ! revvcheck_server ${server:-na} ${ACCOUNT}; then
         err "please check correct account&key is saved in ~/.key_${key_id} in $HOME dir"
         ret=1
@@ -1564,8 +1570,8 @@ function gittinfo(){
         esac
     ;;''|*)             GIT_SITE=$(printf "%s/${review_gerrit}/%s" "$(echo ${GITT_REVIEW}|sed -E 's#(.*)[/]$#\1#')" ${GITT_PROJECT} )
     ;;esac
-    clog "review repo url  :" ${GIT_SITE}                                     #http review url
-    clog "review system url:" $( echo "$GIT_SITE" |sed -E "s#http:(.*)admin/repos/(.*)#https:\1q/project:\2+branch:"$GITT_BRANCH"#")
+    clog "review repository url :" ${GIT_SITE}                                     #http review url
+    clog "review commit url     :" $( echo "$GIT_SITE" |sed -E "s#http:(.*)admin/repos/(.*)#https:\1q/project:\2+branch:"$GITT_BRANCH"#")
     clog "source browser gitiles: " ${GIT_SITE/"${review_gerrit}"/"plugins/gitiles"}/+/refs/heads/${GITT_BRANCH}                #source from gitiles
     clog "source browser gerrit : " ${GIT_SITE/"${review_gerrit}/"/"gitweb?p="}.git\;a=shortlog\;h=refs/heads/${GITT_BRANCH}    #source from gerrit
 
@@ -2155,12 +2161,13 @@ function revvaccount(){
     case ${cmd}${SEP}${subcmd} in
            *~help)
             echo "check your cmd [${cmd}]"; cat <<-EOF
-			usage) revv user      na joongkeun.kim                             # 계정과 그룹이 존재하는지 확인한다.
 			usage) revv user      na joongkeun.kim                             # check account is existed and its groups
 			   ex) revv user      na joon                                      # check all accounts named joon
+			   ex) revv user      na 7602             none none                # for api, get user info only
 			usage) revv sshkey    na joongkeun.kim                             # get registered SSH-KEY
 			usage) revv group     na sa515m_developer                          # check group existance and list sub-groups & all members
-			   ex) revv group     na sa515m_                                   # find groups named sa515m_
+			   ex) revv group     na sa515m_                                   # find groups has *'sa515m_'*
+			   ex) revv group     na 16d578384091ad1~ none none                # for api, get group info only
 			usage) revv groupadd  na sa515m_developer joongkeun.kim            # add member to group
 			usage) revv groupdel  na sa515m_reviewer  joongkeun.kim            # delete member from group
 			usage) revv groupmem  na sa515m_reviewer  joongkeun.kim            # check member is in group and its sub-groups
@@ -2194,14 +2201,19 @@ EOF
             curl -su ${ACCOUNT}:${key} ${server}/a/groups/${source}/members|grep ${target}
 
     ;;     group~*)
-            info "config: " "${server}/admin/groups/q/filter:${source}"
-            info "please visit url for creating & removing user/group"
-            bar inline "find group by name"
+            if [ "$extra" != "none" ]; then
+                info "config: " "${server}/admin/groups/q/filter:${source}"
+                info "please visit url for creating & removing user/group"
+                bar inline "find group by name"
+            fi
             curl -su ${ACCOUNT}:${key} ${server}/a/groups/?m=${source} |sed '1d'| jq '.'
-            bar inline "list sub-group by ${source} group"
-            curl -su ${ACCOUNT}:${key} ${server}/a/groups/${source}/groups/ |sed '1d'| jq -c '.[]|{name, created_on}'
-            bar inline "show group member by ${source} group to its decendents"
-            curl -su ${ACCOUNT}:${key} ${server}/a/groups/${source}/members?recursive |sed '1d'| jq -cC '.[]|{name, email}'  | more -60
+
+            if [ "$extra" != "none" ]; then
+                bar inline "list sub-group by ${source} group"
+                curl -su ${ACCOUNT}:${key} ${server}/a/groups/${source}/groups/ |sed '1d'| jq -c '.[]|{name, created_on}'
+                bar inline "show group member by ${source} group to its decendents"
+                curl -su ${ACCOUNT}:${key} ${server}/a/groups/${source}/members?recursive |sed '1d'| jq -cC '.[]|{name, email}'  | more -60
+            fi
 
     ;;*)    err "please check command ex)revv user help, revv group help"
     esac
@@ -2221,14 +2233,14 @@ function revvproject(){
     local subcmd=$2
     local server=$(getserver ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
     local key=$(ende_code de $(getserver ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub))
-    local source=${3:-$USER}
+    local project=$3 
+    local url_gerrit="${server}/a/projects/${project//'/'/'%2F'}"
     local parent=$4
     local extra=$5
     local file=$(mktemp)
 
 
     #local branch=$4
-
     local SEP='~'
     case ${cmd}${SEP}${subcmd} in
            *~help)
@@ -2244,7 +2256,7 @@ function revvproject(){
 EOF
     ;;projectadd~*)
             bar inline "check if project already existed"
-            local temp=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} |sed '1d' | jq -cC '.name')
+            local temp=$(curl -su ${ACCOUNT}:${key} $url_gerrit |sed '1d' | jq -cC '.name')
             if [ -n "${temp}" ]
             then err "[${temp}] already legacy project existed" && return 1;
             else clog "passed, no legacy project" "ok, continue to create"
@@ -2256,7 +2268,7 @@ EOF
             fi
 
             bar inline "add new project inherited All-projects(default), and create emtpy master"
-            curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} -H "Content-Type:application/json" \
+            curl -su ${ACCOUNT}:${key} $url_gerrit -H "Content-Type:application/json" \
                  --data "{\"description\":\"revvcreate\",\"parent\":\"${parent:-'All-Projects'}\", \"create_empty_commit\":true }" \
                  -X PUT |sed '1d' > $file
             clog "result for creaing project: "
@@ -2264,7 +2276,7 @@ EOF
 
     ;;projectdel~*)
             bar inline "check if project already existed"
-            local temp=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} |sed '1d' | jq -cC '.name')
+            local temp=$(curl -su ${ACCOUNT}:${key} $url_gerrit |sed '1d' | jq -cC '.name')
             if [ -n "${temp}" ]
             then clog "[${temp}] already legacy project existed" "ok, please remove manually"
             else err "no existing project, stopped" && return 1
@@ -2272,12 +2284,12 @@ EOF
 
             bar inline "'removing project' by CLI is not supported in gerrit"
             dlog "so only provide url link, you cand remove git project there"
-            dlog "[guide] To delete project (visit):" "${server}/admin/repos/${source},commands"
+            dlog "[guide] To delete project (visit):" "${server}/admin/repos/${project},commands"
             printf "\n\n"
 
     ;;projectparent~*)
             bar inline "check if project already existed"
-            local temp=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} |sed '1d' | jq -cC '.name')
+            local temp=$(curl -su ${ACCOUNT}:${key} $url_gerrit |sed '1d' | jq -cC '.name')
             [ -z "${temp}" ] && { clog "[${temp}] already legacy project not existed"; return 1; }
 
             if [ -n "${parent}" ]; then
@@ -2287,23 +2299,23 @@ EOF
 
             bar inline "changing parent of project"
             [ -z "${parent}" ] && (warn "git created whose parent is All-project(default)" && return 0)
-            curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/parent -H "Content-Type: application/json" --data "{\"parent\":\"${parent}\"}" -X PUT > $file
+            curl -su ${ACCOUNT}:${key} $url_gerrit/parent -H "Content-Type: application/json" --data "{\"parent\":\"${parent}\"}" -X PUT > $file
             clog "result for changing parent: "
             cat $file| sed '1d'| jq . | more -60
             printf "\n\n"
 
     ;;  project~*)
-            dlog "[gerrit url] gerrit cli:" "curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} | sed '1d'| jq  -cC '.[]'"
+            dlog "[gerrit url] gerrit cli:" "curl -su ${ACCOUNT}:${key} $url_gerrit | sed '1d'| jq  -cC '.[]'"
 
-            info "config: " "${server}/admin/repos/${source}"
+            info "config: " "${server}/admin/repos/${project}"
             bar inline "find project and show project url"
-            curl -su ${ACCOUNT}:${key} ${server}/a/projects/?m=${source} |sed '1d' > $file
+            curl -su ${ACCOUNT}:${key} ${server}/a/projects/?m=${project} |sed '1d' > $file
             clog "matching project: "  $(cat $file| jq -c 'keys[]')
             cat $file| jq --arg jq_var ${VGIT} -c '"src: http://" + $jq_var + .[].web_links[].url'
 
             bar inline "parent-project info"
-            curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'} |sed '1d' | jq -cC '.|{name,parent}'
-            curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/access |sed '1d' > $file
+            curl -su ${ACCOUNT}:${key} $url_gerrit |sed '1d' | jq -cC '.|{name,parent}'
+            curl -su ${ACCOUNT}:${key} $url_gerrit/access |sed '1d' > $file
             cat $file| jq --arg jq_var "${server}/admin/repos/" -c '"config: " + $jq_var + .inherits_from.name'
 
             bar inline "grand parent-project info"
@@ -2317,11 +2329,95 @@ EOF
             bar inline "permission info for each group"
             cat $file| jq -C .local
 
-            bar inline "child-project info inherited from ${source}, plz wait..."
-            curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/children/?recursive| sed '1d'| jq  -cC '.[].name' | more -60
+            bar inline "child-project info inherited from ${project}, plz wait..."
+            curl -su ${ACCOUNT}:${key} $url_gerrit/children/?recursive| sed '1d'| jq  -cC '.[].name' | more -60
             printf "\n\n"
     ;;*)    err "please check command ex)revv project help"
     esac
+}
+
+
+function revvaccess(){
+## ---------------------------------------------------------------------------
+
+# read information from gerrit
+# $1 account
+# $2 server
+# $3 gitproject
+# $4 branch
+    local cmd=$1
+    local subcmd=$2
+    local server=$(getserver ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
+    local key=$(ende_code de $(getserver ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub))
+    local project=$3 
+    local url_gerrit="${server}/a/projects/${project//'/'/'%2F'}"
+    local branch=$3 #^refs/heads/26my_migg_.*
+    local group=${4:-$USER} #gerrit group name
+    local group_id=$(revvaccount group "$server" "$group" none none)    
+    local extra=$5
+    local file=$(mktemp)
+
+
+    local SEP='~'
+    case ${cmd}${SEP}${subcmd} in
+       help~*)  cat <<-EOF
+				usage) revv access    na <project>                                            #read permission from project and its parents
+				   ex) revv access    na vendor/qct/sa515m/sa515m_modem/modem_proc            #read permission 
+				usage) revv accessadd na <project>  <group> <'branch-regexp'>                 #add migration permission to a group
+				   ex) revv accessadd na qct/modem  26my_migrator '^refs/heads/26my_migg_.'   #add migration permission to 26my_migrator
+				       
+				 info) repp connect help : you can check your basic access permission for a git.
+EOF
+    ;; access~*) curl -su ${ACCOUNT}:${key} $url_gerrit/access |sed '1d' > $file
+                bar inline "show inherit parent permission git and grandparent"
+                cat $file|jq  '.inherits_from|del(.web_links)'
+                bar inline "show permission setting in current git"
+                cat $file|jq  '.local[].permissions'
+                bar inline "show permission defined group in current git"                
+                cat $file|jq  '.groups[]|"group-name: ",.name'
+    ;; accessadd~*) 
+                clog "add migration permission $group_id $branch" 
+                [ -z "$group_id" ] && { err "group is not existed, check $group"; return 1; }
+                cat|json_pp >temp.json << TEMP_JSON 
+        {"add" : { ""$branch"" : {"permissions" :   {
+            "forgeCommitter"            : {"rules" : {""$group_id"" : {
+                     "action" : "ALLOW"
+                  }}},
+            "abandon"                   : {"rules" : {""$group_id"" : {
+                     "action" : "ALLOW"
+                  }}},
+            "label-Code-Review"         : {"rules" : {""$group_id"" : {
+                     "action" : "ALLOW"
+                  }},"label" : "Code-Review"},
+            "create"                    : {"rules" : {""$group_id"" : {
+                     "action" : "ALLOW"
+                  }}},
+            "label-CodeReview-Verified" : {"rules" : {""$group_id"" : {
+                     "action" : "ALLOW"
+                  }},"label" : "CodeReview-Verified"},
+            "pushMerge"                 : {"rules" : {""$group_id"" : {
+                     "action" : "ALLOW"
+                  }}},
+            "label-Verified"            : {"rules" : {""$group_id"" : {
+                     "action" : "ALLOW"
+                  }},"label" : "Verified"},
+            "submit"                    : {"rules" : {""$group_id"" : {
+                     "action" : "ALLOW"
+                  }}},
+            "push"                      : {"rules" : {""$group_id"" : {
+                     "force" : true,
+                     "action" : "ALLOW"
+                  }}},
+            "forgeAuthor"               : {"rules" : {""$group_id"" : {
+                     "action" : "ALLOW"
+                  }}}
+        }}}}
+TEMP_JSON
+
+        showRUNQ y curl -su ${ACCOUNT}:${key} $url_gerrit/access -H "Content-Type:application/json" -d @temp.json -X POST
+       
+    ;; *) echo "default functionality"
+    esac    
 }
 
 
@@ -2349,9 +2445,9 @@ function revvbranch(){
     case ${cmd}${SEP}${subcmd} in
            *~help)
             echo "check your cmd [${cmd}]"; cat <<-EOF
-			usage) revv branch    na mustang/tm/src tsu_25.5my_release         # find branch with branch-name
-			usage) revv branchadd na mustang/tm/src tsu_25.5my_release_new     # create branch
-			usage) revv branchdel na mustang/tm/src tsu_25.5my_release_new     # remove branch
+			   ex) revv branch    na mustang/tm/src tsu_25.5my_release         # find branch with branch-name
+			   ex) revv branchadd na mustang/tm/src tsu_25.5my_release_new     # create branch (will ask base branch)
+			   ex) revv branchdel na mustang/tm/src tsu_25.5my_release_old     # remove branch
 			 info) 'empty branch' can be created by 'revv projectadd' not 'revv branchadd'
 			       therefore if you want 'empty branch', you can reuse 'master branch if it empty' or 'gitt branch create'
 EOF
@@ -2364,6 +2460,7 @@ EOF
     ;;branchdel~*)
             bar inline "delete branch by name"
             showRUNQ y curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -X DELETE
+            clog "if cannot delete branch, use cli with force option" "git push vgit_na HEAD:refs/heads/tsu_26my_release -f"
 
     ;;   branch~*)
             bar inline "find branches by name"
@@ -2398,7 +2495,8 @@ function revvcommit(){
             local change_id=$(curl -su ${ACCOUNT}:${key} ${server}/a/changes/${source} |grep -oP '(?<=change_id": ").*(?=")')
             if [ -z "${change_id}" ]; then
                 err "NOT Found in $server change_id for commit_id [${source}]"
-                echo "this commit is not in this gerrit system. ex) direct pushed commit or maybe in other servers"
+                echo "this commit is not in this gerrit system."
+                clog "ex" "it could bue direct pushed commit or maybe in other servers"
                 return 1;
             fi
             curl -su ${ACCOUNT}:${key} ${server}/a/changes/?q=${change_id}| sed '1d' > ${file}
@@ -2698,6 +2796,8 @@ case "$1" in
     ;;   debug)      reppcheck_initvar gittrevv        &&  revvdebug "${@:2}"
     ;;  forall)      reppcheck_initvar repprevv        &&  revvforall "${@:2}"
     ;;  commit)      reppcheck_initvar repprevv        &&  revvcommit "${@:2}"
+       #pass revv access* such as 'revv accessadd'
+    ;; access*)      reppcheck_initvar repprevv        &&  revvaccess "${@:1}"    
     ;; branch*)      reppcheck_initvar repprevv        &&  revvbranch "${@:1}"
     ;;project*)      reppcheck_initvar repprevv        &&  revvproject "${@:1}"
     ;;       *)      reppcheck_initvar repprevv        &&  revvaccount "${@:1}"
