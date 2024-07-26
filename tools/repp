@@ -173,7 +173,10 @@ function reppmani(){
     local str=$3
     local filter=$4
 
-    if [[ "${cmd}" != "db" ]] && [[ "${cmd}" != "go" ]] && [[ ! "${PWD}" =~ "${REPP_PATH}" ]]; then
+    if [[ "${cmd}" != "db" ]]   &&\
+       [[ "${cmd}" != "go" ]]   &&\
+       [[ "${cmd}" != "work" ]] &&\
+       [[ ! "${PWD}" =~ "${REPP_PATH}" ]]; then
         warn "you must move to manifest dir, path is changed automatically ${REPP_PATH}"
         info "you can go by 'repp go mani' or 'git go mani'"
         cd ${REPP_PATH}
@@ -181,8 +184,11 @@ function reppmani(){
 
 
     case ${cmd} in
-          db)   rm -f ${REPPFILE_CSV} ${REPPFILE_TXT} ${REPPFILE_JSON}
-                reppmanidb ${item}
+          db)   rm -f ${REPPFILE_CSV} ${REPPFILE_TXT} ${REPPFILE_JSON}; reppmanidb
+    ;;  work)   cd "$REPP_DIR"
+                echo "REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_UPSTREAM,REPO_DEST_BRANCH,REPO_RREV,REPO_PROJECT,REPO_PATH,REPO_WORK" > "$REPPFILE_WORK"
+                cat "$REPPFILE_CSV"| colrm 7 40| sed -e "s/.*/'&/" >> "$REPPFILE_WORK"
+                #REPO_WORK에 세미콜론으로 구분된 명령을 넣고 각 git마다 해당 명령을 실행하여 migration등의 작업을 처리할수 있도록 개발필요
     ;;    go)   gittgo mani
     ;;  info)   ##get global variable and repo init command.
                 reppget_repcmd info
@@ -535,7 +541,7 @@ EOF
     if ! repp_initvar; then warn "your are not in repo"; return 1; fi
     if [ ! -f ${REPPFILE_CSV} ]; then reppfind $cmd; fi
 
-    local INPUT=( $(cat ${REPPFILE_CSV} |grep ${cmd}| awk -v FS="\|" '{print $8}'| sort) )
+    local INPUT=( $(cat ${REPPFILE_CSV} |grep ${cmd}| awk -v FS='\\|' '{print $8}'| sort) )
     if [ -n "${INPUT}" ];
     then
         run_menu "${INPUT[@]}"; cd "${REPP_ROOT}/${menu_selected##* }";
@@ -701,10 +707,10 @@ function reppfind(){
 # find git repository with path and project name with regexp
 # $1 path or project
 # usage: reppfind [path|project]
-    local aparam="$1"
+    local aparam="$1"               #original input value
     local filter="${2:-.}"
-    local cparam="$3"
-    local cshow="$3"
+    local cparam="$3"               #original input value
+    local cshow="$3"                #select colum from input value
     local allname="REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_UPSTREAM,REPO_DEST_BRANCH,REPO_RREV,REPO_PROJECT,REPO_PATH"
     local hide="$allname,"
     local aname cindex cname
@@ -1413,6 +1419,7 @@ function repp_initvar(){
     REPPFILE_STATUS=${REPP_DIR}/repp.status
     REPPFILE_COMMIT=${REPP_DIR}/repp.commit
     REPPFILE_CSV=${REPP_DIR}/repp.csv
+    REPPFILE_WORK=${REPP_DIR}/reppwork.csv
     REPPFILE_TXT=${REPP_DIR}/repp.txt
     REPPFILE_JSON=${REPP_DIR}/repp.json
     REPPFILE_XML=repp.xml
@@ -1926,8 +1933,11 @@ function gittdiff(){
 				usage) gitt diff staged <path>                      #    HEAD >>> diff <<< staged
 				usage) gitt diff HEAD <path>                        #    HEAD >>> diff <<< unstaged & staged(add empty path)
 				usage) gitt diff HEAD^ <path>                       #    HEAD >>> diff <<< HEAD^
+
 				usage) gitt diff branch <path> <branchA> <branchB>  #branch A >>> diff <<< branch B, <path> is mandatory
-				   ex) gitt diff branch . vgit_na/tsu_25.5my_release vgit_na/tcua_release
+				   ex) gitt diff branch . vgit_na/tsu_26my_release vgit_na/tcua_release
+				       if this not working, please put 'current local branch name' as parameter
+
 				usage) gitt diff commit <path> <commitA> <commitB>  #commit A >>> diff <<< commit B, <path> is ignored
 				   ex) gitt diff commit . HEAD^ 03c2df
 
@@ -2456,14 +2466,15 @@ function revvbranch(){
 
     local SEP='~'
     case ${cmd}${SEP}${subcmd} in
-           *~help)
+           *~help|*~)
             echo "check your cmd [${cmd}]"; cat <<-EOF
 			   ex) revv branch    na mustang/tm/src tsu_25.5my_release         # find branch with branch-name
 			   ex) revv branchadd na mustang/tm/src tsu_25.5my_release_new     # create branch (will ask base branch)
 			   ex) revv branchdel na mustang/tm/src tsu_25.5my_release_old     # remove branch
 			 info) 'empty branch' can be created by 'revv projectadd' not 'revv branchadd'
-			       therefore if you want 'empty branch', you can reuse 'master branch if it empty' or 'gitt branch create'
+			       therefore if you want 'empty branch', refer 'gitt branch create empty'
 EOF
+            clog "\ncopy & modify this:" "revv branch ${GITT_REMOTE:-${REPP_REMOTE}} "${GITT_PROJECT:-${REPP_PROJECT}}" "${GITT_BRANCH:-${REPP_BRANCH}}""
 
     ;;branchadd~*)
             bar inline "create branch with base revision"
