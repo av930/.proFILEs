@@ -1,6 +1,6 @@
 #!/bin/bash
 ## ==========================================================================
-##  readme    : repo utiliies
+##  readme    : repo wrapper utility
 ##  mail      : joongkeun.kim@lge.com, av9300@gmail.com
 ## ==========================================================================
 ###---------------------------------------------------------- DEBUG OPTION
@@ -26,9 +26,9 @@ PATH_MIRROR="/data001/${ACCOUNT}"/mirror
 
 ##------------------------ alias & oneline func ------------------------------
 ##============================================================================
-#### git alias
+#### when running script, register git alias automatically
 ## load direct from below
-source <(cat <<\EOF
+source <(cat <<'EOF'
 ## alias
     #suppress repo update log: alias repp='_repp(){ repp $@ 2> >(sed '/.../,/cp/d') ;}; _repp'
 ## git alias
@@ -52,8 +52,8 @@ EOF
 ) 2> /dev/null
 
 
-## oneline function
-##suppress print path
+## oneline function defined below
+## suppress print path
 pushd() { command pushd "$@" > /dev/null ;}
 popd() { command popd "$@" > /dev/null ;}
 NJOBS=$(( $(nproc --all) / 4))
@@ -86,43 +86,36 @@ EOF
 VGIT="vgit.lge.com"
 LAMP="lamp.lge.com"
 GERRIT=( "${VGIT}/na:29420" "${VGIT}/eu:29430" "${VGIT}/as:29440" "${VGIT}/adas:29550" "${VGIT}/devops_test:29999" "${LAMP}/review:29418" )
-function ret_server() {
-## ---------------------------------------------------------------------------
-## search target from source and return
-    local target=$1
-    local source="${@:2}"
-    case $target in                                                                       # return value
-            http)    echo "${source}"| awk -F[./:] '{print "http://"$1"."$2"."$3"/"$4}'   # http://vgit.lge.com/na
-    ;;      port)    echo "${source}"| awk -F[./:] '{print $5}'                           # 29420
-    ;;       sub)    echo "${source}"| awk -F[./:] '{print $1}'                           # vgit
-    ;;    domain)    echo "${source}"| awk -F[./:] '{print $2"."$3}'                      # lge.com
-    ;; subdomain)    echo "${source}"| awk -F[./:] '{print $1"."$2"."$3}'                 # vgit.lge.com
-    ;;      path)    echo "${source}"| awk -F[./:] '{print $4}'                           # na
-    ;;       url)    echo "${source}"| awk -F[./:] '{print $1"."$2"."$3"/"$4}'            # vgit.lge.com/na
-    ;;    remote)    echo "${source}"| awk -F[./:] '{print $1"_"$4}'                      # vgit_na
-    ;;     debug)    echo "${source}"                                                     # vgit.lge.com/na:29420
-    ;;         *)    echo "not processed"                                                 # vgit.lge.com/na:29420
-    esac
-}
-
-
 function getserver() {
 ## ---------------------------------------------------------------------------
+## return remote (gerrit server) info as a various type
 ## format: getserver [29420|na|vgit|lamp|review] [port|http|sub|domain|subdomain|path|url|remote|debug]
 ## exception: vgitxxx lampxxx will return only postfix after delimter _
 
     local search_key=$1
     local return_type=$2
     case $search_key in
-    vgit_*|lamp_*)   search_key="${search_key#*_}";                                      #remove prefix vgit_ or lamp_ and return remain.
+    vgit*|lamp*) search_key="${search_key/vgit/}"; search_key="${search_key/lamp/}"; search_key="${search_key/#_/}"          #remove prefix vgit or lamp and return remain.
     esac
 
     for _item in ${GERRIT[@]};do
-        if [[ "${_item##*/}" =~ "${search_key}" ]]; then
-            ret_server "${return_type}" "${_item}"
-            return 0
+        if [[ "${_item##*/}" =~ "${search_key}" ]] && [[ -n "${search_key}" ]]; then
+            case $return_type in                                                                       # return value
+                    http)    echo "${_item}"| awk -F[./:] '{print "http://"$1"."$2"."$3"/"$4}'   # http://vgit.lge.com/na
+            ;;      port)    echo "${_item}"| awk -F[./:] '{print $5}'                           # 29420
+            ;;       sub)    echo "${_item}"| awk -F[./:] '{print $1}'                           # vgit
+            ;;    domain)    echo "${_item}"| awk -F[./:] '{print $2"."$3}'                      # lge.com
+            ;; subdomain)    echo "${_item}"| awk -F[./:] '{print $1"."$2"."$3}'                 # vgit.lge.com
+            ;;      path)    echo "${_item}"| awk -F[./:] '{print $4}'                           # na
+            ;;       url)    echo "${_item}"| awk -F[./:] '{print $1"."$2"."$3"/"$4}'            # vgit.lge.com/na
+            ;;    remote)    echo "${_item}"| awk -F[./:] '{print $1"_"$4}'                      # vgit_na
+            ;;     debug)    echo "${_item}"                                                     # vgit.lge.com/na:29420
+            ;;         *)    echo "NULL"                                                         # vgit.lge.com/na:29420
+            esac            
+            return 1
         fi
     done
+    echo "NULL" && return 1
     #default server, if not [[ ${_item##*/} =~ "$search_key" ]]
     #ret_server $return_type ${GERRIT[0]}
     #not found, return null
@@ -173,8 +166,8 @@ function reppmani(){
     local str=$3
     local filter=$4
 
-    if [[ "${cmd}" != "db" ]]   &&\
-       [[ "${cmd}" != "go" ]]   &&\
+    if [[ "${cmd}" != "db"   ]] &&\
+       [[ "${cmd}" != "go"   ]] &&\
        [[ "${cmd}" != "work" ]] &&\
        [[ ! "${PWD}" =~ "${REPP_PATH}" ]]; then
         warn "you must move to manifest dir, path is changed automatically ${REPP_PATH}"
@@ -684,14 +677,20 @@ function reppmanidb(){
 
     ## compare both only rrev
     if ! diff -q -B <(awk -v FS="|" '{print $1 $3 $6 $7 $8}' ${REPPFILE_CSV}) <(awk -v FS="|" '{print $1 $3 $6 $7 $8}' ${REPPFILE_CSV}.cmp) &>/dev/null ; then
-    local tempfile=$(mktemp)
-
-    warn "the json file of ${REPP_PATH}/${REPPFILE_MANI} has mismatch between 'manifest parsing' and 'repo variable'"
-    read -p "current manifest has error, it's DB could be generated by composition :[enter:continue| ctrl+c:break]";
-
-    ##join from ${REPPFILE_CSV} and ${REPPFILE_CSV}.cmp
-    paste -d'|' <(awk -v FS="|" '{print $1"|"$2"|"$3"|"$4"|"$5}' ${REPPFILE_CSV}) <(awk -v FS="|" '{print $6"|"$7"|"$8}' ${REPPFILE_CSV}.cmp) > tempfile
-    mv tempfile ${REPPFILE_CSV}
+        local tempfile=$(mktemp)
+        warn "the json file of ${REPP_PATH}/${REPPFILE_MANI} has mismatch between 'manifest parsing' and 'repo variable'"
+        
+        ##join from ${REPPFILE_CSV} and ${REPPFILE_CSV}.cmp
+        if [ -s ${REPPFILE_JSON} ]; then
+            clog "${REPPFILE_CSV}:" "normal case: generated by 'composition' manifest and repo";
+            paste -d'|' <(awk -v FS="|" '{print $1"|"$2"|"$3"|"$4"|"$5}' ${REPPFILE_CSV}) <(awk -v FS="|" '{print $6"|"$7"|"$8}' ${REPPFILE_CSV}.cmp) > tempfile
+            mv tempfile ${REPPFILE_CSV}
+        else
+            clog "${REPPFILE_CSV}:" "bad case: generated by 'repo' only"
+            cp ${REPPFILE_CSV}.cmp ${REPPFILE_CSV};
+        fi
+    else
+        clog "${REPPFILE_CSV}:" "good case: by 'repo' and by 'manifest'"  
     fi
 
     #cat ${REPPFILE_JSON}|jq -cC '.project[]|{groups,remote,upstream,"dest-branch",revision,name,path}'
