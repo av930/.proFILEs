@@ -166,9 +166,9 @@ function reppmani(){
     local str=$3
     local filter=$4
 
-    if [[ "${cmd}" != "db"   ]] &&\
-       [[ "${cmd}" != "go"   ]] &&\
-       [[ "${cmd}" != "work" ]] &&\
+    if [[ "${cmd}" != "db"     ]] &&\
+       [[ "${cmd}" != "go"     ]] &&\
+       [[ "${cmd}" != "script" ]] &&\
        [[ ! "${PWD}" =~ "${REPP_PATH}" ]]; then
         warn "you must move to manifest dir, path is changed automatically ${REPP_PATH}"
         info "you can go by 'repp go mani' or 'git go mani'"
@@ -178,10 +178,11 @@ function reppmani(){
 
     case ${cmd} in
           db)   rm -f ${REPPFILE_CSV} ${REPPFILE_TXT} ${REPPFILE_JSON}; reppmanidb
-    ;;  work)   cd "$REPP_DIR"
-                echo "REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_UPSTREAM,REPO_DEST_BRANCH,REPO_RREV,REPO_PROJECT,REPO_PATH,REPO_WORK" > "$REPPFILE_WORK"
-                ## input number as string "=""Data Here"""
-                cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=","; ORS="\n";}{print "\042\042\075\042"$1"\042","\042"$2"\042,"$3","$4","$5","$6","$7","$8}' >> "$REPPFILE_WORK"
+    ;;script)   cd "$REPP_DIR"
+                echo "REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_UPSTREAM,REPO_DEST_BRANCH,REPO_RREV,REPO_PROJECT,REPO_PATH,REPO_SCRIPT" > "$REPPFILE_SCRIPT"
+                ## change to csv from a file which is using seperator '|' but containing comma in item.
+                #cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=","; ORS="\n";}{print "\042\042\075\042"$1"\042","\042"$2"\042,"$3","$4","$5","$6","$7","$8}' >> "$REPPFILE_SCRIPT"
+                cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=","; ORS="\n";}{gsub(/,/,":",$2);print "\042\042\075\042"$1"\042",$2","$3","$4","$5","$6","$7","$8}' >> "$REPPFILE_SCRIPT"
                 #REPO_WORK에 세미콜론으로 구분된 명령을 넣고 각 git마다 해당 명령을 실행하여 migration등의 작업을 처리할수 있도록 개발필요
     ;;    go)   gittgo mani
     ;;  info)   ##get global variable and repo init command.
@@ -276,6 +277,27 @@ EOF
     ;; esac
 }
 
+
+
+function reppscript(){
+## ---------------------------------------------------------------------------
+# run command(.repp/reppwork.csv) as like repo for all 
+# 
+    #sed -i 's/,/`/g' "$REPPFILE_SCRIPT"
+    cat "$REPPFILE_SCRIPT" |sed -e 's/,/`/g' -e 's/\r$//' >"$REPPFILE_SCRIPT".tmp
+    readarray -t arrayline < <(cat "$REPPFILE_SCRIPT".tmp) 
+    
+    ## start from line2
+    for (( c=1; c<${#arrayline[@]}; c++ )); do
+        readarray -t -d\` oneline <<< "${arrayline[$c]}"
+        oneline[8]=$(echo "${oneline[8]}"| sed -z 's/\n$//')
+        #declare -p oneline
+        if [[ -n $(echo ${oneline[8]} | xargs) ]]; then
+           clog "[$c] ${oneline[6]}" "${oneline[8]}"
+           repo forall ${oneline[6]} -vc bash -c ${oneline[8]}
+        fi
+    done
+}
 
 
 function reppdiff(){
@@ -1419,7 +1441,7 @@ function repp_initvar(){
     REPPFILE_STATUS=${REPP_DIR}/repp.status
     REPPFILE_COMMIT=${REPP_DIR}/repp.commit
     REPPFILE_CSV=${REPP_DIR}/repp.csv
-    REPPFILE_WORK=${REPP_DIR}/reppwork.csv
+    REPPFILE_SCRIPT=${REPP_DIR}/reppscript.csv
     REPPFILE_TXT=${REPP_DIR}/repp.txt
     REPPFILE_JSON=${REPP_DIR}/repp.json
     REPPFILE_XML=repp.xml
@@ -1877,7 +1899,7 @@ EOF
     ;; *)   bar outline "search in commit with regexp(${keyword}) in files(${area:-file list or path})"
     esac
 
-    source <(cat <<\EOL
+    source <(cat <<'EOL'
     under "find string(${keyword}) in committer in history(${area:-all})\n"
     echo "ex) git log --author=".*${keyword}.*" ${area}"
     echo "ex) git log --owner=".*${keyword}.*" ${area}"
@@ -2904,6 +2926,7 @@ case "$1" in
     ;; find|list)   reppcheck_initvar repp              &&  reppfind "${@:2}"
     ;; branch)      reppcheck_initvar repp              &&  reppbranch "${@:2}"
     ;; mani)        reppcheck_initvar reppmani          &&  reppmani "${@:2}";
+    ;; script)      reppcheck_initvar repp              &&  reppscript "${@:2}";    
     ;; init)        reppcheck_initvar repp              &&  reppinit "${@:2}"
     ;; sync)        reppcheck_initvar repp              &&  reppsync "${@:2}"
     ;; reset)       reppcheck_initvar repp              &&  reppreset "${@:2}"
@@ -2963,7 +2986,7 @@ function reppdebug(){
 #reppdebug & gittdebug
 #repo forall -c 'echo ${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}'
 
-    source <(cat <<\EOL
+    source <(cat <<'EOL'
         bar inline "GITT_VARIABLE && REPP_VARIABLE for all repository"
         for var in \
         '${GITT_REMOTE}' '${GITT_PROJECT}' '${GITT_BRANCH}' '${GITT_PATH}' '${GITT_REVIEW}' '${GITT_URL}' \
@@ -3022,7 +3045,7 @@ function gittdebug(){
         reppcheck_initvar gitt
     fi
 
-    source <(cat <<\EOL
+    source <(cat <<'EOL'
         bar inline "GITT_VARIABLE && REPP_VARIABLE for this git"
         for var in \
         '${GITT_PROJECT}' '${GITT_REMOTE}' '${GITT_BRANCH}' '${GITT_REVIEW}' '${GITT_URL}' '${GITT_PATH}'
