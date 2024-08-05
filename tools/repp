@@ -180,9 +180,13 @@ function reppmani(){
           db)   rm -f ${REPPFILE_CSV} ${REPPFILE_TXT} ${REPPFILE_JSON}; reppmanidb
     ;;script)   cd "$REPP_DIR"
                 echo "REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_UPSTREAM,REPO_DEST_BRANCH,REPO_RREV,REPO_PROJECT,REPO_PATH,REPO_SCRIPT" > "$REPPFILE_SCRIPT"
-                ## change to csv from a file which is using seperator '|' but containing comma in item.
+                ## change from a txt file with separator '|' but containing comma in item.
+                ##          to a csv file with separator ',' but containing semi-colon in item.
                 #cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=","; ORS="\n";}{print "\042\042\075\042"$1"\042","\042"$2"\042,"$3","$4","$5","$6","$7","$8}' >> "$REPPFILE_SCRIPT"
-                cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=","; ORS="\n";}{gsub(/,/,":",$2);print "\042\042\075\042"$1"\042",$2","$3","$4","$5","$6","$7","$8}' >> "$REPPFILE_SCRIPT"
+                cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=",";}{gsub(/,/,";",$2);print "\042\042\075\042"$1"\042",$2","$3","$4","$5","$6","$7","$8}' >> "$REPPFILE_SCRIPT"
+                bar inline "$REPPFILE_SCRIPT"
+                clog "reppscript.csv file is generated" "you can put your commands reppscript.csv and then run by 'repp script'"
+                
                 #REPO_WORK에 세미콜론으로 구분된 명령을 넣고 각 git마다 해당 명령을 실행하여 migration등의 작업을 처리할수 있도록 개발필요
     ;;    go)   gittgo mani
     ;;  info)   ##get global variable and repo init command.
@@ -273,6 +277,10 @@ CHANGE
 				   ex) repp mani diff default.xml event/230712_mig.xml    #compare history from 2 different manifests
 				   ex) repp mani diff                                     #can choose manifest in recent 3 weeks, comparing to current manifest
 				usage) repp mani diffcheck                                #post analysis after 'repp mani diff' for missed commits checking
+				usage) repp mani script                                   #generate script to do process manifest job such as (repo forall -c)
+				       1. repp mani script will save reppscript.csv into .repp dir in root path
+				       2. put muli-cmds in REPO_SCRIPT column like cmd1;cmd2|cmd3;cmd4;
+				       3. run by 'repp scrpt'. it will ask how to run it ex) run all at once or run 1 by 1.
 EOF
     ;; esac
 }
@@ -283,21 +291,73 @@ function reppscript(){
 ## ---------------------------------------------------------------------------
 # run command(.repp/reppwork.csv) as like repo for all 
 # 
-    #sed -i 's/,/`/g' "$REPPFILE_SCRIPT"
-    cat "$REPPFILE_SCRIPT" |sed -e 's/,/`/g' -e 's/\r$//' >"$REPPFILE_SCRIPT".tmp
+    ## change from a csv file with separator ',' but containing semi-colon in item.
+    ##          to a txt file with separator '`' but containing seme-colon in item.
+    
+    local cmd=$1
+    case $cmd in
+        help) cat <<- 'EOF'
+			usage) repp script
+			 info) repo variables: $REPO_I, $REPO_COUNT 
+			                       $REPO_REMOTE, $REPO_PROJECT, $REPO_PATH
+			                       $REPO_LREV, $REPO_RREV
+			                       $REPO__$VARIABLE, $REPO__$UPSTREAM, $REPO__$DEST_BRANCH, $REPO__$GROUP, $REPO__$USER
+			                       #not granteed: REPO_INNERPATH, REPO_OUTERPATH, REPO_UPSTREAM, REPO_DEST_BRANCH 
+
+			guide) example cmds REPO_SCRIPT column in reppscript.csv                                   
+			echo ${!REPO_*}                                              #show all REPO_VARIABLE 
+			echo REPO_PROJECT|xargs -n1 -I% sh -c 'echo $%'              #xargs
+			echo ${REPO_REMOTE} ; echo ${REPO_RREV}                      #multiple commands with ;
+			echo ${REPO_REMOTE} |grep -o vgit; echo ${REPO_REMOTE}       #multiple commands with |
+			echo ${REPO_REMOTE} && echo ${REPO_RREV}                     #multiple commands with &&
+			"$(cat <<-'EOL'
+			echo $REPO_COUNT $REPO_REMOTE $REPO_PROJECT $REPO_PATH |xargs bash -c 'echo $2 $1 $0 $3'
+			EOL
+			)"                                                           #multiple command HEREDOC with avoid multiple commas
+EOF
+        return 0
+    esac
+
+    local c t opt ask tempfile=$(mktemp)
+    #cat "$REPPFILE_SCRIPT" |sed 's/,/`/g'  > aa.txt
+    #cat "$REPPFILE_SCRIPT" |sed -e 's/,/`/g' -e 's/\r$//' >"$REPPFILE_SCRIPT".tmp
+    cat "$REPPFILE_SCRIPT"| awk 'BEGIN{FS=",";}{gsub(/("|=)/,"",$1);gsub(/\r/,"",$9);print $1"`"$2"`"$3"`"$4"`"$5"`"$6"`"$7"`"$8"`"$9}' > "$REPPFILE_SCRIPT".tmp
+
+
+    ##read whole csv to array
     readarray -t arrayline < <(cat "$REPPFILE_SCRIPT".tmp) 
     
-    ## start from line2
-    for (( c=1; c<${#arrayline[@]}; c++ )); do
+    ## start from row from line2, col from 1st col(watch $bash[0], awk[1]) !!
+    ## 먼저 내용을 보여주고, y를 입력하면 결과 실행
+    for ((c=1,t=0; c<${#arrayline[@]}; c++ )); do
+        ##read oneline to array
         readarray -t -d\` oneline <<< "${arrayline[$c]}"
-        oneline[8]=$(echo "${oneline[8]}"| sed -z 's/\n$//')
-        #declare -p oneline
+        #oneline[8]=$(echo "${oneline[8]}"| sed -z 's/\n$//')
+        #declare -p oneline        
+        ## if 8th item is printable, it has command, so run them.
         if [[ -n $(echo ${oneline[8]} | xargs) ]]; then
-           clog "[$c] ${oneline[6]}" "${oneline[8]}"
-           repo forall ${oneline[6]} -vc bash -c ${oneline[8]}
+           ((t=t+1))
+           dlog "[$t] ${oneline[6]}" "repo forall ${oneline[6]} -vc bash -c ${oneline[8]}"
         fi
     done
+
+    read -p $'\n\n[y:execute all |  enter:run 1 by 1 asking |  ctrl+c:break]' opt
+    for ((c=1,t=0; c<${#arrayline[@]}; c++ )); do
+        readarray -t -d\` oneline <<< "${arrayline[$c]}"
+        if [[ -n $(echo ${oneline[8]} | xargs) ]]; then
+            ((t=t+1))
+            bar inline "$t] ${oneline[6]}" 
+            clog "repo forall ${oneline[6]} -vc bash -c" "${oneline[8]}"
+            ## if opt=y,    ask=enter: excute all at once
+            ## if opt=ener, ask=enter: execute 1 by one
+            ## if opt=ener, ask=value: skip one cmd
+            ## if    break, stop all
+            [ "$opt" = "" ] && read -p '[enter:run| other:skip| ctrl+c:break]' ask; 
+            [[ -z "$ask" ]] && GROUP="${oneline[1]}" UPSTREAM="${oneline[3]}" DEST_BRANCH="${oneline[4]}" repo forall ${oneline[6]} ${ask:+--interactive} -vc bash -c "${oneline[8]}"  || echo skipped && continue
+        fi
+    done    
 }
+
 
 
 function reppdiff(){
@@ -1352,7 +1412,7 @@ EOF
     server=$( getserver ${oriserver} subdomain ); port=$(getserver ${oriserver} port)
 
 
-    dlog [$user][$server][$oriserver][$gitproject][$branch]
+    dnlog [$user][$server][$oriserver][$gitproject][$branch]
     clog "should be this format:" "[testaccount][$oriserver][$server][$gitproject][$branch]"
 
     under "step1: check gerrit permission for ${user} from WEB(HTTP) by account admin[${ACCOUNT}]\n"
@@ -2141,9 +2201,9 @@ function revvcheck_permission(){
 
     bar inline "step1.4-gerritserver: [remote] check if ${user} can access branch on the project (checked by $ACCOUNT)"
     clog try "check git/branch is correct and can access it [case sensitive]"
-    dlog "commit" "read,submit,push,pushMerge,revert,forgeCommitter,forgeAuthor,editTopicName,label-Code-Review"
-    dlog "branchtag" "create,delete,createTag,createSignedTag"
-    dlog "server" "priority,streamEvents,administrateServer"
+    dnlog "commit" "read,submit,push,pushMerge,revert,forgeCommitter,forgeAuthor,editTopicName,label-Code-Review"
+    dnlog "branchtag" "create,delete,createTag,createSignedTag"
+    dnlog "server" "priority,streamEvents,administrateServer"
     [ -z "${branch}" ] && branch="master"
     [ -z "${perm}" ] && perm="read"
     log=$(set -x; curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject}/check.access?account=${REVV_USERID}\&ref=refs%2fheads%2f${branch}\&perm=${perm})
@@ -2328,8 +2388,8 @@ EOF
             fi
 
             bar inline "'removing project' by CLI is not supported in gerrit"
-            dlog "so only provide url link, you cand remove git project there"
-            dlog "[guide] To delete project (visit):" "${server}/admin/repos/${project},commands"
+            dnlog "so only provide url link, you cand remove git project there"
+            dnlog "[guide] To delete project (visit):" "${server}/admin/repos/${project},commands"
             printf "\n\n"
 
     ;;projectparent~*)
@@ -2350,7 +2410,7 @@ EOF
             printf "\n\n"
 
     ;;  project~*)
-            dlog "[gerrit url] gerrit cli:" "curl -su ${ACCOUNT}:${key} $url_gerrit | sed '1d'| jq  -cC '.[]'"
+            dnlog "[gerrit url] gerrit cli:" "curl -su ${ACCOUNT}:${key} $url_gerrit | sed '1d'| jq  -cC '.[]'"
 
             info "config: " "${server}/admin/repos/${project}"
             bar inline "find project and show project url"
@@ -2899,19 +2959,21 @@ function repp(){
 # $1 command
 #set +o noglob
 local MENU=(
-"   info: shows repository info such as manifest path, repo cmd, tree of manifests, etc"
-"   show: shows uncommitted changes, top -1 commits, md5 sum for all repository"
-"     go: move to repo root dir, manifest dir, git path nearby with similar depth"
-" commit: shows latest commits(git log -1) from all repository (default 20)"
-"   find: search(list) string in all (repo revision, remote, branch, project, path)"
-" branch: show branch info, push remote branch, look-up remote-branch"
-"   mani: repo manifest handling"
-"   init: repo init with automatic options"
-"   sync: repo sync with optimized multi-job and options"
-"  reset: reset all repositories to original state"
-"version: check repo & python version and provide repo upgrade"
-"connect: check the connection with git host server and accessibilty for branch of git"
-"  debug: show variable REPO, REPP, REPPFILE, GITT variable used in script"
+"    info: shows repository info such as manifest path, repo cmd, tree of manifests, etc"
+"    show: shows uncommitted changes, top -1 commits, md5 sum for all repository"
+"      go: move to repo root dir, manifest dir, git path nearby with similar depth"
+"  commit: shows latest commits(git log -1) from all repository (default 20)"
+"    find: search(list) string in all (repo revision, remote, branch, project, path)"
+"  branch: show branch info, push remote branch, look-up remote-branch"
+"    mani: repo manifest handling"
+"    init: repo init with automatic options"
+"    sync: repo sync with optimized multi-job and options"
+"   reset: reset all repositories to original state"
+"  ersion: check repo & python version and provide repo upgrade"
+"  onnect: check the connection with git host server and accessibilty for branch of git"
+"   debug: show variable REPO, REPP, REPPFILE, GITT variable used in script"
+" install: check essential linux packages to run repp utility"
+"  script: run 'repo for all' from .repp/reppscript.csv(plz put your cmds before run)"
 )
 
 local ret=0
@@ -2993,19 +3055,19 @@ function reppdebug(){
         '${REPP_PATH}' '${REPP_ROOT}' '${REPP_REMOTE}' '${REPP_PROJECT}' '${REPP_BRANCH}' '${REPP_URL}' '${REPP_REPOURL}' '${REPP_REF}' '${REPP_GROUPS}' '${REPP_COUNT}' \
         '${REPPFILE_STATUS}' '${REPPFILE_COMMIT}' '${REPPFILE_CSV}' '${REPPFILE_XML}' '${REPPFILE_MANI}'
         do
-           dlog "$var\t" $(eval echo $var)
+           dnlog "$var\t" $(eval echo $var)
         done
 
         for (( i=0; i < ${#REPP_REMOTELIST[@]}; i++ )); do
-            dlog "\${REPP_REMOTELIST[$i]}\t\t"   "${REPP_REMOTELIST[$i]}"
-            dlog "\${REPP_REVIEWLIST[$i]}\t\t"   "${REPP_REVIEWLIST[$i]}"
+            dnlog "\${REPP_REMOTELIST[$i]}\t\t"   "${REPP_REMOTELIST[$i]}"
+            dnlog "\${REPP_REVIEWLIST[$i]}\t\t"   "${REPP_REVIEWLIST[$i]}"
         done
 
         bar inline "[${GITT_PROJECT}] print repo variable"
         showRUN repo forall . -c 'echo ${REPO_COUNT}, ${REPO_LREV}, ${REPO_REMOTE}, ${REPO_UPSTREAM}, ${REPO_DEST_BRANCH}, ${REPO_RREV}, ${REPO_PROJECT}, ${REPO_PATH}, ${REPO_OUTERPATH}, ${REPO_INNERPATH}'
 
         bar inline "[all repo] print repo variable"
-        dlog                '${REPO_I}/${REPO_COUNT}, ${REPO_LREV}, ${REPO_REMOTE}, ${REPO_RREV}, ${REPO_PROJECT}, ${REPO_PATH}, ${REPO_OUTERPATH}, ${REPO_INNERPATH}'
+        dnlog                '${REPO_I}/${REPO_COUNT}, ${REPO_LREV}, ${REPO_REMOTE}, ${REPO_RREV}, ${REPO_PROJECT}, ${REPO_PATH}, ${REPO_OUTERPATH}, ${REPO_INNERPATH}'
         #repo forall -c 'echo ${REPO_I}/${REPO_COUNT}, ${REPO_LREV}, ${REPO_REMOTE}, ${REPO_RREV}, ${REPO_PROJECT}, ${REPO_PATH}, ${REPO_OUTERPATH}, ${REPO_INNERPATH}' | more -60
         repo forall -j1 -c 'printf "%9.9s|%.6s|%.7s|%-32.32s|%-74.74s|%.80s\n" "${REPO_I}/${REPO_COUNT}" "${REPO_LREV}" "${REPO_REMOTE}" "${REPO_RREV}" "${REPO_PROJECT}" "${REPO_PATH}"' | more -60
 EOL
@@ -3050,7 +3112,7 @@ function gittdebug(){
         for var in \
         '${GITT_PROJECT}' '${GITT_REMOTE}' '${GITT_BRANCH}' '${GITT_REVIEW}' '${GITT_URL}' '${GITT_PATH}'
         do
-           dlog "$var\t" $(eval echo $var)
+           dnlog "$var\t" $(eval echo $var)
         done
 
         bar inline "[${GITT_PROJECT}] print REPO variable using repo"
