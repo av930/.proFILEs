@@ -514,7 +514,7 @@ function reppinfo(){
 
     clog "number of repositories: " $REPP_COUNT
     clog "duplicated repositories:" ""
-    reppfind @project |sort |uniq -dc |pCount
+    awk -v 'FS=|' '{print $7}' ${REPPFILE_CSV} |sort|uniq -dc |pCount
 
 
     ##show last synced time
@@ -842,12 +842,13 @@ function reppfind(){
 		   ex) repp find @project                          # print project colume for all repo
 		   ex) repp find @remote                           # print all remote
 		   ex) repp find @remote na                        # print remote which including 'na' string
-		   ex) repp find @remote na @path@project@rev      # print remote with corresponding path & project & revision
+		   ex) repp find @remote na @path@project@rev      # print path & project & revision with specific remote
+		   ex) repp find @group na @group@project          # print group & project with corresponding group
 EOF
 
     ;; @*)        awk -v FS="|" -v vf="$filter" -v vo="$cindex" '$vo ~ vf{print $0}' ${REPPFILE_CSV}|\
                   column '-s|' -t --table-columns "$allname" --table-order "$cshow" --table-hide "$hide"| (sed -u 1q; sort|uniq|pCount)
-                  
+
     #;; @rev)      clog "<REPO_LREV>";    awk -v FS="|" -v vf="$filter" -v vo="$cindex" '$1 ~ vf{printf "[%-40.40s]  %s\n", $1,$vo}' ${REPPFILE_CSV} |pCount
     #;; @branch)                          awk -v FS="|" -v vf="$filter" -v vo="$cindex" '$4$5$6 ~ vf{printf "[%s] %s\n", $4"|"$5"|"$6"|", $vo}' ${REPPFILE_CSV} |sort |uniq |column -s'|' -t --table-columns '<REPO_UPSTREAM>,<REPO_DEST_BRANCH>,<REPO_RREV>'  |pCount -1
     #;; @all)     awk -v FS="|" -v vf="$filter" -v vo="$cindex" '$0 ~ vf{printf "[%s] %s\n"    , $0,"|"$vo}' ${REPPFILE_CSV} |sort |uniq |\
