@@ -180,8 +180,12 @@ function reppmani(){
           db)   rm -f ${REPPFILE_CSV} ${REPPFILE_TXT} ${REPPFILE_JSON}; reppmanidb
     ;;script)   cd "$REPP_DIR"
                 ## 추후 REPO_UPSTREAM,REPO_DEST_BRANCH가 필요하면 $4,$5를 넣어야 한다.
-                ## $REPO__$UPSTREAM, $REPO__$DEST_BRANCH, 
-                echo "REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPO_SCRIPT" > "$REPPFILE_SCRIPT"
+                cat <<-GUIDE_CSV > "$REPPFILE_SCRIPT"
+				available variables: REPO_ROOT=$REPP_ROOT $REPO_LREV $REPO_GROUP $REPO_REMOTE $REPO_RREV $REPO_PROJECT $REPO_PATH $REPO_ROOT
+				not supported variable: REPO_I REPO_COUNT REPO_INNERPATH REPO_OUTERPATH REPO_UPSTREAM REPO_DEST_BRANCH
+				guide) example cmds REPO_SCRIPT column in reppscript.csv                                   
+                REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPO_SCRIPT
+GUIDE_CSV
                 ## change from a txt file with separator '|' but containing comma in item.
                 ##          to a csv file with separator ',' but containing semi-colon in item.
                 #cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=","; ORS="\n";}{print "\042\042\075\042"$1"\042","\042"$2"\042,"$3","$6","$7","$8}' >> "$REPPFILE_SCRIPT"
@@ -300,55 +304,42 @@ function reppscript(){
     case $cmd in
         help) cat <<- 'EOF'
 			usage) repp script
-			 info) repo variables: $REPO_I, $REPO_COUNT 
-			                       $REPO_REMOTE, $REPO_PROJECT, $REPO_PATH
-			                       $REPO_LREV, $REPO_RREV
-			                       $REPO__$VARIABLE, $REPO__$GROUP, $REPO__$ROOTDIR, $REPO__$USER
-			                       #not granteed: REPO_INNERPATH, REPO_OUTERPATH, REPO_UPSTREAM, REPO_DEST_BRANCH 
+			 info) repo variables: $REPO_LREV, $REPO_GROUP, $REPO_REMOTE, $REPO_RREV, $REPO_PROJECT, $REPO_PATH, $REPO_ROOT
+			                       #not supported: REPO_I, REPO_COUNT, REPO_INNERPATH, REPO_OUTERPATH, REPO_UPSTREAM, REPO_DEST_BRANCH 
 
 			guide) example cmds REPO_SCRIPT column in reppscript.csv                                   
-			echo ${!REPO_*}                                              #show all REPO_VARIABLE 
 			echo REPO_PROJECT|xargs -n1 -I% sh -c 'echo $%'              #xargs
 			echo ${REPO_REMOTE} ; echo ${REPO_RREV}                      #multiple commands with ;
 			echo ${REPO_REMOTE} |grep -o vgit; echo ${REPO_REMOTE}       #multiple commands with |
 			echo ${REPO_REMOTE} && echo ${REPO_RREV}                     #multiple commands with &&
-			"$(cat <<-'EOL'
-			echo $REPO_COUNT $REPO_REMOTE $REPO_PROJECT $REPO_PATH |xargs bash -c 'echo $2 $1 $0 $3'
-			EOL
-			)"                                                           #multiple command HEREDOC with avoid multiple commas
 EOF
         return 0
     esac
 
-    local c t opt ask tempfile=$(mktemp)
+    local c t opt ask 
     #change comman to backquato and replace carrige return to null
     #gsub(/("|=)/,"",$1)          : change number to text    
     #sed 's/,/`/g'                : change csv to txt
     #gsub(/""/,"\"",$7)           : change csv string "" to normal "
     #gsub(/\r/,"",$7)             : remove carrige return
 
-    cat "$REPPFILE_SCRIPT".csv| awk 'BEGIN{FS=",";}{gsub(/("|=)/,"",$1);gsub(/""/,"\"",$7);gsub(/\r/,"",$7);\
+    cat "$REPPFILE_SCRIPT"| awk 'BEGIN{FS=",";}{gsub(/("|=)/,"",$1);gsub(/""/,"\"",$7);gsub(/\r/,"",$7);\
       print $1"`"$2"`"$3"`"$4"`"$5"`"$6"`"$7}' > "$REPPFILE_SCRIPT".tmp
 
-    #cat "$REPPFILE_SCRIPT".csv| awk 'BEGIN{FS=",";}{gsub(/("|=)/,"",$1);gsub(/""/,"\"",$7);gsub(/\r/,"",$7);\
-    #  print $1"`"$2"`"$3"`"$4"`"$5"`"$6"`"$7}' > "$REPPFILE_SCRIPT".tmp
-
-
     ##read whole csv to array
-    readarray -t arrayline < <(cat "$REPPFILE_SCRIPT".tmp) 
-    
+    readarray -t arrayline < <(tail -n +$(cat $REPPFILE_SCRIPT.tmp|grep -n ^REPO_LREV|cut -d':' -f1) $REPPFILE_SCRIPT.tmp) 
     ## start from row from line2, col from 1st col(watch $bash[0], awk[1]) !!
     ## 먼저 내용을 보여주고, y를 입력하면 결과 실행
     for ((c=1,t=0; c<${#arrayline[@]}; c++ )); do
         ##read oneline to array
         readarray -t -d\` oneline <<< "${arrayline[$c]}"
-        #oneline[8]=$(echo "${oneline[8]}"| sed -z 's/\n$//')
+        #oneline[8]=$(echo "${oneline[6]}"| sed -z 's/\n$//')
         #declare -p oneline        
-        ## if 8th item is printable, it has command, so run them.
+        ## 만약 6번째 item이 print가능한 명령이 존재하면 명령을 보여줘라.
         if [[ -n $(echo ${oneline[6]} | xargs) ]]; then
-           ((t=t+1))
+           
            oneline[6]=$(printf "%b" "${oneline[6]}"| sed 's/^"\(.*\)"$/\1/')
-           bbar cyan "[$t] ${oneline[4]}" "${oneline[6]}\n"
+           bbar cyan "[$((t=t+1))] ${oneline[4]}" "${oneline[6]}\n"
         fi
     done
 
@@ -356,9 +347,9 @@ EOF
     for ((c=1,t=0; c<${#arrayline[@]}; c++ )); do
         readarray -t -d\` oneline <<< "${arrayline[$c]}"
         if [[ -n $(echo ${oneline[6]} | xargs) ]]; then
-            ((t=t+1))
+            
             oneline[6]=$(printf "%b" "${oneline[6]}"| sed 's/^"\(.*\)"$/\1/')
-            under "$t] ${oneline[4]}\n" 
+            under "[$((t=t+1))] ${oneline[4]}\n" 
             bbar cyan "${oneline[5]}" "${oneline[6]}\n"
             [ "$opt" = "" ] && read -p '[enter:run next| go:run all| other:skip next| ctrl+c:break all] :' ask; 
             
