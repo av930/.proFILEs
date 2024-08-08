@@ -1,11 +1,12 @@
-REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_UPSTREAM,REPO_DEST_BRANCH,REPO_RREV,REPO_PROJECT,REPO_PATH,REPO_SCRIPT
-0143c0,sa515m;5g,vgit_na,sa515m_le2.3_release,sa515m_le2.3_release,sa515m_le2.3_release,vendor/qct/sa515m/clo/la/platform/external/compat-wireless,nad/sa515m/SA515M_apps/apps_proc/src/external/compat-wireless,echo ${!REPO_*};
-015b2b,sa515m;5g,vgit_na,sa515m_le2.3_release,sa515m_le2.3_release,sa515m_le2.3_release,vendor/qct/sa515m/apps_proc/src/mcm-api,nad/sa515m/SA515M_apps/apps_proc/src/mcm-api,echo REPO_PROJECT|xargs -n1 -I% sh -c 'echo $%'
-01d98a,sa515m;5g,vgit_na,sa515m_le2.3_release,sa515m_le2.3_release,sa515m_le2.3_release,vendor/qct/sa515m/clo/la/kernel/build,nad/sa515m/SA515M_apps/apps_proc/src/device/qcom/kernelscripts,echo REPO_PROJECT|grep REPO_
-02b04a,sa515m;5g,vgit_na,sa515m_le2.3_release,sa515m_le2.3_release,sa515m_le2.3_release,vendor/qct/sa515m/external/openembedded.org/meta-openembedded,nad/sa515m/SA515M_apps/apps_proc/poky/meta-openembedded,echo $REPO__$GROUP
-0359cc,sa515m;5g,vgit_na,sa515m_le2.3_release,sa515m_le2.3_release,sa515m_le2.3_release,vendor/qct/sa515m/clo/la/platform/external/FreeRTOS/coreJSON,nad/sa515m/SA515M_apps/apps_proc/c2c/external/FreeRTOS/coreJSON,echo ${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}
-0381c9,hlos,vgit_na,tiger_desktop_release,tiger_desktop_release,tiger_desktop_release,tiger/build,nad/LGE/tiger-desktop/desktop-build,echo ${REPO_REMOTE}; echo ${REPO_RREV}
-067f2d,sa515m;5g,vgit_na,sa515m_le2.3_release,sa515m_le2.3_release,sa515m_le2.3_release,vendor/qct/sa515m/apps_proc/src/wlan-proprietary,nad/sa515m/SA515M_apps/apps_proc/src/wlan-proprietary,echo ${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}|grep vgit; echo ${REPO_REMOTE}
-07057a,hlos,vgit_as,tsu_26my_release,tsu_26my_release,tsu_26my_release,honda/linux/build_tsu,nad/LGE/build_tsu,echo ${REPO_REMOTE} && echo ${REPO_RREV}
-07818a,hlos,vgit_na,tiger_tsu_23my_release,tiger_tsu_23my_release,tiger_tsu_23my_release,tiger/variant/services/ApplicationManagerService,nad/LGE/tiger-src/services/app-service,echo $REPO__$GROUP
-078202,hlos,vgit_na,tiger_tsu_23my_release,tiger_tsu_23my_release,tiger_tsu_23my_release,tiger/hal/location,nad/LGE/tiger-src/hal/location,
+REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPO_SCRIPT
+0143c0,sa515m:5g,vgit_na,sa515m_le2.3_release,vendor/qct/sa515m/clo/la/platform/external/compat-wireless,nad/sa515m/SA515M_apps/apps_proc/src/external/compat-wireless,echo ${!REPO_*}  >> $REPO_ROOT/a.txt
+015b2b,sa515m:5g,vgit_na,sa515m_le2.3_release,vendor/qct/sa515m/apps_proc/src/mcm-api,nad/sa515m/SA515M_apps/apps_proc/src/mcm-api,echo $REPO_PROJECT|xargs -n1 -I% sh -c 'echo $%'
+01d98a,sa515m:5g,vgit_na,sa515m_le2.3_release,vendor/qct/sa515m/clo/la/kernel/build,nad/sa515m/SA515M_apps/apps_proc/src/device/qcom/kernelscripts,"echo ""$REPO_PROJECT""|grep qct"
+02b04a,sa515m:5g,vgit_na,sa515m_le2.3_release,vendor/qct/sa515m/external/openembedded.org/meta-openembedded,nad/sa515m/SA515M_apps/apps_proc/poky/meta-openembedded,"echo ""${REPO_GROUP/:/    }"""
+0359cc,sa515m:5g,vgit_na,sa515m_le2.3_release,vendor/qct/sa515m/clo/la/platform/external/FreeRTOS/coreJSON,nad/sa515m/SA515M_apps/apps_proc/c2c/external/FreeRTOS/coreJSON,echo ${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}
+0381c9,hlos,vgit_na,tiger_desktop_release,tiger/build,nad/LGE/tiger-desktop/desktop-build,echo ${REPO_REMOTE}; echo ${REPO_RREV}
+067f2d,sa515m:5g,vgit_na,sa515m_le2.3_release,vendor/qct/sa515m/apps_proc/src/wlan-proprietary,nad/sa515m/SA515M_apps/apps_proc/src/wlan-proprietary,echo ${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_RREV}|grep vgit; echo ${REPO_REMOTE}
+07057a,hlos,vgit_as,tsu_26my_release,honda/linux/build_tsu,nad/LGE/build_tsu,echo ${REPO_REMOTE} && echo ${REPO_RREV}
+07818a,hlos,vgit_na,tiger_tsu_23my_release,tiger/variant/services/ApplicationManagerService,nad/LGE/tiger-src/services/app-service,echo $REPO_GROUP | tee -a $REPO_ROOT/a.txt
+78202,hlos,vgit_na,tiger_tsu_23my_release,tiger/hal/location,nad/LGE/tiger-src/hal/location,git remote -v
+82338,sa515m:5g,vgit_na,sa515m_le2.3_release,vendor/qct/sa515m/apps_proc/src/security,nad/sa515m/SA515M_apps/apps_proc/src/security,"if [[ ""$USER"" =~ ""vc.integrator"" ]]; then echo ""debug aaa"";else echo ""no""; fi"
