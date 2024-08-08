@@ -179,11 +179,13 @@ function reppmani(){
     case ${cmd} in
           db)   rm -f ${REPPFILE_CSV} ${REPPFILE_TXT} ${REPPFILE_JSON}; reppmanidb
     ;;script)   cd "$REPP_DIR"
-                echo "REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_UPSTREAM,REPO_DEST_BRANCH,REPO_RREV,REPO_PROJECT,REPO_PATH,REPO_SCRIPT" > "$REPPFILE_SCRIPT"
+                ## 추후 REPO_UPSTREAM,REPO_DEST_BRANCH가 필요하면 $4,$5를 넣어야 한다.
+                ## $REPO__$UPSTREAM, $REPO__$DEST_BRANCH, 
+                echo "REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPO_SCRIPT" > "$REPPFILE_SCRIPT"
                 ## change from a txt file with separator '|' but containing comma in item.
                 ##          to a csv file with separator ',' but containing semi-colon in item.
-                #cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=","; ORS="\n";}{print "\042\042\075\042"$1"\042","\042"$2"\042,"$3","$4","$5","$6","$7","$8}' >> "$REPPFILE_SCRIPT"
-                cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=",";}{gsub(/,/,";",$2);print "\042\042\075\042"$1"\042",$2","$3","$4","$5","$6","$7","$8}' >> "$REPPFILE_SCRIPT"
+                #cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=","; ORS="\n";}{print "\042\042\075\042"$1"\042","\042"$2"\042,"$3","$6","$7","$8}' >> "$REPPFILE_SCRIPT"
+                cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=",";}{gsub(/,/,":",$2);print "\042\042\075\042"$1"\042",$2","$3","$6","$7","$8}' >> "$REPPFILE_SCRIPT"
                 bar inline "$REPPFILE_SCRIPT"
                 clog "reppscript.csv file is generated" "you can put your commands reppscript.csv and then run by 'repp script'"
                 
@@ -301,7 +303,7 @@ function reppscript(){
 			 info) repo variables: $REPO_I, $REPO_COUNT 
 			                       $REPO_REMOTE, $REPO_PROJECT, $REPO_PATH
 			                       $REPO_LREV, $REPO_RREV
-			                       $REPO__$VARIABLE, $REPO__$UPSTREAM, $REPO__$DEST_BRANCH, $REPO__$GROUP, $REPO__$USER
+			                       $REPO__$VARIABLE, $REPO__$GROUP, $REPO__$ROOTDIR, $REPO__$USER
 			                       #not granteed: REPO_INNERPATH, REPO_OUTERPATH, REPO_UPSTREAM, REPO_DEST_BRANCH 
 
 			guide) example cmds REPO_SCRIPT column in reppscript.csv                                   
@@ -319,9 +321,17 @@ EOF
     esac
 
     local c t opt ask tempfile=$(mktemp)
-    #cat "$REPPFILE_SCRIPT" |sed 's/,/`/g'  > aa.txt
-    #cat "$REPPFILE_SCRIPT" |sed -e 's/,/`/g' -e 's/\r$//' >"$REPPFILE_SCRIPT".tmp
-    cat "$REPPFILE_SCRIPT"| awk 'BEGIN{FS=",";}{gsub(/("|=)/,"",$1);gsub(/\r/,"",$9);print $1"`"$2"`"$3"`"$4"`"$5"`"$6"`"$7"`"$8"`"$9}' > "$REPPFILE_SCRIPT".tmp
+    #change comman to backquato and replace carrige return to null
+    #gsub(/("|=)/,"",$1)          : change number to text    
+    #sed 's/,/`/g'                : change csv to txt
+    #gsub(/""/,"\"",$7)           : change csv string "" to normal "
+    #gsub(/\r/,"",$7)             : remove carrige return
+
+    cat "$REPPFILE_SCRIPT".csv| awk 'BEGIN{FS=",";}{gsub(/("|=)/,"",$1);gsub(/""/,"\"",$7);gsub(/\r/,"",$7);\
+      print $1"`"$2"`"$3"`"$4"`"$5"`"$6"`"$7}' > "$REPPFILE_SCRIPT".tmp
+
+    #cat "$REPPFILE_SCRIPT".csv| awk 'BEGIN{FS=",";}{gsub(/("|=)/,"",$1);gsub(/""/,"\"",$7);gsub(/\r/,"",$7);\
+    #  print $1"`"$2"`"$3"`"$4"`"$5"`"$6"`"$7}' > "$REPPFILE_SCRIPT".tmp
 
 
     ##read whole csv to array
@@ -335,25 +345,49 @@ EOF
         #oneline[8]=$(echo "${oneline[8]}"| sed -z 's/\n$//')
         #declare -p oneline        
         ## if 8th item is printable, it has command, so run them.
-        if [[ -n $(echo ${oneline[8]} | xargs) ]]; then
+        if [[ -n $(echo ${oneline[6]} | xargs) ]]; then
            ((t=t+1))
-           dlog "[$t] ${oneline[6]}" "repo forall ${oneline[6]} -vc bash -c ${oneline[8]}"
+           oneline[6]=$(printf "%b" "${oneline[6]}"| sed 's/^"\(.*\)"$/\1/')
+           bbar cyan "[$t] ${oneline[4]}" "${oneline[6]}\n"
         fi
     done
 
-    read -p $'\n\n[y:execute all |  enter:run 1 by 1 asking |  ctrl+c:break]' opt
+    read -p $'\n\n[go:execute all |  enter:run 1 by 1 asking |  ctrl+c:break] :' opt
     for ((c=1,t=0; c<${#arrayline[@]}; c++ )); do
         readarray -t -d\` oneline <<< "${arrayline[$c]}"
-        if [[ -n $(echo ${oneline[8]} | xargs) ]]; then
+        if [[ -n $(echo ${oneline[6]} | xargs) ]]; then
             ((t=t+1))
-            bar inline "$t] ${oneline[6]}" 
-            clog "repo forall ${oneline[6]} -vc bash -c" "${oneline[8]}"
-            ## if opt=y,    ask=enter: excute all at once
-            ## if opt=ener, ask=enter: execute 1 by one
-            ## if opt=ener, ask=value: skip one cmd
-            ## if    break, stop all
-            [ "$opt" = "" ] && read -p '[enter:run| other:skip| ctrl+c:break]' ask; 
-            [[ -z "$ask" ]] && GROUP="${oneline[1]}" UPSTREAM="${oneline[3]}" DEST_BRANCH="${oneline[4]}" repo forall ${oneline[6]} ${ask:+--interactive} -vc bash -c "${oneline[8]}"  || echo skipped && continue
+            oneline[6]=$(printf "%b" "${oneline[6]}"| sed 's/^"\(.*\)"$/\1/')
+            under "$t] ${oneline[4]}\n" 
+            bbar cyan "${oneline[5]}" "${oneline[6]}\n"
+            [ "$opt" = "" ] && read -p '[enter:run next| go:run all| other:skip next| ctrl+c:break all] :' ask; 
+            
+            ## prompt vs result separator -----------------------------------------
+            bbar cyan "" "\n"
+            ## if opt=go   , ask=any  : excute all at once
+            ## if opt=enter, ask=enter: execute 1 by one
+            ## if opt=enter, ask=value: skip one cmd, value is not 'go'
+            ## if opt=enter, ask=go   : execute leftover without asking
+            ## if     break, stop all : ctrl + c
+
+            if [ -z "$ask" ]; then pushd "$REPP_ROOT/${oneline[5]}"
+                #ROOTDIR="$REPP_ROOT" GROUP="${oneline[1]}" repo forall . ${ask:+--interactive} -evc bash -c "${oneline[6]}"
+                #bash -c "$(printf "%b" "REPO_ROOT="$REPP_ROOT" REPO_LREV="${oneline[0]}" REPO_GROUP="${oneline[1]}" REPO_REMOTE="${oneline[2]}" REPO_RREV="${oneline[3]}" REPO_PROJECT="${oneline[4]}" REPO_PATH="${oneline[5]}"; ${oneline[6]}")"
+                cat <<- EOF | bash -s
+                    REPO_ROOT="$REPP_ROOT"
+                    REPO_LREV="${oneline[0]}"
+                    REPO_GROUP="${oneline[1]}"
+                    REPO_REMOTE="${oneline[2]}"
+                    REPO_RREV="${oneline[3]}"
+                    REPO_PROJECT="${oneline[4]}"
+                    REPO_PATH="${oneline[5]}"
+                    ${oneline[6]}
+EOF
+                popd
+            elif [ "$ask" = "go" ]; then opt=go; ask=''
+            else
+                echo skipped && continue
+            fi
         fi
     done    
 }
