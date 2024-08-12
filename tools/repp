@@ -111,7 +111,7 @@ function getserver() {
             ;;    remote)    echo "${_item}"| awk -F[./:] '{print $1"_"$4}'                      # vgit_na
             ;;     debug)    echo "${_item}"                                                     # vgit.lge.com/na:29420
             ;;         *)    echo "NULL"                                                         # vgit.lge.com/na:29420
-            esac            
+            esac
             return 1
         fi
     done
@@ -178,23 +178,19 @@ function reppmani(){
 
     case ${cmd} in
           db)   rm -f ${REPPFILE_CSV} ${REPPFILE_TXT} ${REPPFILE_JSON}; reppmanidb
+    ;;    go)   gittgo mani
     ;;script)   cd "$REPP_DIR"
                 ## 추후 REPO_UPSTREAM,REPO_DEST_BRANCH가 필요하면 $4,$5를 넣어야 한다.
-                cat <<-GUIDE_CSV > "$REPPFILE_SCRIPT"
-				available variables: REPO_ROOT=$REPP_ROOT $REPO_LREV $REPO_GROUP $REPO_REMOTE $REPO_RREV $REPO_PROJECT $REPO_PATH $REPO_ROOT
-				not supported variable: REPO_I REPO_COUNT REPO_INNERPATH REPO_OUTERPATH REPO_UPSTREAM REPO_DEST_BRANCH
-				guide) example cmds REPO_SCRIPT column in reppscript.csv                                   
-                REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPO_SCRIPT
+				cat <<-GUIDE_CSV > "$REPPFILE_SCRIPT"
+				Refer, GUIDE:, ,http://collab.lge.com/main/display/~joongkeun.kim/reppscript
+				REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPO_SCRIPT
 GUIDE_CSV
-                ## change from a txt file with separator '|' but containing comma in item.
-                ##          to a csv file with separator ',' but containing semi-colon in item.
+                ## txt 파일인 $REPPFILE_CSV로 부터 구분자인 '|'와 콤마를 포함하는 파일을 ','를 구분자로 하고 semi-colon을 포함하는 csv로 file로 만드는 작업
                 #cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=","; ORS="\n";}{print "\042\042\075\042"$1"\042","\042"$2"\042,"$3","$6","$7","$8}' >> "$REPPFILE_SCRIPT"
                 cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=",";}{gsub(/,/,":",$2);print "\042\042\075\042"$1"\042",$2","$3","$6","$7","$8}' >> "$REPPFILE_SCRIPT"
                 bar inline "$REPPFILE_SCRIPT"
                 clog "reppscript.csv file is generated" "you can put your commands reppscript.csv and then run by 'repp script'"
-                
-                #REPO_WORK에 세미콜론으로 구분된 명령을 넣고 각 git마다 해당 명령을 실행하여 migration등의 작업을 처리할수 있도록 개발필요
-    ;;    go)   gittgo mani
+
     ;;  info)   ##get global variable and repo init command.
                 reppget_repcmd info
 
@@ -232,6 +228,7 @@ GUIDE_CSV
                 read -p "input option :" opt
                 if [[ ! "${opt}" =~ "--json" ]] || [[ ! "${opt}" =~ "-o" ]]; then opt+=" -o ${item:-${REPPFILE_XML}}"; fi
                 showRUN repo manifest ${opt} 2> /dev/null
+
     ;;change)   under "please run one of these 'repp mani change' commands to generate cmd to change manifest easily\n"
                 clog "usage)" "repp mani change <revision|name|path|remote|upstream|dest-branch|groups|dest|src|etc> <change-string> <filter>"
                 clog "\n   verifiy :" "cat \${REPPFILE_XML} | <cmd> | grep --color=auto ${str}"
@@ -265,9 +262,11 @@ CHANGE
                 clog 'ex)' 'repp mani diff event/230426_mig.xml event/230712_upstream.xml'
 
                 reppdiff diff "$item" "$str" "$filter"
+
     ;;  diffcheck)
                 bar inline "after repp mani check, if branch changed, find missing commits (this is useful in migration)"
                 reppdiff check "$item" "$str" "$filter"
+
     ;; help|*)   cat <<- EOF
 				usage) repp mani info                                     #show manifest info,structure,log,diff
 				usage) repp mani db                                       #force regenerate db by current manifest not reusing
@@ -295,19 +294,19 @@ EOF
 
 function reppscript(){
 ## ---------------------------------------------------------------------------
-# run command(.repp/reppwork.csv) as like repo for all 
-# 
+# run command(.repp/reppwork.csv) as like repo for all
+#
     ## change from a csv file with separator ',' but containing semi-colon in item.
     ##          to a txt file with separator '`' but containing seme-colon in item.
-    
+
     local cmd=$1
     case $cmd in
         help) cat <<- 'EOF'
 			usage) repp script
 			 info) repo variables: $REPO_LREV, $REPO_GROUP, $REPO_REMOTE, $REPO_RREV, $REPO_PROJECT, $REPO_PATH, $REPO_ROOT
-			                       #not supported: REPO_I, REPO_COUNT, REPO_INNERPATH, REPO_OUTERPATH, REPO_UPSTREAM, REPO_DEST_BRANCH 
+			                       #not supported: REPO_I, REPO_COUNT, REPO_INNERPATH, REPO_OUTERPATH, REPO_UPSTREAM, REPO_DEST_BRANCH
 
-			guide) example cmds REPO_SCRIPT column in reppscript.csv                                   
+			guide) example cmds REPO_SCRIPT column in reppscript.csv
 			echo REPO_PROJECT|xargs -n1 -I% sh -c 'echo $%'              #xargs
 			echo ${REPO_REMOTE} ; echo ${REPO_RREV}                      #multiple commands with ;
 			echo ${REPO_REMOTE} |grep -o vgit; echo ${REPO_REMOTE}       #multiple commands with |
@@ -316,44 +315,45 @@ EOF
         return 0
     esac
 
-    local c t opt ask 
+    local c t opt ask
     #change comman to backquato and replace carrige return to null
-    #gsub(/("|=)/,"",$1)          : change number to text    
+    #gsub(/("|=)/,"",$1)          : change number to text
     #sed 's/,/`/g'                : change csv to txt
     #gsub(/""/,"\"",$7)           : change csv string "" to normal "
     #gsub(/\r/,"",$7)             : remove carrige return
 
     cat "$REPPFILE_SCRIPT"| awk 'BEGIN{FS=",";}{gsub(/("|=)/,"",$1);gsub(/""/,"\"",$7);gsub(/\r/,"",$7);\
-      print $1"`"$2"`"$3"`"$4"`"$5"`"$6"`"$7}' > "$REPPFILE_SCRIPT".tmp
+        print $1"`"$2"`"$3"`"$4"`"$5"`"$6"`"$7}' > "$REPPFILE_SCRIPT".tmp
 
     ##read whole csv to array
-    readarray -t arrayline < <(tail -n +$(cat $REPPFILE_SCRIPT.tmp|grep -n ^REPO_LREV|cut -d':' -f1) $REPPFILE_SCRIPT.tmp) 
+    readarray -t arrayline < <(tail -n +$(cat $REPPFILE_SCRIPT.tmp|grep -n ^REPO_LREV|cut -d':' -f1) $REPPFILE_SCRIPT.tmp)
     ## start from row from line2, col from 1st col(watch $bash[0], awk[1]) !!
-    ## 먼저 내용을 보여주고, y를 입력하면 결과 실행
+    ## 먼저 실행할 내용을 보여주고
     for ((c=1,t=0; c<${#arrayline[@]}; c++ )); do
         ##read oneline to array
         readarray -t -d\` oneline <<< "${arrayline[$c]}"
         #oneline[8]=$(echo "${oneline[6]}"| sed -z 's/\n$//')
-        #declare -p oneline        
+        #declare -p oneline
         ## 만약 6번째 item이 print가능한 명령이 존재하면 명령을 보여줘라.
         if [[ -n $(echo ${oneline[6]} | xargs) ]]; then
-           
-           oneline[6]=$(printf "%b" "${oneline[6]}"| sed 's/^"\(.*\)"$/\1/')
-           bbar cyan "[$((t=t+1))] ${oneline[4]}" "${oneline[6]}\n"
+            oneline[6]=$(printf "%b" "${oneline[6]}"| sed 's/^"\(.*\)"$/\1/')
+            bbar cyan "[$((t=t+1))] ${oneline[4]}" "${oneline[6]}\n"
         fi
     done
 
+    ## go나 enter를 입력하면 결과 실행
+    ## arrayline에는 전체 $REPPFILE_SCRIPT 파일이 들어가있고, 거기서 1 line인씩 읽어 array oneline에 넣어서 처리함.
     read -p $'\n\n[go:execute all |  enter:run 1 by 1 asking |  ctrl+c:break] :' opt
     for ((c=1,t=0; c<${#arrayline[@]}; c++ )); do
         readarray -t -d\` oneline <<< "${arrayline[$c]}"
         if [[ -n $(echo ${oneline[6]} | xargs) ]]; then
-            
+
             oneline[6]=$(printf "%b" "${oneline[6]}"| sed 's/^"\(.*\)"$/\1/')
-            under "[$((t=t+1))] ${oneline[4]}\n" 
+            under "[$((t=t+1))] ${oneline[4]}\n"
             bbar cyan "${oneline[5]}" "${oneline[6]}\n"
-            [ "$opt" = "" ] && read -p '[enter:run next| go:run all| other:skip next| ctrl+c:break all] :' ask; 
-            
-            ## prompt vs result separator -----------------------------------------
+            [ "$opt" = "" ] && read -p '[enter:run next| go:run all| other:skip next| ctrl+c:break all] :' ask;
+
+            ## prompt와 result 구분라인----------------------------------------- 를 출력한다.
             bbar cyan "" "\n"
             ## if opt=go   , ask=any  : excute all at once
             ## if opt=enter, ask=enter: execute 1 by one
@@ -365,13 +365,7 @@ EOF
                 #ROOTDIR="$REPP_ROOT" GROUP="${oneline[1]}" repo forall . ${ask:+--interactive} -evc bash -c "${oneline[6]}"
                 #bash -c "$(printf "%b" "REPO_ROOT="$REPP_ROOT" REPO_LREV="${oneline[0]}" REPO_GROUP="${oneline[1]}" REPO_REMOTE="${oneline[2]}" REPO_RREV="${oneline[3]}" REPO_PROJECT="${oneline[4]}" REPO_PATH="${oneline[5]}"; ${oneline[6]}")"
                 cat <<- EOF | bash -s
-                    REPO_ROOT="$REPP_ROOT"
-                    REPO_LREV="${oneline[0]}"
-                    REPO_GROUP="${oneline[1]}"
-                    REPO_REMOTE="${oneline[2]}"
-                    REPO_RREV="${oneline[3]}"
-                    REPO_PROJECT="${oneline[4]}"
-                    REPO_PATH="${oneline[5]}"
+                    REPO_ROOT="$REPP_ROOT" REPO_LREV="${oneline[0]}" REPO_GROUP="${oneline[1]}" REPO_REMOTE="${oneline[2]}" REPO_RREV="${oneline[3]}" REPO_PROJECT="${oneline[4]}" REPO_PATH="${oneline[5]}"
                     ${oneline[6]}
 EOF
                 popd
@@ -380,7 +374,7 @@ EOF
                 echo skipped && continue
             fi
         fi
-    done    
+    done
 }
 
 
@@ -787,7 +781,7 @@ function reppmanidb(){
     if ! diff -q -B <(awk -v FS="|" '{print $1 $3 $6 $7 $8}' ${REPPFILE_CSV}) <(awk -v FS="|" '{print $1 $3 $6 $7 $8}' ${REPPFILE_CSV}.cmp) &>/dev/null ; then
         local tempfile=$(mktemp)
         warn "the json file of ${REPP_PATH}/${REPPFILE_MANI} has mismatch between 'manifest parsing' and 'repo variable'"
-        
+
         ##join from ${REPPFILE_CSV} and ${REPPFILE_CSV}.cmp
         if [ -s ${REPPFILE_JSON} ]; then
             clog "${REPPFILE_CSV}:" "normal case: generated by 'composition' manifest and repo";
@@ -798,7 +792,7 @@ function reppmanidb(){
             cp ${REPPFILE_CSV}.cmp ${REPPFILE_CSV};
         fi
     else
-        clog "${REPPFILE_CSV}:" "good case: generated by 'exactly same' repo and manifest"  
+        clog "${REPPFILE_CSV}:" "good case: generated by 'exactly same' repo and manifest"
     fi
 
     #cat ${REPPFILE_JSON}|jq -cC '.project[]|{groups,remote,upstream,"dest-branch",revision,name,path}'
@@ -863,7 +857,7 @@ function reppfind(){
 		   ex) cat \${REPPFILE_CSV}                         # cat output file
 		usage) repp find <@key> <string> <@printkey>       # print key colume for all repo
 		                 #key: @rev, @group, @remote, @branch, @project, @path, @up, @dest, @all
-		usage) repp find @all                              # print all raw columns for all repo                         
+		usage) repp find @all                              # print all raw columns for all repo
 		   ex) repp find @project                          # print project colume for all repo
 		   ex) repp find @remote                           # print all remote
 		   ex) repp find @remote na                        # print remote which including 'na' string
@@ -3014,7 +3008,7 @@ case "$1" in
     ;; find|list)   reppcheck_initvar repp              &&  reppfind "${@:2}"
     ;; branch)      reppcheck_initvar repp              &&  reppbranch "${@:2}"
     ;; mani)        reppcheck_initvar reppmani          &&  reppmani "${@:2}";
-    ;; script)      reppcheck_initvar repp              &&  reppscript "${@:2}";    
+    ;; script)      reppcheck_initvar repp              &&  reppscript "${@:2}";
     ;; init)        reppcheck_initvar repp              &&  reppinit "${@:2}"
     ;; sync)        reppcheck_initvar repp              &&  reppsync "${@:2}"
     ;; reset)       reppcheck_initvar repp              &&  reppreset "${@:2}"
