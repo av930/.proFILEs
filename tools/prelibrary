@@ -11,7 +11,7 @@
 red='\e[0;31m';     RED='\e[1;31m';     green='\e[0;32m';       GREEN='\e[1;32m';
 yellow='\e[0;33m';  YELLOW='\e[1;33m';  blue='\e[0;34m';        BLUE='\e[1;34m';
 cyan='\e[0;36m';    CYAN='\e[1;36m';    magenta='\e[0;35m';     brown='\e[0;33m';
-NCOL='\e[0m';       outline=${cyan};    inline=${yellow}; 
+NCOL='\e[0m';       outline=${cyan};    inline=${yellow};
 
 file_error=~/.repoconfig/repo.error
 
@@ -45,24 +45,24 @@ bar()    { printf "\n${!1}%s%s ${NCOL}\n" "${2:+[$2] }" "${_line:(${2:+3}+${#2})
 bbar()  { printf "${!1}%s%s ${NCOL}%b" "${2:+$2 }" "${_space:(${2:+3}+${#2})} " "$3" ;}
 
 
-under()  { 
+under()  {
     local temp="${1}" ; local ret=''
     if [ "${1:(-2)}" = "\n" ]; then temp=${temp::-2}; ret="\n"; fi
     printf "\n${green}〓〓〓   ${CYAN}%b${green}\n%b${NCOL}" "${temp}" "${linedb}${ret}";
 }
 
 
-function printToFILE(){ 
+function printToFILE(){
 ## ---------------------------------------------------------------------------
 ## printToFILE $(mktemp) title contents title-color
 ## $1: file, ## $2: head-msg, ## $3: content, ## $4: tail-msg
 
     case $1 in
     create) printfile=$(mktemp);;
-    flush) 
-        if [ -f "$printfile" ]; then 
+    flush)
+        if [ -f "$printfile" ]; then
             cat $printfile
-            rm -f $printfile; 
+            rm -f $printfile;
         fi ;;
     screen) printf "${yellow}%s %s ${NCOL}\n  %s\n" "$2" "${_line:${#2}}" "$3" ;;
     both) printf "${yellow}%s %s ${NCOL}\n  %s\n" "$2" "${_line:${#2}}" "$3" 2>&1 | tee -a $printfile;;
@@ -78,20 +78,20 @@ function showRUN(){ echo "\$> $@"; "$@" ; return $?; }
 # usage: showRUN repo sync -qcj${njobs:-16} --no-tags --no-clone-bundle $1
 
 
-function showRUNQ(){ 
+function showRUNQ(){
 ## ---------------------------------------------------------------------------
 # show command before execution
 # $1: command
 # usage: showRUN repo sync -qcj${njobs:-16} --no-tags --no-clone-bundle $1
-    if [ "$1" = y ]; then 
-        echo "\$ ${@:2}"; 
-        read -p "choose [y:continue| ctrl+c:break] : " 
-        #if [ "$REPLY" == 'y' ]; then "eval ${@:2}" ; fi 
-        if [ "$REPLY" == 'y' ]; then eval "${@:2}" ; fi 
+    if [ "$1" = y ]; then
+        echo "\$ ${@:2}";
+        read -p "choose [y:continue| ctrl+c:break] : "
+        #if [ "$REPLY" == 'y' ]; then "eval ${@:2}" ; fi
+        if [ "$REPLY" == 'y' ]; then eval "${@:2}" ; fi
     else
-        echo "\$ ${@}"; 
+        echo "\$ ${@}";
         eval "${@}"
-    fi  
+    fi
 }
 
 
@@ -122,7 +122,7 @@ function checkifSHA(){
     case $1 in
       *[!0-9A-Fa-f]* | "" ) return 1 ;;
       * ) return 0;;
-    esac   
+    esac
 }
 
 
@@ -148,12 +148,12 @@ local cmd=$1 tag=$2 key=$3
             if (( 40 < ${#temp_var} )); then
                 echo ${temp_var}| openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 2> /dev/null
             else
-                if [[ -f $HOME/.key_$tag ]]; then cat $HOME/.key_$tag | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 
+                if [[ -f $HOME/.key_$tag ]]; then cat $HOME/.key_$tag | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey
                 else warn "key missing or server is incorrect";fi
                 declare -g "ENCODE_$tag=$( echo $key | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey )"
             fi
        ;;list|debug)  #list up keycode for debugging
-            declare -p |grep ENCODE 
+            declare -p |grep ENCODE
        ;;help|*)
             [ "$cmd" = help ] || err "please check your command"
             info "variable is live during session, file is live permanent"
@@ -162,11 +162,11 @@ local cmd=$1 tag=$2 key=$3
             echo "ex) save file for vgit : ende_code env vgit ejladf69a79f8d79fdsqd"
             echo "ex) save var for lamp  : ende_code en  lamp ejladf69a79f8d79fdsqd"
             echo "ex) save var for arti  : ende_code en  arti ejladf69a79f8d79fdsqd"
-            echo "ex) read key from lamp : ende_code de  lamp" 
-            
-            echo "list of current registered key"
-            echo "$(ls -al ~/.key_*)" 
-             
+            echo "ex) read key from lamp : ende_code de  lamp"
+
+            bar inline "list of current registered key"
+            echo "$(ls -al ~/.key_*)"
+
     esac
 }
 
@@ -243,8 +243,8 @@ function print_menu() {
 # called from run_menu
 
     local menu_items=("$@")
-    local menu_limit=$(( ${#menu_items[@]} - 1 ))  
-    
+    local menu_limit=$(( ${#menu_items[@]} - 1 ))
+
     printf "${yellow}<< choose with arrow ←↑↓→ or num-key>>${NCOL}\n"
     printf "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
     for (( i = 0; i < $menu_limit; ++i ))
@@ -258,7 +258,7 @@ function print_menu() {
 
 
 function __run_menu() {
-## --------------------------------------------------------------------------- 
+## ---------------------------------------------------------------------------
 # refresh menu when cursor move and number input
 
     menu_selected=""
@@ -268,7 +268,7 @@ function __run_menu() {
 
     clear
     print_menu "${menu_items[@]}"
-    
+
     while read -rsn1 input
     do
         case "$input" in
@@ -297,10 +297,10 @@ function __run_menu() {
                 read -rsn5 -t 0.1  ;;# flushing stdin
             "")  # Enter key
                 menu_selected=${menu_items[${menu_items[$menu_limit]}]}
-                return $(( 11 + ${menu_items[$menu_limit]} )) 
+                return $(( 11 + ${menu_items[$menu_limit]} ))
                 ;;
             *)  menu_selected=${menu_items[$input]}
-                return "$input" 
+                return "$input"
                 ;;
         esac
     done
@@ -308,7 +308,7 @@ function __run_menu() {
 
 
 function run_menu() {
-## --------------------------------------------------------------------------- 
+## ---------------------------------------------------------------------------
 # refresh menu when cursor move and number input
 
     menu_selected=""
@@ -318,7 +318,7 @@ function run_menu() {
 
     clear
     print_menu "${menu_items[@]}"
-    
+
     while read -rsn1 input
     do
         case "${input:0:1}" in
@@ -344,14 +344,14 @@ function run_menu() {
             "")  # Enter key
                 echo $input
                 menu_selected=${menu_items[${menu_items[$menu_limit]}]}
-                return $(( 11 + ${menu_items[$menu_limit]} )) 
+                return $(( 11 + ${menu_items[$menu_limit]} ))
                 ;;
-            ^[0-9]*$)  
-                echo $input            
+            ^[0-9]*$)
+                echo $input
                 read -rsn2 -t 1 input2
                 echo [${input}][${input2}]
                 menu_selected=${menu_items[${input}${input2}]}
-                return "${input}${input2}" 
+                return "${input}${input2}"
                 ;;
              *) read -rsn6   ;; # flushing stdin ;;
         esac
