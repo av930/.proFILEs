@@ -63,12 +63,12 @@ local cmd=$1 tag=$2 key=$3
             if (( 40 < ${#temp_var} )); then
                 echo ${temp_var}| openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 2> /dev/null
             else
-                if [[ -f $HOME/.key_$tag ]]; then cat $HOME/.key_$tag | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 
+                if [[ -f $HOME/.key_$tag ]]; then cat $HOME/.key_$tag | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey
                 else echo "key missing or server is incorrect";fi
                 declare -g "ENCODE_$tag=$( echo $key | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey )"
             fi
        ;;list|debug)  #list up keycode for debugging
-            declare -p |grep ENCODE 
+            declare -p |grep ENCODE
        ;;help|*)
             [ "$cmd" = help ] || echo "please check your command"
             echo "variable is live during session, file is live permanent"
@@ -77,13 +77,13 @@ local cmd=$1 tag=$2 key=$3
             echo "ex) save file for vgit : dock key env vgit ejladf69a79f8d79fdsqd"
             echo "ex) save var for lamp  : dock key en  lamp ejladf69a79f8d79fdsqd"
             echo "ex) save var for arti  : dock key en  arti ejladf69a79f8d79fdsqd"
-            echo "ex) read key from lamp : dock key de  lamp" 
-            echo 
-            echo 
+            echo "ex) read key from lamp : dock key de  lamp"
+            echo
+            echo
             echo "list of current registered key"
-            ls -al ~/.key_* 
+            ls -al ~/.key_*
             echo "scp ${account}@10.158.7.50:/data001/${account}/.key_* ~/"
-             
+
     esac
 }
 
@@ -101,18 +101,18 @@ function dockdown(){
     file_tar=$(mktemp)
     echo "please refer first: http://vgit.lge.com/na/gitweb?p=devops/scm/infra/devenv.git;a=tree;f=dockerfile;hb=HEAD";
     #git clone ssh://vgit.lge.com:29420/devops/scm/infra/devenv.git -b devops_release ${clone_path}
-        
+
     printf "${yellow}\n==================================================================================================="
     printf "\n      %s" "currently supported dockerfiles for projects"
     printf "\n---------------------------------------------------------------------------------------------------\n\n${NCOL}"
 
     if git -C "$1" rev-parse --is-inside-work-tree &> /dev/null ; then echo "you are in git project, cd other directory, retry 'dock down'"; exit 1; fi
-    
+
     listpath=( $(git archive --remote=ssh://vgit.lge.com:29420/devops/scm/infra/devenv.git devops_release:dockerfile -o ${file_tar} && tar -tf ${file_tar} | grep '.*/.*/$' ))
     printlist=$(declare -p listpath | sed 's/.*(\(.*\)).*/\1/')
     printf "%s\n" ${printlist}
     #git archive --remote=ssh://vgit.lge.com:29420/devops/scm/infra/devenv.git devops_release:dockerfile/honda/tsu . | tar -x -C .
-    
+
     read -p "input project [Ctrl+C(break)| Enter(git clone)| Number(download)]: " reply
     case $reply in
                '') echorun git clone ssh://vgit.lge.com:29420/devops/scm/infra/devenv.git -b devops_release clone_dock
@@ -124,13 +124,13 @@ function dockdown(){
 
 function list_repo(){
 ## ---------------------------------------------------------------------------
-    if [ -z "${KEY_ADMIN}" ]; then 
+    if [ -z "${KEY_ADMIN}" ]; then
         echo "input artifactory password first !!!"
         echo "permanant usage: 'dock key en  arti <KEY>' !!!"
         echo "temporary usage: 'dock key env arti <KEY>' !!!"
         exit 1
     fi
-    
+
     local i=0 printlist
     # Read the files of a directory
     #echo "curl -su 'admin':${KEY_ADMIN}  ${repo_url}/artifactory/api/docker/devops-docker/v2/_catalog"
@@ -160,7 +160,7 @@ function dockerhub(){
             list_repo
             read -p "must input image name [Number]: " input_img
             curl -su 'admin':${KEY_ADMIN}  ${repo_url}/artifactory/api/docker/devops-docker/v2/${listimg[${input_img}]}/tags/list |jq -C
-            
+
             read -t 5 -p "default tag is latest otherwise input tag[2s]:" input_tag
             if [ -z "$input_img" ]; then echo you have to input image number; return; fi
             echorun docker pull ${repo_url}/devops-docker/${listimg[${input_img}]}:${input_tag:=latest}
@@ -242,23 +242,23 @@ function docklist(){
 # $1: ps|images|vol|list
 # $2: detail option
     $DEBUG "[$1] [$2] [$3]"
-    local cmd=$1 option=$2 
+    local cmd=$1 option=$2
     local format_img format_ps format_vol
-    format_img='{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|' 
+    format_img='{{.CreatedAt}}|{{.Size}}|{{.ID}}|{{.Tag}}|{{.Repository}}|'
      format_ps='{{.CreatedAt}}|{{.Ports}}|{{.State}}|{{.Status}}|{{.ID}}|{{.Names}}|{{.Image}}|'
     [ "$option" = "--size" ] && format_ps=${format_ps/"{{.Status}}"/"{{.Status}}|{{.Size}}"}
     format_vol='{{.Driver}}|{{.Mountpoint}}|{{.Name}}|'
-    
+
     #echo "[$1] [$2] [$3]"
-    
+
     case $cmd in
         image|images)   formatprint docker images --format "$format_img" ${@:2}
         ;; ps)          formatprint docker ps --format "$format_ps" ${@:2}
         ;; vol|volume)  formatprint docker volume ls --format "$format_vol" ${@:2}
-        ;; *) 
-            formatprint docker images --format "$format_img" 
+        ;; *)
+            formatprint docker images --format "$format_img"
             formatprint docker ps --format "$format_ps"
-            formatprint docker volume ls --format "$format_vol" 
+            formatprint docker volume ls --format "$format_vol"
     esac
 }
 
@@ -270,7 +270,7 @@ function dockhello(){
     printf "${red}========== "${FUNCNAME[0]}" ========== ${NCOL}\n"
 
     DOC_F=dockerfile.hello
-    if ! [ -f "$DOC_F" ]; then 
+    if ! [ -f "$DOC_F" ]; then
         echo "make simplest dockerfile for test"
         echo "FROM ubuntu:18.04" > $DOC_F
         echo 'ENTRYPOINT ["/bin/bash", "-ex"]' >> $DOC_F
@@ -294,7 +294,7 @@ function dockbuild(){
 ## ---------------------------------------------------------------------------
 
     local tmppath tmpfile
-    printf "\nplease refer current images when building images\n"    
+    printf "\nplease refer current images when building images\n"
     docklist images
 
     printf "${red}========== "${FUNCNAME[0]}" ========== ${NCOL}\n"
@@ -308,14 +308,14 @@ function dockbuild(){
     if [ "$cntr_file" = "" ];then cntr_file="${tmpfile:=Dockerfile}"; fi
     tmppath=$(readlink -f $cntr_file);
     if [ "${tmppath%/*}" = "${HOME}" ];then
-        printf "${red}This jois is not permitted in $HOME directory.${NCOL}\n" 
+        printf "${red}This jois is not permitted in $HOME directory.${NCOL}\n"
         printf "make new dir, place [$cntr_file] there and continue" && exit 0;
 
     fi
     if [ "$cntr_img" = "" ];then cntr_img=$today; fi
     echorun DOCKER_BUILDKIT=1 docker build --progress=plain -f ${cntr_file} -t ${cntr_img,,} . "$@" |& tee -a log.docker
-    
-    
+
+
     printf "docker build log is saved to ./log.docker"
 }
 
@@ -327,7 +327,7 @@ function dockstart(){
 
     local recent_name=$(docker images --format '{{.Repository}}'|head -1)
 
-    if [ -n "$(docker ps -q --filter "status=exited")" ]; then 
+    if [ -n "$(docker ps -q --filter "status=exited")" ]; then
         read -p "this is stopped container, you can restart it manually, 'docker restart <container>'"
         docker ps --filter "status=exited"
     fi
@@ -345,21 +345,21 @@ function dockstart(){
         return 0
     fi
 
-    read -p "input Port [Port Number| Enter:${cntr_port}]: " 
+    read -p "input Port [Port Number| Enter:${cntr_port}]: "
     [ -n "${REPLY}" ] && cntr_port="${REPLY}"
 
     list_port=( $(docker ps --format '{{.Ports}}'|sed 's/.*:\([0-9]*\)->.*/\1/') )
-    if [[ "${list_port[*]}" =~ "$cntr_port" ]]; then    
+    if [[ "${list_port[*]}" =~ "$cntr_port" ]]; then
         local i=7000
         while (( i < 10000 )); do
             if [[ ! "${list_port[*]}" =~ "$i" ]]; then cntr_port="$i"; break; fi
             ((i=i+10))
-        done    
+        done
     fi
 
     # create dirs&files in advanced, if not, these dir&file is created for root account.
     sudo -u ${account} mkdir -p ${home_dir}/Docker_MountDIR ${home_dir}/mirror ${home_dir}/.jfrog
-    touch ${home_dir}/.ssh ${home_dir}/.profile ${home_dir}/.bashrc ${home_dir}/.gitconfig 
+    touch ${home_dir}/.ssh ${home_dir}/.profile ${home_dir}/.bashrc ${home_dir}/.gitconfig
 
     ## warning
     ## if mount with ro, file is another copy from start
@@ -404,13 +404,13 @@ function dockstoprm(){
     [ -z "${cntr_name}" ] && return
     echorun docker stop ${cntr_name}
 
-    vol=$(docker container inspect -f '{{range .Mounts}}{{if eq .Type "volume"}}{{println .Name}}{{end}}{{end}}' $cntr_name)    
+    vol=$(docker container inspect -f '{{range .Mounts}}{{if eq .Type "volume"}}{{println .Name}}{{end}}{{end}}' $cntr_name)
     read -p "remove container?  [enter:continue| ctrl+c:exit]: "
     echorun docker rm ${cntr_name}
 
     if [ -n "${vol}" ]; then read -p "remove volume used in $cntr_name ? [continue:enter| ctrl+c:exit]: $vol"
     [ -z "${REPLY}" ] && echorun docker volume rm --force ${vol}
-    fi    
+    fi
 
     printf "\n\n"
 }
@@ -423,13 +423,13 @@ function dockrmi(){
     docklist images --all
     printf "${red}========== "$cmd" ========== ${NCOL}\n"
     printf "[docker rmi] command will be executed!! otherwise use [dock stop]\n"
-    
-    echo "Multiple image can be input with space ex) img1 img2 img3 ..."    
+
+    echo "Multiple image can be input with space ex) img1 img2 img3 ..."
     read -p "must input Image ID/Repository or enter [ImageID| Repository]: " list_img
     docker rmi ${list_img}
 
     if [ $? -ne 0 ]; then
-        read -p "docker rmi ${REPLY} --force [Enter:${REPLY}| Ctrl+C]: " 
+        read -p "docker rmi ${REPLY} --force [Enter:${REPLY}| Ctrl+C]: "
         if [ "$REPLY" = "" ]; then
             docker rmi ${list_img} --force
         fi
@@ -491,11 +491,11 @@ function dockclean(){
 
     #ask by confirm in docker system prune
     docker system prune --all
-    
+
     echo "docker image prune --filter [label|until]"
     echo "docker image prune --filter="label=maintainer=joongkeun.kim@lge.com" #created image label with"
     echo "docker image prune --filter "until=120m" #created image for recent 120 min"
-    
+
     printf "\nprune is done\n"
     printf "current total docker container is: " && docker ps --all -q | wc -l
     printf "current total docker images is: "    && docker images --all -q | wc -l
@@ -518,14 +518,14 @@ function dockenter(){
 ##https://github.com/jpetazzo/nsenter/
 ##https://jpetazzo.github.io/2015/01/13/docker-mount-dynamic-volumes/
     local IMPORTENV PID ENVIRON OPTS LAZY_SUDO
-    
+
     if ! command -v nsenter > /dev/null ; then echo "nsenter is not existed"; exit 1; fi
 
     IMPORTENV=$PATH_DIR/importenv
     PID=$(docker inspect --format "{{.State.Pid}}" "$1")
     ENVIRON="/proc/$PID/environ"
     OPTS="--target $PID --mount --uts --ipc --net --pid "
-    
+
     [ -z "$PID" ] && exit 1
     shift
 
@@ -554,8 +554,8 @@ function dockcmd(){
 ## ---------------------------------------------------------------------------
 # 도커에 진입하지 않고 도커외부에서 docker 없는 명령을 실행시킨다.
     local cntr_name cmd path_host path_real file_sys DEV MOUNT JUNK SUBROOT SUBPATH DEVDEC
-    
-    docklist ps 
+
+    docklist ps
     printf "${red}========== "${FUNCNAME[0]}" ========== ${NCOL}\n"
     read -p "must input Container [Name]: " cntr_name
     read -p "command [default:mount| othercmd]: " cmd
@@ -596,7 +596,7 @@ function dockcmd(){
 
 function dockcopy(){
 ## ---------------------------------------------------------------------------
-    if [ -z "${cntr_name}" ];then 
+    if [ -z "${cntr_name}" ];then
         docklist ps
     read -p "must input Container [Name| ID]: " cntr_name;
     fi
@@ -639,9 +639,9 @@ ${NCOL} "
 }
 
 MENU=(
-    'list(img&cntr)' 'build(dockerfile)' 'start(run++ img)' 'exec(attach cntr)' 
-    'hello(testimg)' 'run(just run)' 'stop(&rm ctnr)' 'remove(rm img)' 'clean(prune all)' 
-    'debug(log)' 'find(in arti)' 'pull(from arti)' 'push(to arti)' 'down(dockerfile)' 
+    'list(img&cntr)' 'build(dockerfile)' 'start(run++ img)' 'exec(attach cntr)'
+    'hello(testimg)' 'run(just run)' 'stop(&rm ctnr)' 'remove(rm img)' 'clean(prune all)'
+    'debug(log)' 'find(in arti)' 'pull(from arti)' 'push(to arti)' 'down(dockerfile)'
     'cmd(exe docker)' 'copy(between host)' 'help'
 )
 

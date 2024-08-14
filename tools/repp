@@ -83,10 +83,27 @@ EOF
 }
 
 
+
 VGIT="vgit.lge.com"
 LAMP="lamp.lge.com"
 GERRIT=( "${VGIT}/na:29420" "${VGIT}/eu:29430" "${VGIT}/as:29440" "${VGIT}/adas:29550" "${VGIT}/devops_test:29999" "${LAMP}/review:29418" )
-function getserver() {
+function listserver() { declare -p GERRIT |sed -E 's#(\(|\)|\[)#\n\1#g';}
+function  addserver() {
+## ---------------------------------------------------------------------------
+    local url=$1 port=$2 ret=0
+    url=${url/%\//}
+    [[ "$url" =~ "http" ]] && { err "[${url/http*\/\//}] input url without http(s) "; ret=1;}
+    [[ "$url" =~ ":"    ]] && { err "please remove colon(:)"; ret=1;}
+    [[ ! "$url" =~ "/"  ]] && url="$url/none"
+
+    (( ret == 1 )) && { clog "please input as following format:" "addserver vgit.lge.com/na 29420";return 1;}
+
+    [[ ! "${GERRIT[*]}" =~ "$url:$port" ]] && GERRIT+=("$url:$port")
+    clog "added successfully" "$url:$port\n"
+    listserver
+}
+
+function  getserver() {
 ## ---------------------------------------------------------------------------
 ## return remote (gerrit server) info as a various type
 ## format: getserver [29420|na|vgit|lamp|review] [port|http|sub|domain|subdomain|path|url|remote|debug]
@@ -100,7 +117,7 @@ function getserver() {
 
     for _item in ${GERRIT[@]};do
         if [[ "${_item##*/}" =~ "${search_key}" ]] && [[ -n "${search_key}" ]]; then
-            case $return_type in                                                                       # return value
+            case $return_type in                                                                 # return value
                     http)    echo "${_item}"| awk -F[./:] '{print "http://"$1"."$2"."$3"/"$4}'   # http://vgit.lge.com/na
             ;;      port)    echo "${_item}"| awk -F[./:] '{print $5}'                           # 29420
             ;;       sub)    echo "${_item}"| awk -F[./:] '{print $1}'                           # vgit
@@ -485,9 +502,9 @@ function reppget_repcmd(){
         REPPFILE_MANI=default.xml
     fi
 
-    if [ -n "$REPP_GROUPS" ] && [[ ! "${EXTRA_OPTION}" =~ "--groups" ]] ;then EXTRA_OPTION="--groups=$REPP_GROUPS "; fi
+    if [ -n "$REPP_GROUPS" ] && [[ ! "${EXTRA_OPTION}" =~ "--groups"    ]] ;then EXTRA_OPTION="--groups=$REPP_GROUPS " ; fi
     if [ -n "$REPP_REF" ]    && [[ ! "${EXTRA_OPTION}" =~ "--reference" ]] ;then EXTRA_OPTION+="--reference=$REPP_REF "; fi
-    if [ -n "$REPP_MIRR" ]   && [[ ! "${EXTRA_OPTION}" =~ "--mirror" ]] ;then EXTRA_OPTION+="--mirror "; fi
+    if [ -n "$REPP_MIRR" ]   && [[ ! "${EXTRA_OPTION}" =~ "--mirror"    ]] ;then EXTRA_OPTION+="--mirror "             ; fi
 
 
     if [ "$1" = "info" ];then
@@ -1577,6 +1594,8 @@ function gitt_initvar(){
 
 
 function revv_initvar(){
+## ---------------------------------------------------------------------------
+# find repo, gitt, review variable
     local server=$1
     local ret=0
     #default initial gerrit API key is na (vgit_na).
@@ -2100,6 +2119,7 @@ function gittreset(){
 EOF
     esac
 }
+
 
 
 ## revv ======================================================================================================================
