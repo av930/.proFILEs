@@ -32,7 +32,7 @@ else
 
 fi
 
-if grep -q docker /proc/1/cgroup; then
+if grep -q docker /proc/1/cgroup 2>/dev/null; then
     PS1="\n${debian_chroot:+($debian_chroot)}$red\u@${HOSTNAME}:$yellow\$PWD\[$NCOL\$\n\$ "
 fi
 
