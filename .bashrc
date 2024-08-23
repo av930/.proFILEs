@@ -188,6 +188,7 @@ alias llt='_bar time-base; ls -agohrt'
 alias lld='_lld(){ _bar "time-base dir-only"; ls -arthlp -d $1*/; }; _lld'
 alias ll='_bar time-base all-file; ls -alrthF --color=auto --show-control-chars'
 alias dir='ls -al -F --color=auto| grep /'
+alias tree='tree  --charset ascii -L '
 alias grep='grep --color=auto'
 alias grep${TAG}='_grep(){ CMD grep --color=auto --exclude-dir={.git,.byobu,tempdir} -rn $@ ;}; _grep'
 alias grepalias='alias | egrep -i --color=auto'
@@ -209,7 +210,7 @@ function __findgrep() {
         echo "you should go topdir first !!"
         echo "ex) findgrep .txt string"
     fi
-    find . \( -name "*/*.repo" -o -name "*/*.git" \) -prune -o -name "*$1*" | xargs grep -rn --color "$2"
+    find . \( -name ".repo" -o -name ".git" \) -prune -o -name "*$1*" | xargs grep -rn --color "$2"
 }
 
 alias greppro='__greppro'
