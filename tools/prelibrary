@@ -126,53 +126,6 @@ function checkifSHA(){
 }
 
 
-function ende_code(){
-## ---------------------------------------------------------------------------
-# encoding as variable: code env <keyname> <key>
-# encoding as file: code en <keyfile> <key>
-# decode de <keyfile>
-local temp temp_var
-local cmd=$1 tag=$2 key=$3
-    case $cmd in
-            en) [ -z "${key}" ] && ende_code help
-    ;; dev|def) [ -z "${tag}" ] && ende_code help
-    esac
-
-    case $cmd in
-         env) #encrypt to ENCODE_$tag
-            declare -g "ENCODE_$tag=$( echo $key | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey )"
-       ;; en) #encrypt to ~/.key_$tag
-            echo $( echo $key | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey ) > $HOME/.key_$tag
-       ;; de) #decrypt from ENCODE_$tag, if error, decrypt from ~/.key_$tag
-            temp=ENCODE_$tag;
-            temp_var=${!temp} #must be indirect reference
-            if (( 40 < ${#temp_var} )); then
-                echo ${temp_var}| openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 2> /dev/null
-            else
-                if [[ -f $HOME/.key_$tag ]]; then cat $HOME/.key_$tag | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey
-                else warn "key missing or server is incorrect";fi
-                declare -g "ENCODE_$tag=$( echo $key | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey )"
-            fi
-       ;;list|debug)  #list up keycode for debugging
-            declare -p |grep ENCODE
-       ;;help|*)
-            [ "$cmd" = help ] || err "please check your command"
-            info "variable is live during session, file is live permanent"
-            echo "en/decoding as variable: ende_code env <keyname> <key>, ende_code de <key_id>"
-            echo "en/decoding as file    : ende_code en <keyfile> <key>, ende_code de <key_id>"
-            echo "ex) save file for vgit : ende_code env vgit ejladf69a79f8d79fdsqd"
-            echo "ex) save var for lamp  : ende_code en  lamp ejladf69a79f8d79fdsqd"
-            echo "ex) save var for arti  : ende_code en  arti ejladf69a79f8d79fdsqd"
-            echo "ex) read key from lamp : ende_code de  lamp"
-
-            bar inline "list of current registered key"
-            echo "$(ls -al ~/.key_*)"
-
-    esac
-}
-
-
-
 function  getserver() {
 ## ---------------------------------------------------------------------------
 ## return remote (gerrit server) info as a various type
@@ -180,7 +133,8 @@ function  getserver() {
 ## exception: vgitxxx lampxxx will return only postfix after delimter _
 ##            aaa-bbb같이 -를 포함하는 sub은 -앞의 string(aaa)만 사용한다.
 
-    local _item=$(serverinfo de $1 |awk -F '|' '{print $2}')
+    local key=$1
+    local _item=$(serverinfo de $key |awk -F '|' '{print $2}')
     local return_type=$2
 
     case ${return_type} in                                                                    # return value
@@ -192,6 +146,7 @@ function  getserver() {
     ;;      path)    echo "${_item#*://}"| awk -F[./:] '{print $4}'                           # na
     ;;       url)    echo "${_item#*://}"| awk -F[./:] '{$4="/"$4;gsub(/\/none_.*/,"",$4);print $1"."$2"."$3$4}'            # vgit.lge.com/na
     ;;    remote)    echo "${_item#*://}"| awk -F[./:] '{print $1"_"$4}'                      # vgit_na
+    ;;      pass)    serverinfo de $key  | awk -F '|'  '{print $4}'                           # N4lIA0SoQAoUfxlmCZudjNA12344
     ;;     debug)    echo "${_item}"                                                          # http://vgit.lge.com/na:29420
     ;;         *)    echo "NULL";                                                             # vgit.lge.com/na:29420
     esac
@@ -250,7 +205,7 @@ EOF
 
     ;;  de) #~/.key_server.en에서 server정보를 획득해온다.
             if [ -f $HOME/.key_server.en ]; then
-                temp_var=$(cat $HOME/.key_server.en | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey | awk -v tag="$tag" -F '[[:space:]]+\\|' '$1 ~ tag{print $0}' )
+                temp_var=$(cat $HOME/.key_server.en | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey | awk -v tag="$tag" -F '[[:space:]]+\\|' '$1$2 ~ tag{print $0}' )
                 if [ -n "$temp_var" ];then echo $temp_var;
                 else err "matched http key is not existed or incorrect!";
                     clog "guide" "run '$FUNCNAME edit' and edit proper server info in .key_server"
@@ -273,8 +228,8 @@ EOF
 			serverinfo   en             #after edit .key_server, encrypt it to .key_server.en
 			serverinfo edit             #encrypted .key_server.en is decryped to .key_server to edit
 			serverinfo   de vgit_na     #search vgit_na server and get info of it from .key_server.en
-            serverinfo show             #show current server info from .key_server.en
-            serverinfo debug            #check all formats of getserver api
+			serverinfo show             #show current server info from .key_server.en
+			serverinfo debug            #check all formats of getserver api
 EOF
     esac
 }
