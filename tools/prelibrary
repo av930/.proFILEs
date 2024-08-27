@@ -144,7 +144,8 @@ local cmd=$1 tag=$2 key=$3
        ;; en) #encrypt to ~/.key_$tag
             echo $( echo $key | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey ) > $HOME/.key_$tag
        ;; de) #decrypt from ENCODE_$tag, if error, decrypt from ~/.key_$tag
-            temp=ENCODE_$tag; temp_var=${!temp} #must be indirect reference
+            temp=ENCODE_$tag;
+            temp_var=${!temp} #must be indirect reference
             if (( 40 < ${#temp_var} )); then
                 echo ${temp_var}| openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 2> /dev/null
             else
@@ -167,6 +168,114 @@ local cmd=$1 tag=$2 key=$3
             bar inline "list of current registered key"
             echo "$(ls -al ~/.key_*)"
 
+    esac
+}
+
+
+
+function  getserver() {
+## ---------------------------------------------------------------------------
+## return remote (gerrit server) info as a various type
+## format: getserver [29420|na|vgit|lamp|review] [port|http|sub|domain|subdomain|path|url|remote|debug]
+## exception: vgitxxx lampxxx will return only postfix after delimter _
+##            aaa-bbb같이 -를 포함하는 sub은 -앞의 string(aaa)만 사용한다.
+
+    local _item=$(serverinfo de $1 |awk -F '|' '{print $2}')
+    local return_type=$2
+
+    case ${return_type} in                                                                    # return value
+            http)    echo "${_item%:*}"                                                       # http://vgit.lge.com/na
+    ;;      port)    echo "${_item##*:}"                                                      # 29420
+    ;;       sub)    echo "${_item#*://}"| awk -F[./:] '{sub(/-.*/,"",$1);print $1}'          # vgit
+    ;;    domain)    echo "${_item#*://}"| awk -F[./:] '{print $2"."$3}'                      # lge.com
+    ;; subdomain)    echo "${_item#*://}"| awk -F[./:] '{print $1"."$2"."$3}'                 # vgit.lge.com
+    ;;      path)    echo "${_item#*://}"| awk -F[./:] '{print $4}'                           # na
+    ;;       url)    echo "${_item#*://}"| awk -F[./:] '{$4="/"$4;gsub(/\/none_.*/,"",$4);print $1"."$2"."$3$4}'            # vgit.lge.com/na
+    ;;    remote)    echo "${_item#*://}"| awk -F[./:] '{print $1"_"$4}'                      # vgit_na
+    ;;     debug)    echo "${_item}"                                                          # http://vgit.lge.com/na:29420
+    ;;         *)    echo "NULL";                                                             # vgit.lge.com/na:29420
+    esac
+
+}
+
+
+function test_getserver() {
+## ---------------------------------------------------------------------------
+## check all format is well printed
+## print remote (gerrit server) info for all supported format
+
+    for _item in $(serverinfo show |awk -F '|' 'NR>1{print $1}');do
+        for _test in http port sub domain subdomain path url remote debug;do
+            bbar cyan "${_item##*/}:$_test"  "$(getserver "${_item##*/}" "$_test")\n"
+        done
+    done
+}
+
+
+function serverinfo(){
+## ---------------------------------------------------------------------------
+# encoding as variable: code env <keyname> <key>
+# encoding as file: code en <keyfile> <key>
+# decode de <keyfile>
+local temp temp_var
+local cmd=$1 tag=$2 key=$3
+    case $cmd in
+       gen) #default server 접속정보 파일인 ~/.key_server를 생성한다.
+            clog ".key_server" "is generated, \nplease add your server info with http key from: https://gerrit.url.com/settings/#HTTPCredentials\n"
+        cat <<-EOF  >.key_server
+			REMOTE,KEY   |URL to GERRIT                          |ACCOUNT         |HTTP KEY
+			vgit_na      |http://vgit.lge.com/na:29420           |vc.integrator   |ex)N4lIA0SoQAoUfxlmCZudjNA1
+			vgit_eu      |http://vgit.lge.com/eu:29430           |vc.integrator   |~~~
+			vgit_as      |http://vgit.lge.com/as:29440           |vc.integrator   |~~~
+			vgit_adas    |http://vgit.lge.com/adas:29550         |vc.integrator   |
+			devops_test  |http://vgit.lge.com/devops_test:29999  |vc.integrator   |
+			review       |http://lamp.lge.com/review:29418       |vc.integrator   |
+EOF
+        cat .key_server
+
+    ;;  en) #~/.key_server.en 로 암호화한다.
+            if [ -f $HOME/.key_server ]; then
+                clog "$HOME/.key_server.en" "is created from encrypting $HOME/.key_server"
+                cat $HOME/.key_server | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey > $HOME/.key_server.en
+                rm -f $HOME/.key_server
+            else
+                clog "$HOME/.key_server.en" "could be edit by '$FUNCNAME edit' [$HOME/.key_server]"
+                err "You must create server connection info, use '$FUNCNAME gen'"; return 1
+            fi
+
+    ;;edit) #~/.key_server.en으로 부터 ~/.key_server를 생성하여 편집할수 있게 해준다.
+            cat $HOME/.key_server.en | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey >$HOME/.key_server
+            clog "$HOME/.key_server" "is decrypted from $HOME/.key_server.en"
+            [ -f "$HOME/.key_server" ] && cat $HOME/.key_server || { err "You must create server connection info, use '$FUNCNAME gen'"; return 1; }
+
+    ;;  de) #~/.key_server.en에서 server정보를 획득해온다.
+            if [ -f $HOME/.key_server.en ]; then
+                temp_var=$(cat $HOME/.key_server.en | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey | awk -v tag="$tag" -F '[[:space:]]+\\|' '$1 ~ tag{print $0}' )
+                if [ -n "$temp_var" ];then echo $temp_var;
+                else err "matched http key is not existed or incorrect!";
+                    clog "guide" "run '$FUNCNAME edit' and edit proper server info in .key_server"
+                    return  1;
+                fi
+            else
+                err "You must create server connection info, use '$FUNCNAME gen'"; return 1
+            fi
+
+    ;;show)  #현재 .key_server파일을 보여준다.
+            [ ! -f $HOME/.key_server ] && "You must create server connection info, use '$FUNCNAME gen'"
+            cat $HOME/.key_server.en | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey
+    ;;debug) #getserver 함수 test용으로 모든 format대로 제대로 출력하는지 확인할수 있다.
+            test_getserver
+    ;;help|*) cat <<- 'EOF'
+			usage) serverinfo <cmd> <option>
+
+			guide) example cmds REPO_SCRIPT column in reppscript.csv
+			serverinfo  gen             #generate template .key_server file to edit
+			serverinfo   en             #after edit .key_server, encrypt it to .key_server.en
+			serverinfo edit             #encrypted .key_server.en is decryped to .key_server to edit
+			serverinfo   de vgit_na     #search vgit_na server and get info of it from .key_server.en
+            serverinfo show             #show current server info from .key_server.en
+            serverinfo debug            #check all formats of getserver api
+EOF
     esac
 }
 
