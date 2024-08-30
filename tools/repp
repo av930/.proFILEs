@@ -2067,6 +2067,7 @@ EOF
 
 
 ## revv ======================================================================================================================
+JSON_IDFY=")]}'"
 function revvcheck_server(){
 ## ---------------------------------------------------------------------------
 # check gerrit is permitted for input user on git project > branch
@@ -2086,6 +2087,7 @@ function revvcheck_server(){
     fi
     #$DEBUG ["$server"]["$port"]
 
+    [ "${flag}" = "log" ] && info "curl -su ${user}:${key} ${server}/a/config/server/version |sed '1d'| jq -cC '.'"
     REVV_VER=$(curl -su ${user}:${key} ${server}/a/config/server/version |sed '1d'| jq -cC '.')
     if ! [[ "${REVV_VER}" =~ [2-9].[0-9].[0-9]* ]]; then REVV_VER='NA'; err "gerrit is not working, please check"; return 1; fi
 
@@ -2232,22 +2234,25 @@ function revvaccount(){
 ## ---------------------------------------------------------------------------
 
 # read information from gerrit
-# $1 account
+# $1 account (from 'revv account')
 # $2 server
 # $3 gitproject
 # $4 branch
     local cmd=$1
     local subcmd=$2
     local server=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
-    local key=$(getServer $(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub) pass)
+    local sub=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub)
+    local key=$(getServer $sub pass)
+    local user=$(getServer $sub user)
     local source=${3:-$USER}
     local target=$4
     local extra=$5
     local file=$(mktemp)
+    local out
 
 
     #local branch=$4
-
+    [ -z "$user" ] && user=$ACCOUNT
     local SEP='~'
     case ${cmd}${SEP}${subcmd} in
            *~help)
@@ -2264,46 +2269,55 @@ function revvaccount(){
 			usage) revv groupmem  na sa515m_reviewer  joongkeun.kim            # check member is in group and its sub-groups
 EOF
     ;;      user~*)
-            if [ "$extra" != "none" ]; then
-                bar inline "check if account is existed & get account info "
-            fi
-            curl -su ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${source} |sed '1d'| jq '.'
+            [ "$extra" != "none" ] && bar inline "check if account is existed & get account info "
+            curl -su ${user}:${key} ${server}/a/accounts/?suggest\&q=${source} |sed '1d'| jq '.'
 
             if [ "$extra" != "none" ]; then
                 bar inline "list group name which account belongs to"
-                curl -su ${ACCOUNT}:${key} ${server}/a/accounts/${source}/groups |sed '1d'| jq -cC '.[]|{name, created_on}' | more -60
+                curl -su ${user}:${key} ${server}/a/accounts/${source}/groups |sed '1d'| jq -cC '.[]|{name, created_on}' | more -60
             fi
 
     ;;    sshkey~*)
             info "config: " "${server}/na/settings/#SSHKeys"
             bar outline "get registered SSH-key for account [${source}] in server [$server]"
-            curl -su ${ACCOUNT}:${key} ${server}/a/accounts/${source}/sshkeys |sed '1d'| jq -cC '.[]|{ssh_public_key, comment}'
+            #curl -su ${user}:${key} ${server}/a/accounts/${source}/sshkeys |sed '1d'| jq -cC '.[]|{ssh_public_key, comment}'
+            out=$(curl -su ${user}:${key} ${server}/a/accounts/${source}/sshkeys)
+            if [ "$(echo "${out}" | head -1)" = "${JSON_IDFY}" ];
+            then echo "$out"| sed '1d'| jq -cC '.[]|{ssh_public_key, comment}'
+            else err "$out"
+            fi
 
     ;;  groupadd~*)
             bar outline "add member to group"
-            curl -su ${ACCOUNT}:${key} ${server}/a/groups/${source}/members/${target} -X PUT
+            curl -su ${user}:${key} ${server}/a/groups/${source}/members/${target} -X PUT
 
     ;;  groupdel~*)
             bar outline "delete member from group"
-            curl -su ${ACCOUNT}:${key} ${server}/a/groups/${source}/members/${target} -X DELETE
+            curl -su ${user}:${key} ${server}/a/groups/${source}/members/${target} -X DELETE
 
     ;; groupmem~*)
             bar outline "find member from group"
-            curl -su ${ACCOUNT}:${key} ${server}/a/groups/${source}/members|grep ${target}
+            curl -su ${user}:${key} ${server}/a/groups/${source}/members|grep ${target}
 
-    ;;     group~*)
+    ;;    group~*)
             if [ "$extra" != "none" ]; then
                 info "config: " "${server}/admin/groups/q/filter:${source}"
                 info "please visit url for creating & removing user/group"
                 bar inline "find group by name"
             fi
-            curl -su ${ACCOUNT}:${key} ${server}/a/groups/?m=${source} |sed '1d'| jq '.'
+            #curl -su ${user}:${key} ${server}/a/groups/?m=${source} |sed '1d'| jq '.'
+            out=$(curl -su ${user}:${key} ${server}/a/groups/?m=${source})
+            if [ "$(echo "${out}" | head -1)" = "${JSON_IDFY}" ];
+            then echo "$out"| sed '1d'| jq '.'
+            else err "$out"
+            fi
 
             if [ "$extra" != "none" ]; then
+                #gerrit에 대한 permission은 위 처리로 충분하여 아래는 예외처리를 하지 않았다.
                 bar inline "list sub-group by ${source} group"
-                curl -su ${ACCOUNT}:${key} ${server}/a/groups/${source}/groups/ |sed '1d'| jq -c '.[]|{name, created_on}'
+                curl -su ${user}:${key} ${server}/a/groups/${source}/groups/ |sed '1d'| jq -c '.[]|{name, created_on}'
                 bar inline "show group member by ${source} group to its decendents"
-                curl -su ${ACCOUNT}:${key} ${server}/a/groups/${source}/members?recursive |sed '1d'| jq -cC '.[]|{name, email}'  | more -60
+                curl -su ${user}:${key} ${server}/a/groups/${source}/members?recursive |sed '1d'| jq -cC '.[]|{name, email}'  | more -60
             fi
 
     ;;*)    err "please check command ex)revv user help, revv group help"
@@ -2323,7 +2337,9 @@ function revvproject(){
     local cmd=$1
     local subcmd=$2
     local server=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
-    local key=$(getServer $(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub) pass)
+    local sub=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub)
+    local key=$(getServer $sub pass)
+    local user=$(getServer $sub user)
     local project=$3
     local url_gerrit="${server}/a/projects/${project//'/'/'%2F'}"
     local parent=$4
@@ -2332,6 +2348,7 @@ function revvproject(){
 
 
     #local branch=$4
+    [ -z "$user" ] && user=$ACCOUNT
     local SEP='~'
     case ${cmd}${SEP}${subcmd} in
            *~help)
@@ -2347,19 +2364,19 @@ function revvproject(){
 EOF
     ;;projectadd~*)
             bar inline "check if project already existed"
-            local temp=$(curl -su ${ACCOUNT}:${key} $url_gerrit |sed '1d' | jq -cC '.name')
+            local temp=$(curl -su ${user}:${key} $url_gerrit |sed '1d' | jq -cC '.name')
             if [ -n "${temp}" ]
             then err "[${temp}] already legacy project existed" && return 1;
             else clog "passed, no legacy project" "ok, continue to create"
             fi
 
             if [ -n "${parent}" ]; then
-                temp=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${parent//'/'/'%2F'} |sed '1d' | jq -cC '.name')
+                temp=$(curl -su ${user}:${key} ${server}/a/projects/${parent//'/'/'%2F'} |sed '1d' | jq -cC '.name')
                 if [ -z "${temp}" ]; then err "but no parent project, stop to create"; return 1; fi
             fi
 
             bar inline "add new project inherited All-projects(default), and create emtpy master"
-            curl -su ${ACCOUNT}:${key} $url_gerrit -H "Content-Type:application/json" \
+            curl -su ${user}:${key} $url_gerrit -H "Content-Type:application/json" \
                  --data "{\"description\":\"revvcreate\",\"parent\":\"${parent:-'All-Projects'}\", \"create_empty_commit\":true }" \
                  -X PUT |sed '1d' > $file
             clog "result for creaing project: "
@@ -2367,7 +2384,7 @@ EOF
 
     ;;projectdel~*)
             bar inline "check if project already existed"
-            local temp=$(curl -su ${ACCOUNT}:${key} $url_gerrit |sed '1d' | jq -cC '.name')
+            local temp=$(curl -su ${user}:${key} $url_gerrit |sed '1d' | jq -cC '.name')
             if [ -n "${temp}" ]
             then clog "[${temp}] already legacy project existed" "ok, please remove manually"
             else err "no existing project, stopped" && return 1
@@ -2380,33 +2397,33 @@ EOF
 
     ;;projectparent~*)
             bar inline "check if project already existed"
-            local temp=$(curl -su ${ACCOUNT}:${key} $url_gerrit |sed '1d' | jq -cC '.name')
+            local temp=$(curl -su ${user}:${key} $url_gerrit |sed '1d' | jq -cC '.name')
             [ -z "${temp}" ] && { clog "[${temp}] already legacy project not existed"; return 1; }
 
             if [ -n "${parent}" ]; then
-                temp=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${parent//'/'/'%2F'} |sed '1d' | jq -cC '.name')
+                temp=$(curl -su ${user}:${key} ${server}/a/projects/${parent//'/'/'%2F'} |sed '1d' | jq -cC '.name')
                 if [ -z "${temp}" ]; then err "but no parent project, stop to create"; return 1; fi
             fi
 
             bar inline "changing parent of project"
             [ -z "${parent}" ] && (warn "git created whose parent is All-project(default)" && return 0)
-            curl -su ${ACCOUNT}:${key} $url_gerrit/parent -H "Content-Type: application/json" --data "{\"parent\":\"${parent}\"}" -X PUT > $file
+            curl -su ${user}:${key} $url_gerrit/parent -H "Content-Type: application/json" --data "{\"parent\":\"${parent}\"}" -X PUT > $file
             clog "result for changing parent: "
             cat $file| sed '1d'| jq . | more -60
             printf "\n\n"
 
     ;;  project~*)
-            dnlog "[gerrit url] gerrit cli:" "curl -su ${ACCOUNT}:${key} $url_gerrit | sed '1d'| jq  -cC '.[]'"
+            dnlog "[gerrit url] gerrit cli:" "curl -su ${user}:${key} $url_gerrit | sed '1d'| jq  -cC '.[]'"
 
             info "config: " "${server}/admin/repos/${project}"
             bar inline "find project and show project url"
-            curl -su ${ACCOUNT}:${key} ${server}/a/projects/?m=${project} |sed '1d' > $file
+            curl -su ${user}:${key} ${server}/a/projects/?m=${project} |sed '1d' > $file
             clog "matching project: "  $(cat $file| jq -c 'keys[]')
             cat $file| jq --arg jq_var "${server}/admin/repos/" -c '"src: http://" + $jq_var + .[].web_links[].url'
 
             bar inline "parent-project info"
-            curl -su ${ACCOUNT}:${key} $url_gerrit |sed '1d' | jq -cC '.|{name,parent}'
-            curl -su ${ACCOUNT}:${key} $url_gerrit/access |sed '1d' > $file
+            curl -su ${user}:${key} $url_gerrit |sed '1d' | jq -cC '.|{name,parent}'
+            curl -su ${user}:${key} $url_gerrit/access |sed '1d' > $file
             cat $file| jq --arg jq_var "${server}/admin/repos/" -c '"config: " + $jq_var + .inherits_from.name'
 
             bar inline "grand parent-project info"
@@ -2421,7 +2438,7 @@ EOF
             cat $file| jq -C .local
 
             bar inline "child-project info inherited from ${project}, plz wait..."
-            curl -su ${ACCOUNT}:${key} $url_gerrit/children/?recursive| sed '1d'| jq  -cC '.[].name' | more -60
+            curl -su ${user}:${key} $url_gerrit/children/?recursive| sed '1d'| jq  -cC '.[].name' | more -60
             printf "\n\n"
     ;;*)    err "please check command ex)revv project help"
     esac
@@ -2439,7 +2456,10 @@ function revvaccess(){
     local cmd=$1
     local subcmd=$2
     local server=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
-    local key=$(getServer $(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub) pass)
+    local sub=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub)
+    local key=$(getServer $sub pass)
+    local user=$(getServer $sub user)
+
     local project=$3
     local url_gerrit="${server}/a/projects/${project//'/'/'%2F'}"
     local branch=$3 #^refs/heads/26my_migg_.*
@@ -2448,7 +2468,7 @@ function revvaccess(){
     local extra=$5
     local file=$(mktemp)
 
-
+    [ -z "$user" ] && user=$ACCOUNT
     local SEP='~'
     case ${cmd}${SEP}${subcmd} in
        help~*)  cat <<-EOF
@@ -2459,7 +2479,7 @@ function revvaccess(){
 
 				 info) repp connect help : you can check your basic access permission for a git.
 EOF
-    ;; access~*) curl -su ${ACCOUNT}:${key} $url_gerrit/access |sed '1d' > $file
+    ;; access~*) curl -su ${user}:${key} $url_gerrit/access |sed '1d' > $file
                 bar inline "show inherit parent permission git and grandparent"
                 cat $file|jq  '.inherits_from|del(.web_links)'
                 bar inline "show permission setting in current git"
@@ -2505,7 +2525,7 @@ EOF
         }}}}
 TEMP_JSON
 
-        showRUNQ y curl -su ${ACCOUNT}:${key} $url_gerrit/access -H "Content-Type:application/json" -d @temp.json -X POST
+        showRUNQ y curl -su ${user}:${key} $url_gerrit/access -H "Content-Type:application/json" -d @temp.json -X POST
 
     ;; *) echo "default functionality"
     esac
@@ -2524,14 +2544,16 @@ function revvbranch(){
     local cmd=$1
     local subcmd=$2
     local server=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
-    local key=$(getServer $(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub) pass)
+    local sub=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub)
+    local key=$(getServer $sub pass)
+    local user=$(getServer $sub user)
     local source=${3:-$USER}
     local target=$4
     local extra=$5
 
 
     #local branch=$4
-
+    [ -z "$user" ] && user=$ACCOUNT
     local SEP='~'
     case ${cmd}${SEP}${subcmd} in
            *~help|*~)
@@ -2547,16 +2569,16 @@ EOF
     ;;branchadd~*)
             bar inline "create branch with base revision"
             if [ -z "${extra}" ]; then read -p "input base branch which new branch is created from: ";fi
-            showRUNQ y curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -H "Content-Type:application/json" --data "{"revision":"${extra:-${REPLY}}"}"  -X PUT
+            showRUNQ y curl -su ${user}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -H "Content-Type:application/json" --data "{"revision":"${extra:-${REPLY}}"}"  -X PUT
 
     ;;branchdel~*)
             bar inline "delete branch by name"
-            showRUNQ y curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -X DELETE
+            showRUNQ y curl -su ${user}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -X DELETE
             clog "if cannot delete branch, use cli with force option" "git push vgit_na HEAD:refs/heads/tsu_26my_release -f"
 
     ;;   branch~*)
             bar inline "find branches by name"
-            curl -su ${ACCOUNT}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/?m=${target} | sed '1d'| jq  -cC '.[]|{ref,revision}' | more -60
+            curl -su ${user}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/?m=${target} | sed '1d'| jq  -cC '.[]|{ref,revision}' | more -60
 
     ;;*)    err "please check command ex)revv branch help"
     esac
@@ -2575,23 +2597,27 @@ function revvcommit(){
     local cmd=$1
     local subcmd=$2
     local server=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
-    local key=$(getServer $(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub) pass)
+    local sub=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub)
+    local key=$(getServer $sub pass)
+    local user=$(getServer $sub user)
+
     local source=${3:-$USER}
     local target=$4
     local extra=$5
     local file=$(mktemp)
 
     #local branch=$4
+    [ -z "$user" ] && user=$ACCOUNT
     case ${cmd} in
        find)
-            local change_id=$(curl -su ${ACCOUNT}:${key} ${server}/a/changes/${source} |grep -oP '(?<=change_id": ").*(?=")')
+            local change_id=$(curl -su ${user}:${key} ${server}/a/changes/${source} |grep -oP '(?<=change_id": ").*(?=")')
             if [ -z "${change_id}" ]; then
                 err "NOT Found in $server change_id for commit_id [${source}]"
                 echo "this commit is not in this gerrit system."
                 clog "info:" "it could bue direct pushed commit or maybe in other servers"
                 return 1;
             fi
-            curl -su ${ACCOUNT}:${key} ${server}/a/changes/?q=${change_id}| sed '1d' > ${file}
+            curl -su ${user}:${key} ${server}/a/changes/?q=${change_id}| sed '1d' > ${file}
 
             local pro branch changenumber path
             under "commit & user info from gerrit server\n"
@@ -2728,13 +2754,17 @@ function revvshowcmd(){
 # $3 gitproject
 # $4 branch
     local cmd=$1
-    local server=$(getServer ${cmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
-    local key=$(getServer $(getServer ${GITT_REMOTE:-${REPP_REMOTE}} sub) pass)
+    local server=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
+    local sub=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub)
+    local key=$(getServer $sub pass)
+    local user=$(getServer $sub user)
+
     local usercmd=${2-${USER}}
     local oriproject=${3:-${GITT_PROJECT:-${REPP_PROJECT}}}
     local gitproject=${oriproject//'/'/'%2F'}
     #local branch=$4
 
+    [ -z "$user" ] && user=$ACCOUNT
     case ${cmd} in
        help)    cat <<-EOF
 				usage) revv cmd help                                    #show account info from gerrit server
@@ -2745,46 +2775,46 @@ function revvshowcmd(){
 				   ex) revv cmd
 EOF
             bar outline "info gerritserver: show gerrit account"
-            showRUN curl -su ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${usercmd} |more
+            showRUN curl -su ${user}:${key} ${server}/a/accounts/?suggest\&q=${usercmd} |more
 
     ;; *)
             bar outline "show gerrit account commands"
             cat <<-EOF
-			## check if <user> account is existed           ex) curl -su ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${usercmd}| more
-			## list group <user> belongs to                 ex) curl -su ${ACCOUNT}:${key} ${server}/a/accounts/${usercmd}/groups |sed '1d'| jq  '.[].name'| sort |more
-			## find group which has string <group-name>     ex) curl -su ${ACCOUNT}:${key} ${server}/a/groups/?m=<group-name>
+			## check if <user> account is existed           ex) curl -su ${user}:${key} ${server}/a/accounts/?suggest\&q=${usercmd}| more
+			## list group <user> belongs to                 ex) curl -su ${user}:${key} ${server}/a/accounts/${usercmd}/groups |sed '1d'| jq  '.[].name'| sort |more
+			## find group which has string <group-name>     ex) curl -su ${user}:${key} ${server}/a/groups/?m=<group-name>
 
-			## show group member for <group-name>           ex) curl -su ${ACCOUNT}:${key} ${server}/a/groups/<group-name>/members?recursive
-			## list sub-group in <group-name>               ex) curl -su ${ACCOUNT}:${key} ${server}/a/groups/<group-name>/groups/
-			## add account to group                         ex) curl -su ${ACCOUNT}:${key} ${server}/a/groups/<group-name>/members/${usercmd} -X PUT
-			## check account is existed in <group-name>     ex) curl -su ${ACCOUNT}:${key} ${server}/a/groups/<group-name>/members|grep ${usercmd}
-			## remote accout from group                     ex) curl -su ${ACCOUNT}:${key} ${server}/a/groups/<group-name>/members/${usercmd} -X DELETE
-			## get ssh-key for specific account             ex) curl -su ${ACCOUNT}:${key} ${server}/a/accounts/${usercmd}/sshkeys
+			## show group member for <group-name>           ex) curl -su ${user}:${key} ${server}/a/groups/<group-name>/members?recursive
+			## list sub-group in <group-name>               ex) curl -su ${user}:${key} ${server}/a/groups/<group-name>/groups/
+			## add account to group                         ex) curl -su ${user}:${key} ${server}/a/groups/<group-name>/members/${usercmd} -X PUT
+			## check account is existed in <group-name>     ex) curl -su ${user}:${key} ${server}/a/groups/<group-name>/members|grep ${usercmd}
+			## remote accout from group                     ex) curl -su ${user}:${key} ${server}/a/groups/<group-name>/members/${usercmd} -X DELETE
+			## get ssh-key for specific account             ex) curl -su ${user}:${key} ${server}/a/accounts/${usercmd}/sshkeys
 EOF
             bar outline "show gerrit project which name has <project-name>"
             cat <<-EOF
-			##find git project named <gitproject>           ex) curl -su ${ACCOUNT}:${key} ${server}/a/projects/?m=${gitproject:-"<project-name>"}
-			##find labels, parents[id], basic info          ex) curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}
-			##find child projects of <project name>         ex) curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/children/?recursive| sed '1d'| jq  '.[].name'
+			##find git project named <gitproject>           ex) curl -su ${user}:${key} ${server}/a/projects/?m=${gitproject:-"<project-name>"}
+			##find labels, parents[id], basic info          ex) curl -su ${user}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}
+			##find child projects of <project name>         ex) curl -su ${user}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/children/?recursive| sed '1d'| jq  '.[].name'
 EOF
             bar outline "show gerrit branch which name has <branch-name>"
             cat <<-EOF
-			##list branches including named <branch>        ex) curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/branches/?m=<branch-name>
-			##remove branch                                 ex) curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/branches/<branch-name> -X DELETE
-			##create branch with base revision              ex) curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/branches/<branch-name> -H "Content-Type: application/json" --data '{"sha": "049405ab2885e6c6844b212f83b43f835c904"}'  -X PUT
+			##list branches including named <branch>        ex) curl -su ${user}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/branches/?m=<branch-name>
+			##remove branch                                 ex) curl -su ${user}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/branches/<branch-name> -X DELETE
+			##create branch with base revision              ex) curl -su ${user}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/branches/<branch-name> -H "Content-Type: application/json" --data '{"sha": "049405ab2885e6c6844b212f83b43f835c904"}'  -X PUT
 EOF
             bar outline "show gerrit tag which name has ${tag}"
             cat <<-EOF
-			##list tag named <tag-name>                     ex) curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/tags?m=<tag-name>
-			##show tag date, tag revision, committer        ex) curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/tags/<tag-name>
+			##list tag named <tag-name>                     ex) curl -su ${user}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/tags?m=<tag-name>
+			##show tag date, tag revision, committer        ex) curl -su ${user}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/tags/<tag-name>
 EOF
             bar outline "show gerrit commit with branch info"
             cat <<-EOF
-			##show commit msg with data, author, committer  ex) curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/commits/<full-sha-code>
-			##show branches that commit beloings to         ex) curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/commits/<full-sha-code>/in
-			##show files that commit has changed            ex) curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/commits/<full-sha-code>/files
-			##show all hashtaged commit                     ex) curl -su ${ACCOUNT}:${key} ${server}/a/changes/?q=hashtag
-			##show hastag with HITT or TAT2                 ex) curl -su ${ACCOUNT}:${key} ${server}/a/changes/?q=hashtag:HITT+OR+hashtag:TAT2
+			##show commit msg with data, author, committer  ex) curl -su ${user}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/commits/<full-sha-code>
+			##show branches that commit beloings to         ex) curl -su ${user}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/commits/<full-sha-code>/in
+			##show files that commit has changed            ex) curl -su ${user}:${key} ${server}/a/projects/${gitproject:-"<project-name>"}/commits/<full-sha-code>/files
+			##show all hashtaged commit                     ex) curl -su ${user}:${key} ${server}/a/changes/?q=hashtag
+			##show hastag with HITT or TAT2                 ex) curl -su ${user}:${key} ${server}/a/changes/?q=hashtag:HITT+OR+hashtag:TAT2
 EOF
     esac
 }
