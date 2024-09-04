@@ -161,8 +161,10 @@ function test_getServer() {
 ## ---------------------------------------------------------------------------
 ## check all format is well printed
 ## print remote (gerrit server) info for all supported format
-
-    for _item in $(serverInfo show |awk -F '|' 'NR>1{print $1}');do
+## awk print 2nd line to last-1 line
+#serverInfo show |awk -F '|' 'NR>1{print $1}'
+    for _item in $(serverInfo show |awk -F '|' 'NR>2 {print last} {last=$1}');do
+        revvcheck_server $_item log
         for _test in http port sub domain subdomain path url remote debug;do
             bbar cyan "${_item##*/}:$_test"  "$(getServer "${_item##*/}" "$_test")\n"
         done

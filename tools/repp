@@ -138,7 +138,12 @@ function reppmani(){
 
 
     case ${cmd} in
-          db)   rm -f ${REPPFILE_CSV} ${REPPFILE_TXT} ${REPPFILE_JSON}; reppmanidb
+          db)   rm -f ${REPPFILE_CSV} ${REPPFILE_TXT} ${REPPFILE_JSON};
+                if ! reppmanidb; then
+                    warn "DB is not generated well, please check error"
+                    under "${REPPFILE_TXT}\n manifest info is generated for simple use, using only manifest git without 'repo sync'\n"
+                    repo manifest --json 2> /dev/null | jq -jr '.project[]|.revision,"|",.groups,"|",.remote,"|",.upstream,"|",."dest-branch","|",.name,"|",.path,"|\n"' > ${REPPFILE_TXT}
+                fi
     ;;    go)   gittgo mani
     ;;script)   cd "$REPP_DIR"
                 ## 추후 REPO_UPSTREAM,REPO_DEST_BRANCH가 필요하면 $4,$5를 넣어야 한다.
@@ -662,10 +667,10 @@ function reppmanidb(){
 
     ## generate json from manifest, #suppress all log for generation json
     [ -d ${REPP_DIR} ] || mkdir ${REPP_DIR}
-    repo manifest -r --json -o ${REPPFILE_JSON}  &> /dev/null
+    repo manifest -r --json -o ${REPPFILE_JSON}
     if (( "$(reppversion ver 2>/dev/null)" > 220 )) && ! [ -s ${REPPFILE_JSON} ]; then
-        err "check if you are in mirror repo, use source repo not mirror "
-        err "or failed by manifest error, check with 'repo manifest -r --json'"
+        warn "check if you are in mirror repo, use source repo not mirror
+        or failed by manifest error, check with 'repo manifest -r --json'"
     fi
 
     ## get <default> from json
@@ -2203,6 +2208,24 @@ function revvcheck_permission(){
 }
 
 
+function test_getServer() {
+## ---------------------------------------------------------------------------
+## check all format is well printed
+## print remote (gerrit server) info for all supported format
+## awk print 2nd line to last-1 line
+#serverInfo show |awk -F '|' 'NR>1{print $1}'
+    local cmd=$1
+    for _item in $(serverInfo show |awk -F '|' 'NR>2 {print last} {last=$1}');do
+        if [ "$cmd" = test ]||[ "$cmd" = info ]; then revvcheck_server $_item log; fi
+
+        if [ "$cmd" = test ]; then
+        for _test in http port sub domain subdomain path url remote debug;do
+            bbar cyan "${_item##*/}:$_test"  "$(getServer "${_item##*/}" "$_test")\n"
+        done
+        fi
+    done
+}
+
 
 function revvinfo(){
 ## ---------------------------------------------------------------------------
@@ -2212,21 +2235,17 @@ function revvinfo(){
 # $3 gitproject
 # $4 branch
 
-    local server=${1:-na}
-    local remote=$(getServer $server sub)
-    local key=$(getServer $server pass)
-    local cmd=$2
-    local gitproject=${3//'/'/'%2F'}
+    local cmd=${1:-info}
     #local branch=$4
 
-    case ${usercmd} in
+    case ${cmd} in
        help)    cat <<-EOF
 				usage) revv info                                   #show gerrit POST command
 EOF
     ;; create|*new*)  showRUNQ echo "tempfunc"
     ;; list) echo tempfunc
-    ;; *) clog "$remote" "check connection with server"
-          revvcheck_server $server log
+    ;; *) clog "check gerrit" "connection with server"
+    test_getServer "$cmd"
     ;; esac
 }
 
