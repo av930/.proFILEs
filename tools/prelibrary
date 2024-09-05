@@ -218,8 +218,7 @@ EOF
             fi
 
     ;;debug) #getServer 함수 test용으로 모든 format대로 제대로 출력하는지 확인할수 있다.
-            test_getServer
-
+            test_getServer test
     ;;help) cat <<- 'EOF'
 			usage) serverinfo <cmd> <option>
 
