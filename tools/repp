@@ -141,8 +141,8 @@ function reppmani(){
           db)   rm -f ${REPPFILE_CSV} ${REPPFILE_TXT} ${REPPFILE_JSON};
                 if ! reppmanidb; then
                     warn "DB is not generated well, please check error"
-                    under "${REPPFILE_TXT}\n manifest info is generated for simple use, using only manifest git without 'repo sync'\n"
-                    repo manifest --json 2> /dev/null | jq -jr '.project[]|.revision,"|",.groups,"|",.remote,"|",.upstream,"|",."dest-branch","|",.name,"|",.path,"|\n"' > ${REPPFILE_TXT}
+                    under "${REPPFILE_TXT}\n manifest info is generated for simple use by using only manifest git without 'repo sync'\n"
+                    #repo manifest --json 2> /dev/null | jq -jr '.project[]|.revision,"|",.groups,"|",.remote,"|",.upstream,"|",."dest-branch","|",.name,"|",.path,"|\n"' > ${REPPFILE_TXT}
                 fi
     ;;    go)   gittgo mani
     ;;script)   cd "$REPP_DIR"
@@ -724,14 +724,17 @@ function reppmanidb(){
             lineout+="${item:+"${item}|"}"
         done <<< "${line}"
         $DEBUG "%s\n" "${lineout}"
+        #printf "%s\n" "${lineout}"
         #lineout+="${itemrrev}"
         mani_out+=(${lineout})
     done
 
     #declare -p mani_out
-    local prnmsg='%s|%12.12s|%8.8s|%-32.32s|%-74.74s|%.80s'
     printf "%s\n" "${mani_out[@]}" >  ${REPPFILE_CSV}
-    printf "${prnmsg}\n" ${mani_out[*]//|/ } >  ${REPPFILE_TXT}
+
+    #current
+    local prnmsg='%s|%12.12s|%8.8s|%-32.32s|%-32.32s|%-32.32s|%-74.74s|%.80s'
+    printf "${prnmsg}\n" ${mani_out[*]//|/ } > ${REPPFILE_TXT}
 
     ## RREV is created by upper logic
     ##NEEDTO improve: each field $1 $2 ... should be replaced $N_LREV $N_GROUP ...
