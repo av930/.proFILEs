@@ -55,7 +55,7 @@ export TAG='l'
 export allfile='* .[^.]*'
 export dotfile='.[^.]*'
 function CMD(){
-    echo "cmd: $@"; 
+    echo "cmd: $@";
     "$@" ;
 }
 
@@ -95,9 +95,9 @@ function update_history(){
     screen -X chdir "$PWD" &>/dev/null
     #history -c
 } #redirect log to null#  &>/dev/null
-#update_history 
+#update_history
 export PROMPT_COMMAND="update_history; $PROMPT_COMMAND"
-    
+
 shopt -s cmdhist
 shopt -s lithist
 
@@ -199,7 +199,8 @@ function __filegrep() {
     if [ -z "$1" ]; then
         echo "you should go topdir first !!"
         echo "cmd) rgrep --color --include="*file*" "string" ./;"
-        echo "ex) filegrep *.txt string"
+        echo "ex) filegrep .txt string"
+        return 1
     fi
     rgrep --color --include="*$1*" "$2" ./;
 }
@@ -209,6 +210,7 @@ function __findgrep() {
     if [ -z "$1" ]; then
         echo "you should go topdir first !!"
         echo "ex) findgrep .txt string"
+        return 1
     fi
     find . \( -name ".repo" -o -name ".git" \) -prune -o -name "*$1*" | xargs grep -rn --color "$2"
 }
