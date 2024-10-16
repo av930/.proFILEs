@@ -24,7 +24,7 @@ func_su(){
     "
 }
 
-alias sul="func_su"
+alias sul='_bar "auto su" ;func_su'
 if (( 8 < $(grep \/docker /proc/1/cgroup 2>/dev/null |wc -l)  )); then 
     eval $(cat ~/.bash_aliases | grep PS1SC) 
     [ -n "${PS1SC}" ] && PS1="${PS1SC}"
