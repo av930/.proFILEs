@@ -35,6 +35,9 @@ fi
 USR_FILE=${proFILEdir}/.profile
 if [ -f "${USR_FILE}" ]; then source "${USR_FILE}"; fi
 
+
+line="--------------------------------------------------------------------------------------"
+_bar() { printf "\n${YELLOW}%s${NCOL}%s \n" "${1:+$1 }" "${line:(${1:+2}+${#1})}" ;}
 ############################### RC setting  #####################################
 #Beware that most terminals override Ctrl+S to suspend execution until Ctrl+Q is entered.-
 #This is called XON/XOFF flow control. For activating forward-search-history,
@@ -88,8 +91,8 @@ function update_history(){
     history -a
     if [ -n "${STY}" ] && [ "${path}" != "${PWD}" ] ; then  #mean [ ${TERM} = 'screen' ]
         [ "${PWD}" = "${HOME}" ] \
-		&& printf "\033k%s\033\\" "HOME" \
-		|| printf "\033k%s\033\\" "${PWD##*/}"
+        && printf "\033k%s\033\\" "HOME" \
+        || printf "\033k%s\033\\" "${PWD##*/}"
         path=${PWD}
     fi
     screen -X chdir "$PWD" &>/dev/null
@@ -103,31 +106,33 @@ shopt -s lithist
 
 alias his='history 300| tail -60'
 alias hisgrep='cat ~/.bash_history | egrep -i --color=auto'
+alias his${TAG}='_bar "print history all session" ;_hisall'
+function _hisall(){
+    awk -F \\n '{         \
+    if ($0 ~ /^#[0-9]+/) {\
+    printf "%5d  %s ", ++i, strftime("%d/%m/%y %T", substr($1,2)); getline; print $0 \
+    }}' ~/.bash_history
+}
 
 ###############################
 #### screen alias
 
 # screen configuration
 # alias byobu='byobu -U $*'
-alias sc$ECHO='printf "Usage
-screen -U -c ${proFILEdir}/.screenrc -RR
-screen -dR -c ${proFILEdir}/.screenrc
-screen -ls | tail -n +2 | head -n -2 | awk {print $1} | xargs -I {} screen -S {} -X quit
-screen -U -R -c ${proFILEdir}/.screenrc_spilt
+alias sc$ECHO='_bar "Usage"; printf "
+    screen -U -c ${proFILEdir}/.screenrc -RR
+    screen -U -dR -c ${proFILEdir}/.screenrc ~/${proFILEdir}/scw
+    screen -ls | tail -n +2 | head -n -2 | awk {print $1} | xargs -I {} screen -S {} -X quit
+    screen -U -R -c ${proFILEdir}/.screenrc_spilt
 "'
 
 alias sc${TAG}='screen -ls'
 alias sc="screen -U -RR -c ~/.proFILEs/.screenrc ~/.proFILEs/scw"
-alias scr="screen -U -DR -c ~/.proFILEs/.screenrc ~/.proFILEs/scw"
-alias scx='kill_screen'
-
-function kill_screen()
-{
-    if [ "$1" != "" ]; then
-       #kill only one
+alias scx='_bar "kill all screen session"; _killscreen'
+function _killscreen(){
+    if [ "$1" != "" ]; then  #kill only one
        screen -S $1 -X quit
-    else
-       #kill all
+    else                     #kill all
        #alias scx="screen -ls | grep Detached | cut -f1 -d .| xargs -i screen -S {} -X quit"
        for var in $(screen -ls | grep Detached | cut -f1 -d .)
        do
@@ -138,34 +143,28 @@ function kill_screen()
 
 ###############################
 #### utility
-alias scp$ECHO='printf "Usage
-scp -p <port> <user>@<src-ip>:<full-path-filename> .
-scp filename -p <port> <user>@<dest-ip>:<full-path-dest-dir>/
-docker cp <container-id>:<full-path-filename> .
-docker cp <filename> <container-id>:<full-path-dest-dir>/
+alias scp$ECHO='_bar "Usage"; printf "
+    scp -p <port> <user>@<src-ip>:<full-path-filename> .
+    scp filename -p <port> <user>@<dest-ip>:<full-path-dest-dir>/
+    docker cp <container-id>:<full-path-filename> .
+    docker cp <filename> <container-id>:<full-path-dest-dir>/
 "'
 
-alias ssh$ECHO='printf "Usage
-ssh -p <port> <user>@<dest-ip>
-scp ${USER}@$CURR_IP:${HOME}/filename .
+alias ssh$ECHO='_bar "Usage; printf "
+    ssh -p <port> <user>@<dest-ip>
+    scp ${USER}@$CURR_IP:${HOME}/filename .
 "'
-alias ssh${TAG}='_sshl(){ echo "usage: sshl [port]" ; ssh -J localhost vc.integrator@localhost -p "$1" -t screen -dR ;}; _sshl'
-
-alias rsync$ECHO='printf "Usage
-rsync -auvht --exclude-from=exclude.txt --port=873 172.21.74.32::$USER/SRC_DIR/* .
-"'
-alias repo$ECHO='printf "Usage
-repo sync -qcj4 --no-tags --no-clone-bundle
-"'
+alias ssh${TAG}='_sshl(){ _bar "usage: sshl [port]" ; ssh -J localhost vc.integrator@localhost -p "$1" -t screen -dR ;}; _sshl'
+alias rsync$ECHO='_bar "usage: rsync -auvht --exclude-from=exclude.txt --port=873 172.21.74.32::$USER/SRC_DIR/* . "'
+alias repo$ECHO='_bar "usage: repo sync -qcj4 --no-tags --no-clone-bundle"'
 
 ###############################
 #### move
 #alias moveup='mv * .[^.]* ..'
 alias moveup='mv {.,}* .. > /dev/null'
-alias findrm='__findrm'
-function __findrm()
-{
-    if [ "$1" == "" ]; then echo [WARNING] plz input filename!!
+alias findrm='_bar "find file as name and remove them"; __findrm'
+function __findrm(){
+    if [ "$1" == "" ]; then printf "[WARNING] plz input filename!!"
     else find . -name "$1" -exec rm -rf \{\} \;
     fi
 }
@@ -176,9 +175,9 @@ alias catl${TAG}='_catll(){ cat -nA "$1"| more ;}; _catll'
 alias cdcd='_cdcd(){ mkdir -p "$1"; cd "$1" ;}; _cdcd'
 
 #### find
-alias du${TAG}='_dul(){ printf "usage: dul [dir]\n subdir $1 size is"; du -sh $1; du -sBM $1 ;}; _dul'
-alias dus='_dus(){ printf "each directory size is\n"; du -hs */|sort -n ;}; _dus'
-alias ps${TAG}='echo "usage: psl"; CMD ps -u $USER -o pid,ppid,args --forest'
+alias du${TAG}='_dul(){ _bar "usage: dul [dir]\n subdir $1 size is"; du -sh $1; du -sBM $1 ;}; _dul'
+alias dus='_dus(){ _bar "each directory size is\n"; du -hs */|sort -n ;}; _dus'
+alias ps${TAG}='_bar "usage: psl"; CMD ps -u $USER -o pid,ppid,args --forest'
 alias pst='_pst(){ _bar  "usage: pst [$USER]"; CMD pstree -hapg -u ${1:-$USER} ;}; _pst'
 alias kil='_kil(){ _bar "kill -SIGTERM -- -[PGID]"; kill -SIGTERM -- -$1 ;}; _kil'
 
@@ -186,58 +185,51 @@ alias ls='ls --color=auto'
 alias lls='_bar size-base; ls -agohrS'
 alias llt='_bar time-base; ls -agohrt'
 alias lld='_lld(){ _bar "time-base dir-only"; ls -arthlp -d $1*/; }; _lld'
-alias ll='_bar time-base all-file; ls -alrthF --color=auto --show-control-chars'
+alias ll='_bar "time-base all-file"; ls -alrthF --color=auto --show-control-chars'
 alias dir='ls -al -F --color=auto| grep /'
 alias tree='tree  --charset ascii -L '
 alias grep='grep --color=auto'
 alias grep${TAG}='_grep(){ CMD grep --color=auto --exclude-dir={.git,.byobu,tempdir} -rn $@ ;}; _grep'
 alias grepalias='alias | egrep -i --color=auto'
-alias findrecent='_findrecent(){ find . -ctime -"$1" -a -type f | xargs ls -l ;}; _findrecent'
+alias findrecent='_findrecent(){ _bar "ex) findrecent 6 (hours)"; find . -ctime -"$1" -a -type f | xargs ls -l ;}; _findrecent'
 
-alias filegrep='__filegrep'
+alias filegrep='_bar "ex) filegrep .txt <string>"; __filegrep'
 function __filegrep() {
     if [ -z "$1" ]; then
         echo "you should go topdir first !!"
         echo "cmd) rgrep --color --include="*file*" "string" ./;"
-        echo "ex) filegrep .txt string"
-        return 1
+        return sc
     fi
     rgrep --color --include="*$1*" "$2" ./;
 }
 
-alias findgrep='__findgrep'
+alias findgrep='_bar "ex) filegrep .txt <string> without .git, .repo"; __findgrep'
 function __findgrep() {
     if [ -z "$1" ]; then
         echo "you should go topdir first !!"
-        echo "ex) findgrep .txt string"
         return 1
     fi
     find . \( -name ".repo" -o -name ".git" \) -prune -o -name "*$1*" | xargs grep -rn --color "$2"
 }
 
-alias greppro='__greppro'
-function __grepro() { find "$proFILEdir" -name "*" | xargs grep -rn --color "$1" ;}
+alias greppro='_bar "grep only in .proFILEs: greppro <string>"; __greppro'
+function __greppro() { find "$proFILEdir" -name "*" | xargs grep -rn --color "$1" ;}
 
 # env variable & path control
 alias env='env|sort'
 alias pathshow='echo $PATH|sed "s/:/:\n/g"'
 alias pathexport='echo $PATH|sed "s/:/:\n/g" > ~/path.export; echo "path saved to file: ~/path.export"'
 
-function pathremove()
-{
+function pathremove(){
     local p d
-    p=":$1:"
-    d=":$PATH:"
-    d=${d//$p/:}
-    d=${d/#:/}
+    p=":$1:"; d=":$PATH:"; d=${d//$p/:}; d=${d/#:/}
     PATH=${d/%:/}
     pathshow
 }
 
 # ~/bin is always applied, but ~/bin/temporary_path is applied when pathimport call
-alias pathimport='__pathimport'
-function __pathimport()
-{
+alias pathimport='_bar "import path from ~/path.export and declare it"; __pathimport'
+function __pathimport(){
     if [ -f ~/path.export ];then PATH_FILE=$(cat ~/path.export|sed -z "s/\n//g");else PATH_FILE=$PATH; fi
     PATH=$1:$PATH_FILE
     pathshow
@@ -245,7 +237,7 @@ function __pathimport()
     echo "path is changed by path.export file"
 }
 
-alias gg="echo 'find path up&down <gg .git>'; go_updown"
+alias gg='_bar "find path and go up&down <gg .git>"; go_updown'
 function go_updown()
 {
     echo "go parent dir << [$HOME] ---- ${PWD##*/} ---- [depth 8] >> "
@@ -278,7 +270,7 @@ function go_updown()
     #cd $HERE
 }
 
-alias ggn="go_near"
+alias ggn='_bar "find path and go up+2/down+2"; go_near'
 function go_near(){
     local INPUT
     #find sub dirtory
@@ -324,17 +316,17 @@ alias copy_cc="sh ${CLCP_DIR}/cc.sh"
 alias coyp_cv="cat ${CLCF}"
 
 #alias lll="launch_cur_dir | copy_cc; copy_cv"
-alias lll="launch_cur_dir"
+alias lll='_bar "launch cur dir in explorer"; launch_cur_dir'
 alias llf='_llf(){ read -p "input filename: " && launch_cur_dir $REPLY }; _llf'
 
 
 ###############################
 #### vi startup option
-alias vi$ECHO='printf "Usage
-VIMINIT=:so ~/.vim/.vimrc MYVIMRC=~/.vim/.vimrc vim $*
-VIMINIT=:so ~/.viu/.vimrc_backup MYVIMRC=~/.viu/.vimrc_backup vim $* -V9myLog
-VIMINIT=:so ~/.viu/.vimrc MYVIMRC=~/.viu/.vimrc vim $*
-VIMINIT=:so ~/.vio/.vimrc MYVIMRC=~/.vio/.vimrc vim $* -V9myLog
+alias vi$ECHO='_bar "Usage; printf"
+    VIMINIT=:so ~/.vim/.vimrc MYVIMRC=~/.vim/.vimrc vim $*
+    VIMINIT=:so ~/.viu/.vimrc_backup MYVIMRC=~/.viu/.vimrc_backup vim $* -V9myLog
+    VIMINIT=:so ~/.viu/.vimrc MYVIMRC=~/.viu/.vimrc vim $*
+    VIMINIT=:so ~/.vio/.vimrc MYVIMRC=~/.vio/.vimrc vim $* -V9myLog
 "'
 
 
