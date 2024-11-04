@@ -231,10 +231,10 @@ EOF
 			serverinfo debug            #check all formats of getServer api
 EOF
     ;;show|*)  #현재 .key_server파일을 보여준다.
-            [ ! -f $HOME/.key_server ] && "You must create server connection info, use '$FUNCNAME gen'"
+            [ ! -f $HOME/.key_server ] && err "You must create server connection info, use '$FUNCNAME gen'"
             cat $HOME/.key_server.en | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey
 
-            clog "help command:" "'serverinfo help'"
+            clog "You can refer:" "'serverinfo help'"
 
     esac
 }
