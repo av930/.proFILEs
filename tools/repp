@@ -514,15 +514,19 @@ function reppinfo(){
     #cat ${REPPFILE_CSV}.submodule| xargs -I% bash -c 'set -- %; [ -e "$1/$2/.git" ] && cat $1/.gitmodules'
     #cat ${REPPFILE_CSV}.submodule| xargs -I% bash -c 'set -- %; echo [$1/$2]; [ -e "$1/$2/.git" ] && cat $1/.gitmodules'
     pushd "${REPP_ROOT}"
-    clog "git submodule repositories path(git):" ""
-    if [ -s ${REPPFILE_CSV}.submodule ]; then cat ${REPPFILE_CSV}.submodule| xargs -I{} bash -c \
+
+    if [ -s ${REPPFILE_CSV}.submodule ]; then
+    clog "git submodule repositories path:" "";
+    cat ${REPPFILE_CSV}.submodule| xargs -I{} bash -c \
     '   set -- {};
         if [ -e "$1/$2/.git" ]; then printf "\e[1;33m active  :\e[0m $1/$2\n"; cat $1/.gitmodules;
                                 else printf "\e[0;31m inactive:\e[0m $1/$2\n"; fi
     ';fi
 
-    clog "git lfs repositories path(git):" ""
-    if [ -s ${REPPFILE_CSV}.lfs ]; then cat ${REPPFILE_CSV}.lfs; fi
+    if [ -s ${REPPFILE_CSV}.lfs ]; then
+        clog "git lfs repositories path(git):" ""
+        cat ${REPPFILE_CSV}.lfs;
+    fi
     popd
 
     #IFS=${oldIFS}
@@ -1709,11 +1713,8 @@ function gittinfo(){
     clog "git submodules:" ""
     if [ -n "$(grep ${GITT_PATH} ${REPPFILE_CSV}.submodule)" ]; then
         pushd "${GITT_PATH}"
-        if [ -e ".git" ]; then printf '\e[1;33m active  :\e[0m $1/$2\n'; cat .gitmodules;
-                                else printf "\e[0;31m inactive:\e[0m $1/$2\n"; fi
-
-    ;fi
-
+        if [ -e ".git" ];   then printf '\e[1;33m active  :\e[0m $1/$2\n'; cat .gitmodules;
+                            else printf "\e[0;31m inactive:\e[0m $1/$2\n"; fi
     fi
 
     clog "git lfs files:" ""
