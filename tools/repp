@@ -1712,13 +1712,13 @@ function gittinfo(){
     pushd "${GITT_PATH}"
     bar inline "git submodule & lfs info (if any)"
     clog "git submodules:" ""
-    if [ -n "$(grep ${GITT_PATH} ${REPPFILE_CSV}.submodule)" ] && [ -e ".git" ];
-    then printf '\e[1;33m active  :\e[0m $1/$2\n'; cat .gitmodules;
-    else printf '\e[0;31m inactive:\e[0m $1/$2\n';
+    if [ -n "$(grep ${GITT_PATH/$REPP_ROOT\//} ${REPPFILE_CSV}.submodule)" ] && [ -e ".git" ]
+    then printf '\e[1;33m active  :\e[0m \n'; cat .gitmodules;
+    else printf '\e[0;31m inactive:\e[0m \n';
     fi
 
     clog "git lfs files:" ""
-    [ -n "$(grep ${GITT_PATH} ${REPPFILE_CSV}.lfs)" ] && git lfs ls-files
+    [ -n "$(grep ${GITT_PATH/$REPP_ROOT\//} ${REPPFILE_CSV}.lfs)" ] && git lfs ls-files
     popd
 
     bar inline "last synced time"                                              #extract sync time
