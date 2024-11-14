@@ -1709,7 +1709,7 @@ function gittinfo(){
     git show --stat --oneline HEAD
 
 
-    pushd "${GITT_PATH}"
+    pushd "${GITT_PATH:?"You are not in git project"}"
     bar inline "git submodule & git lfs"
     ## sub module 정보가 있으면 출력
     if [ -f .gitmodules ]; then info "$( cat .gitmodules|grep -oP "(?<=path \= ).*" |xargs -I{} bash -c '[ -e {}/.git ] && echo "this git has active git-submodule: [{}] "' )"; fi
