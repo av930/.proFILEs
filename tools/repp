@@ -1710,18 +1710,10 @@ function gittinfo(){
 
 
     pushd "${GITT_PATH}"
-    bar inline "git submodule & lfs info (if any)"
-<<<<<<< HEAD
-    clog "git submodules:" ""
-    if [ -n "$(grep ${GITT_PATH/$REPP_ROOT\//} ${REPPFILE_CSV}.submodule)" ] && [ -e ".git" ]
-    then printf '\e[1;33m active  :\e[0m \n'; cat .gitmodules;
-    else printf '\e[0;31m inactive:\e[0m \n';
-    fi
-=======
-    if [ -n "$(awk '$1==${GITT_PATH/$REPP_ROOT\//}' ${REPPFILE_CSV}.submodule)" ] && [ -e ".git" ];
-    then clog "this git has git-submodules:" ""; cat .gitmodules;
-    else if clog "this git is git-submodules:" "";  cat .gitmodules; fi
->>>>>>> 0fd6509 (add count of lfs & submodule)
+    bar inline "git submodule"
+    [ -f .gitmodules ] && printf "%s""$( cat .gitmodules|grep -oP "(?<=path \= ).*" |xargs -I{} bash -c '[ -e {}/.git ] && info "this git has active {} git-submodule"' )"
+    [ ! -f .gitmodules ] && [ -n $(awk -v VAR=${GITT_PATH} 'VAR~$1"/"$2' ${REPPFILE_CSV}.submodule) ] && info "this git is git-submodule"
+
 
     clog "git lfs files:" ""
     [ -n "$(grep ${GITT_PATH/$REPP_ROOT\//} ${REPPFILE_CSV}.lfs)" ] && git lfs ls-files
