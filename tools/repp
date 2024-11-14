@@ -1712,7 +1712,7 @@ function gittinfo(){
     pushd "${GITT_PATH}"
     bar inline "git submodule"
     [ -f .gitmodules ] && printf "%s""$( cat .gitmodules|grep -oP "(?<=path \= ).*" |xargs -I{} bash -c '[ -e {}/.git ] && info "this git has active {} git-submodule"' )"
-    [ ! -f .gitmodules ] && [ -n $(awk -v VAR=${GITT_PATH} 'VAR~$1"/"$2' ${REPPFILE_CSV}.submodule) ] && info "this git is git-submodule"
+    if [ ! -f .gitmodules ] && [ -n "$(awk -v VAR=${GITT_PATH} 'VAR~$1"/"$2' ${REPPFILE_CSV}.submodule)" ]; then info "this git is git-submodule"; fi
 
 
     clog "git lfs files:" ""
