@@ -1715,7 +1715,7 @@ function gittinfo(){
     if [ -f .gitmodules ]; then info "$( cat .gitmodules|grep -oP "(?<=path \= ).*" |xargs -I{} bash -c '[ -e {}/.git ] && echo "this git has active git-submodule: [{}] "' )"; fi
     if [ ! -f .gitmodules ] && [ -n "$(awk -v VAR=${GITT_PATH} 'VAR~$2{print $2}' ${REPPFILE_CSV}.submodule)" ]; then info "this git is git-submodule: [${GITT_PATH/$REPP_ROOT/}]"; fi
     ## lfs 정보가 있으면 출력
-    [ -n "$(grep ${GITT_PATH/$REPP_ROOT\//} ${REPPFILE_CSV}.lfs)" ] && git lfs ls-files
+    [ -n "$(grep ${GITT_PATH/$REPP_ROOT\//} ${REPPFILE_CSV}.lfs)" ] && { info "git lfs"; git lfs ls-files; }
     popd
 
     bar inline "last synced time"                                              #extract sync time
