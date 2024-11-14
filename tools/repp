@@ -3014,7 +3014,7 @@ case "$1" in
     ##$1:below ${@:2}:parameters
           help)                                     reppmenu help "${MENU[@]}"
     ;;      '')                                     reppmenu gitt "${MENU[@]}"
-    ;;    info)     reppcheck_initvar gitt      &&  gittinfo
+    ;;    info)     reppcheck_initvar reppgitt  &&  gittinfo
     ;;    show)     reppcheck_initvar gitt      &&  gittshow "${@:2}"
     ;;      go)     reppcheck_initvar gittgo    &&  gittgo "${@:2}"
     ;;  commit)     reppcheck_initvar gitt      &&  gittcommit "${@:2}"
