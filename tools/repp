@@ -554,12 +554,11 @@ function reppshow(){
     repo branch 2> /dev/null
 
     ##run command "repo info"
-    bar outline "it takes time to get information..."
     echo "repo status" > ${REPPFILE_STATUS}
 
     ##remove colored output with 1) sed command, 2) --color option
     #repo status -j8 |sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" >> ${REPPFILE_STATUS}
-    repo --no-pager --color=never status -j8 >> ${REPPFILE_STATUS} 2> /dev/null
+    repo --no-pager --color=never status  >> ${REPPFILE_STATUS} 2> /dev/null &
 
     ##list up repo commit, remote, branch, project, path
     reppfind |more -60
@@ -569,8 +568,8 @@ function reppshow(){
     #echo "repo info" >> ${REPPFILE_STATUS}
     #repo info |sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g" >> ${REPPFILE_STATUS}
 
-    bar inline "repo status: uncommitted changes list saved to [ ${REPPFILE_STATUS} ]"
-    info "\${REPPFILE_STATUS} you can use this file to check dirty commits left"
+    bar inline "repo status: uncommitted changes list saved to [ ${REPPFILE_STATUS} ], it takes about 2mins to get info"
+    info "${REPPFILE_STATUS} you can use this file to check dirty commits left"
 }
 
 
@@ -658,15 +657,20 @@ function reppcommit(){
     case $cmd in
         last)
             bar outline "repo get newest N of last(-1) commit from each gits"
-            bar inline "date:YMD HMS]       [sha]   [author]      [commit title]                                            [git project                            branch"
-            repo forall -j16 -c 'printf "%-100.100s %-32.32s %-s \n" "$(git log -1 --abbrev=6 --date=format:"%Y-%m-%d %H:%M:%S" --pretty=format:"%ad  %h  [%an] %s")" "${REPO_RREV}" "${REPO_PROJECT}"' | sort -r |head -${base:-50}
+            bar inline "date:YMD HMS]       [sha]    [author]         [commit title]                                         [branch]                            [git project"
+            repo forall -j16 -c 'printf "%-100.100s %-32.32s %-s \n" "$(git log -1 --abbrev=7 --date=format:"%Y-%m-%d %H:%M:%S" --pretty=format:"%ad  %h  [%an] %s")" "${REPO_RREV}" "${REPO_PROJECT}"' | sort -r |head -${base:-50}
             #repo forall -c "git log -1 --abbrev=6 --date=format:'%Y-%m-%d %H:%M:%S' --pretty=format:'%ad  %h  [%an] %d %s%n'" |sort -r |head -${base:-50}
       ;;diff)
             reppdiff diff "$base" "$target"
 
       ;;find)
-            for server in na as eu devops_test review; do
-                if revvcommit find ${server} ${base}; then break; fi
+            for server in na as eu devops_test review null; do
+                if [ "$server" != "null" ]; then
+                    if revvcommit find ${server} ${base}; then break; fi
+                    clog "gerrit url:" $server/plugins/gitilies/$pro/+/$source
+                    ## https://git.repp.com/as/plugins/gitiles/npro/build/+/f94ba87
+
+                else  break; fi
             done
       ;;help|*) cat <<- EOF
 				usage) repp commit last N            # show top N commits from each git HEAD
@@ -2685,7 +2689,7 @@ function revvcommit(){
     [ -z "$user" ] && user=$ACCOUNT
     case ${cmd} in
        find)
-            local change_id=$(curl -su ${user}:${key} ${server}/a/changes/${source} |grep -oP '(?<=change_id": ").*(?=")')
+            local change_id=$(curl -su ${user}:${key} ${server}/a/changes/${source} |sed '1d'| jq -r '.change_id')
             if [ -z "${change_id}" ]; then
                 err "NOT Found in $server change_id for commit_id [${source}]"
                 echo "this commit is not in this gerrit system."
@@ -2703,13 +2707,14 @@ function revvcommit(){
             submitter=$(cat ${file} |jq -r .[].submitter._account_id)
 
             clog "gerrit url:" $server/c/$pro/+/$changenumber
+            ##gerrit url:  http://vgit.lge.com/na/c/vendor/ss/v920/vm2_qnx_dts-poip-qla/+/1487342
             revvaccount user na $submitter none none
 
             cat ${file}| jq '.[]|{project,branch,change_id,_number,subject,status,submitted}'
             echo
 
             under "commit info from current source\n"
-            path=$REPP_ROOT/$(repo list -p tiger/services/PowerManagerService 2> /dev/null)
+            path=$REPP_ROOT/$(repo list -p $pro 2> /dev/null)
             clog "local git path:" "$path"
             git -C "$path" show --quiet ${source}
 
