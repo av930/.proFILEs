@@ -178,8 +178,8 @@ alias cdcd='_cdcd(){ mkdir -p "$1"; cd "$1" ;}; _cdcd'
 alias du${TAG}='_dul(){ _bar "usage: dul [dir]\n subdir $1 size is"; du -sh $1; du -sBM $1 ;}; _dul'
 alias dus='_dus(){ _bar "each directory size is\n"; du -hs */|sort -n ;}; _dus'
 alias df${TAG}='df -Thx squashfs| (read -r; printf "%s\n" "$REPLY"; sort -k 7)'
-alias ps${TAG}='_bar "usage: psl"; CMD ps -u $USER -o pid,ppid,args --forest'
-alias pst='_pst(){ _bar  "usage: pst [$USER]"; CMD pstree -hapg --ascii -u ${1:-$USER} ;}; _pst'
+alias ps${TAG}='_bar "usage: psl"; ps -u vc.integrator -o pid,ppid,user,stime,etime,pcpu,pmem,tty,args --forest'
+alias pst='_pst(){ _bar  "usage: pst [$USER]"; pstree -hapgT --ascii -u ${1:-$USER} ;}; _pst'
 alias kil='_kil(){ _bar "kill -SIGTERM -- -[PGID]"; kill -SIGTERM -- -$1 ;}; _kil'
 
 alias ls='ls --color=auto'
@@ -204,7 +204,7 @@ function __filegrep() {
     rgrep --color --include="*$1*" "$2" ./;
 }
 
-alias findgrep='_bar "ex) filegrep .txt <string> without .git, .repo"; __findgrep'
+alias findgrep='_bar "ex) findgrep .txt <string> recursively without .git, .repo"; __findgrep'
 function __findgrep() {
     if [ -z "$1" ]; then
         echo "you should go topdir first !!"
