@@ -156,7 +156,7 @@ GUIDE_CSV
                 #cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=","; ORS="\n";}{print "\042\042\075\042"$1"\042","\042"$2"\042,"$3","$6","$7","$8}' >> "$REPPFILE_SCRIPT"
                 cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=",";}{gsub(/,/,":",$2);print "\042\042\075\042"$1"\042",$2","$3","$6","$7","$8}' >> "$REPPFILE_SCRIPT"
                 bar inline "$REPPFILE_SCRIPT"
-                clog "reppscript.csv file is generated" "you can put your commands reppscript.csv and then run by 'repp script'"
+                clog "${REPPFILE_SCRIPT##*/} file is generated" "you can put your commands ${REPPFILE_SCRIPT##*/} and then run by 'repp script'"
 
     ;;  info)   ##get global variable and repo init command.
                 reppget_repcmd info
@@ -227,7 +227,6 @@ CHANGE
     ;;  diff)   bar inline "compare 2 different manifests what project is changed"
                 clog 'ex)' 'repp mani diff <old manifest.xml> <new manifest.xml>'
                 clog 'ex)' 'repp mani diff event/230426_mig.xml event/230712_upstream.xml'
-
                 reppdiff diff "$item" "$str" "$filter"
 
     ;;  diffcheck)
@@ -289,6 +288,7 @@ EOF
     #gsub(/""/,"\"",$7)           : change csv string "" to normal "
     #gsub(/\r/,"",$7)             : remove carrige return
 
+    [ ! -f "$REPPFILE_SCRIPT" ]  && err "file is not existed!"; return 1
     cat "$REPPFILE_SCRIPT"| awk 'BEGIN{FS=",";}{gsub(/("|=)/,"",$1);gsub(/""/,"\"",$7);gsub(/\r/,"",$7);\
         print $1"`"$2"`"$3"`"$4"`"$5"`"$6"`"$7}' > "$REPPFILE_SCRIPT".tmp
 
@@ -965,7 +965,7 @@ EOF
                 clog "postfix:" "repo forall -pc 'git push \${REPO_REMOTE} HEAD:refs/heads/\${REPO_RREV}_\${1}' ${name:-<branch-postfix>}"
                 echo
                 clog "ex) infix only current git" "repo forall . -pc 'git push \${REPO_REMOTE} HEAD:refs/heads/\${1}' ${name:-<branch-name>}"
-                clog "ex) infix for several git " "repo forall xxx/yyy ppp/qqq/rrr -pc 'git push \${REPO_REMOTE} HEAD:refs/heads/\${1}' ${name:-<branch-name>}"
+                clog "ex) infix for several gits" "repo forall xxx/yyy ppp/qqq/rrr -pc 'git push \${REPO_REMOTE} HEAD:refs/heads/\${1}' ${name:-<branch-name>}"
     ;;  remove|delete)
                 under "please run one of these 'git push' commands to delete branch in remote\n"
                 info "<branch name> will be passing to 'git push' cmd in position of parameter \${1}\n"
@@ -1018,9 +1018,11 @@ function reppinit(){
 				ex) repp init -u ssh://${USER}@vgit.lge.com:29440/honda/linux/manifest -b tsu_25.5my_release
 				ex) repp init -u https://android.googlesource.com/platform/manifest -b android-12.1.0_r1
 				ex) repp init -b lampauto_r_release -m all.xml
-				ex) repp init -u ssh://lamp.lge.com:29418/platform/manifest.git -b lampauto_r_release
+				ex) repp init -u ssh://lamp.lge.com:29418/platform/manifest.git -b lampauto_r_release --git-lfs
 				     -m lampauto/lampauto-gm-recent.xml --reference=/data001/vc.integrator/mirror/lampauto_r_release/
 				     --repo-url=ssh://lamp.lge.com:29418/repo/git-repo.git
+                ex) repp init -u ssh://lamp.lge.com:29418/platform/manifest.git -b lampauto_r_release --dissociate
+                ex) repp init -u ssh://${USER}@vgit.lge.com:29440/honda/linux/manifest -b tsu_25.5my_release --partial-clone --clone-filter=blob:none
 
 EOF
             info 'please refer http://collab.lge.com/main/x/xYv4j'
@@ -1118,7 +1120,8 @@ EOF
                     clog "-m" "event/branch_migration.xml  # use input manifest.xml (to check if manifest work before commit) "
                     clog "-d" "                            # back to manifest revision"
                     clog "-f" "                            # force sync with overwriting"
-                    clog "--jobs-network=" "8              # count of network thread [default 1]"
+                    clog "--jobs-network=" "8              # count of network thread [default 1], 8 recommand"
+                    clog "--jobs-checkout=" "8             # count of checkout thread [default 8], 24 recommand"
                     clog "--auto-gc" "                     # with garbage collection [default no]"
                     info "default cmd: repo sync --no-tags --no-clone-bundle --fail-fast -cj8"
 
@@ -1714,7 +1717,7 @@ function gittinfo(){
     ;;''|*)             GIT_SITE=$(printf "%s/${review_gerrit}/%s" "$(echo ${GITT_REVIEW}|sed -E 's#(.*)[/]$#\1#')" ${GITT_PROJECT} )
     ;;esac
     clog "review repository url :" ${GIT_SITE}                                     #http review url
-    clog "review commit url     :" $( echo "$GIT_SITE" |sed -E "s#http:(.*)admin/repos/(.*)#https:\1q/project:\2+branch:"$GITT_BRANCH"#")
+    clog "review commit url     :" $( echo "$GIT_SITE" |sed -E "s#http:(.*)admin/repos/(.*)#https:\1q/project:\2+branch:"\$GITT_BRANCH"#")
     clog "source browser gitiles: " ${GIT_SITE/"${review_gerrit}"/"plugins/gitiles"}/+/refs/heads/${GITT_BRANCH}                #source from gitiles
     clog "source browser gerrit : " ${GIT_SITE/"${review_gerrit}/"/"gitweb?p="}.git\;a=shortlog\;h=refs/heads/${GITT_BRANCH}    #source from gerrit
 
@@ -1755,7 +1758,7 @@ function gittshow(){
 
     if [[ ${#depth} -gt 3 ]] && [[ ${depth} =~ ^[0-9a-f]+$ ]]; then
         bar outline "call native git"
-        git show --stat ${depth}
+        git show  --pretty=fuller --stat ${depth}
         return 0
     fi
 
@@ -1766,7 +1769,7 @@ function gittshow(){
     bar inline "git commit history with diff file list"
     echo "filter: --since(=after), --before(=until)"
     echo "date  : 6 hour, 2-day, 2-week, 1-month, 1-year"
-    clog "ex:" "--since=2-weeks, --since=04:24, --before=6-hours, --after=2022-11-10 --before=2022-11-20-23"
+    clog "ex:" "--since=2-weeks, --since=04:24, --before=6-hours, --after=2022-11-10 --before=2022-11-20-23\n"
     read -p "input add option [default:--pretty="short" --name-only with your input option] "
 
     bar inline "file name only (press 'q' to stop)"
@@ -2221,16 +2224,15 @@ EOF
 
     ;;debug) #getServer 함수 test용으로 모든 format대로 제대로 출력하는지 확인할수 있다.
             test_getServer test
-    ;;help) cat <<- 'EOF'
+    ;;help) cat <<- EOF
 			usage) revv server <cmd> <option>
 
-			guide) example cmds REPO_SCRIPT column in reppscript.csv
-			revv server  gen             #generate template .key_server file for easy creation
-			revv server   en             #after update .key_server, encrypt it to .key_server.en
-			revv server edit             #encrypted .key_server.en will be decryped to .key_server to edit
-			revv server   de vgit_na     #search vgit_na server and get info of it from .key_server.en
-			revv server show             #show current server info from .key_server.en
-			revv server debug            #check all formats of getServer api
+			revv server   gen             #generate template .key_server file for easy creation
+			revv server    en             #after update .key_server, encrypt it to .key_server.en
+			revv server  edit             #encrypted .key_server.en will be decryped to .key_server to edit
+			revv server    de vgit_na     #search vgit_na server and get info of it from .key_server.en
+			revv server  show             #show current server info from .key_server.en
+			revv server debug             #check all formats of getServer api
 EOF
     ;;show|*)  #현재 .key_server파일을 보여준다.
             [ ! -f $HOME/.key_server.en ] && err "You must create server connection info, use '$FUNCNAME gen'"
