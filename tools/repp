@@ -1157,7 +1157,7 @@ EOF
         ;;   '')    info "repp reset help : for more usage\n"
                     ## git reset --hard;   #reset to local lastest commit status.
                     ## git clean -xdf      #remove uncommitted change
-                    showRUNQ y repo forall -cj${NJOBS} 'git reset --hard @{upstream}; git clean -xdf'
+                    showRUNQ y repo forall -cj${NJOBS} 'git reset --hard FETCH_HEAD; git clean -xdf'
 
                     #showRUN repo sync -dlvj${NJOBS} --force-remove-dirty
                     info "\nfinish reset all repositories, and reset FETCH_HEAD"
@@ -1570,12 +1570,11 @@ function gitt_initvar(){
 
     #git config --get-regexp remote.$GITT_REMOTE |sort|grep -Ee "(projectname|url)"
     #git config --get-regexp remote.*.projectname|cut -d' ' -f2
-    temp=$(git config --get-regexp remote.* |grep -Ee "(projectname|url)" |head -1|grep -Po '\w/\K.\w+[^?]+')
-    if [ -n "${GITT_PROJECT}" ] && [ "${temp}" = "${GITT_PROJECT}" ]; then
-        return 0; #git path not changed, so break
+    temp=$(git config --get-regexp remote.* |grep -e "projectname" |head -1|cut -f2 -d' ')
+    if [ -n "${GITT_PROJECT}" ] && [ "${temp}" = "${GITT_PROJECT}" ]; then return 0; else GITT_PROJECT=${temp}; fi
+    if [ -z "${GITT_PROJECT}" ]; then
+        GITT_PROJECT=$(git config --get-regexp remote.* |grep -Ee "(url)" |head -1| sed  "s#.*${REPP_REF}/##")
     fi
-    GITT_PROJECT=${temp}
-
 
     #NEEDTO WORK: find more secure way to get current branch revision
     GITT_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null| sed 's:.*/::')
