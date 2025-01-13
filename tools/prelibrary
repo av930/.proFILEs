@@ -40,7 +40,8 @@ clog()   { log "${cyan}$1 ${NCOL} ${@:2}"  ;}
 info()   { log "${GREEN}INFO: ${NCOL} ${*}"  ;}
 warn()   { log "${YELLOW}WARN: ${NCOL} ${*}" ;}
 err()    { log "${RED}ERROR: ${NCOL} ${*}" > /dev/stderr ;}
-pCount() { tee >(let sum="$(wc -l) + ${1:-0}"; clog "#count:" "$((sum<0?0:+sum))" ) ;}
+#pCount() { tee >(let sum="$(wc -l) + ${1:-0}"; clog "#count:" "$((sum<0?0:+sum))" ); }
+pCount() { tee >(let sum="$(wc -l) + ${1:-0}"; clog "#count:" "$((sum<0?0:+sum))"; echo $sum > /tmp/__s_um; ); }
 
 
 #${2:+[$2] }: if $2 exist, use '[$2] '
