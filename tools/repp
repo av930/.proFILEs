@@ -2222,8 +2222,8 @@ EOF
                 err "You must create server connection info, use '$FUNCNAME gen'"; return 1
             fi
 
-    ;;debug) #getServer 함수 test용으로 모든 format대로 제대로 출력하는지 확인할수 있다.
-            test_getServer test
+    ;;check|info) #getServer 함수 test용으로 모든 format대로 제대로 출력하는지 확인할수 있다.
+            test_getServer $cmd
     ;;help) cat <<- EOF
 			usage) revv server <cmd> <option>
 
@@ -2232,7 +2232,8 @@ EOF
 			revv server  edit             #encrypted .key_server.en will be decryped to .key_server to edit
 			revv server    de vgit_na     #search vgit_na server and get info of it from .key_server.en
 			revv server  show             #show current server info from .key_server.en
-			revv server debug             #check all formats of getServer api
+            revv server check             #check connection of server
+			revv server  info             #check connection of server and format of getServer api
 EOF
     ;;show|*)  #현재 .key_server파일을 보여준다.
             [ ! -f $HOME/.key_server.en ] && err "You must create server connection info, use '$FUNCNAME gen'"
@@ -2387,9 +2388,9 @@ function test_getServer() {
 #revvserver show |awk -F '|' 'NR>1{print $1}'
     local cmd=$1
     for _item in $(revvserver show |awk -F '|' 'NR>2 {print last} {last=$1}');do
-        if [ "$cmd" = test ]||[ "$cmd" = info ]; then revvcheck_server $_item log; fi
+        if [ "$cmd" = info ]||[ "$cmd" = check ]; then revvcheck_server $_item log; fi
 
-        if [ "$cmd" = test ]; then
+        if [ "$cmd" = info ]; then
         for _test in http port sub domain subdomain path url remote debug;do
             bbar cyan "${_item##*/}:$_test"  "$(getServer "${_item##*/}" "$_test")\n"
         done
@@ -2415,8 +2416,7 @@ function revvinfo(){
 EOF
     ;; create|*new*)  showRUNQ echo "tempfunc"
     ;; list) echo tempfunc
-    ;; *) clog "check gerrit" "connection with server"
-    test_getServer "$cmd"
+    ;; *) clog "test" "test api"
     ;; esac
 }
 
@@ -2610,8 +2610,13 @@ EOF
             info "config: " "${server}/admin/repos/${project}"
             bar inline "find project and show project url"
             curl -su ${user}:${key} ${server}/a/projects/?m=${project} |sed '1d' > $file
-            clog "matching project: "  $(cat $file| jq -c 'keys[]')
-            cat $file| jq --arg jq_var "${server}/admin/repos/" -c '"src: http://" + $jq_var + .[].web_links[].url'
+            clog "matching project: "  $(cat $file| jq -C 'keys[]'| pCount)
+            if [ "$(cat /tmp/__s_um)" -eq 1 ]; then
+                #cat $file| jq --arg jq_var "${server}/admin/repos/" -c '$jq_var + .[].id' | nl
+                local temps=http://$(getServer $server subdomain)
+                echo $temps$(curl -su ${user}:${key} ${server}/a/projects/?m=${project} |sed '1d' | jq -rM '..|select(contains("gitweb?")?)')
+                echo $temps$(curl -su ${user}:${key} ${server}/a/projects/?m=${project} |sed '1d' | jq -rM '..|select(contains("plugins")?)')
+            fi
 
             bar inline "parent-project info"
             curl -su ${user}:${key} $url_gerrit |sed '1d' | jq -cC '.|{name,parent}'
@@ -2657,7 +2662,6 @@ function revvaccess(){
     local branch=$3 #^refs/heads/26my_migg_.*
     local group=${4:-$USER} #gerrit group name
     local group_id=$(revvaccount group "$server" "$group" none none)
-    local extra=$5
     local file=$(mktemp)
 
     [ -z "$user" ] && user=$ACCOUNT
@@ -2677,7 +2681,7 @@ EOF
                 bar inline "show permission setting in current git"
                 cat $file|jq  '.local[].permissions'
                 bar inline "show permission defined group in current git"
-                cat $file|jq  '.groups[]|"group-name: ",.name'
+                cat $file|jq  '.groups[]|.name'
     ;; accessadd~*)
                 clog "add migration permission $group_id $branch"
                 [ -z "$group_id" ] && { err "group is not existed, check $group"; return 1; }
@@ -2967,7 +2971,7 @@ function revvshowcmd(){
 				   ex) revv cmd eu
 				   ex) revv cmd
 EOF
-            bar outline "info gerritserver: show gerrit account"
+            bar outline "info gerritserver: ex) show gerrit account"
             showRUN curl -su ${user}:${key} ${server}/a/accounts/?suggest\&q=${usercmd} |more
 
     ;; *)
@@ -3084,7 +3088,7 @@ local MENU=(
 "     info: shows repository info such as manifest path, repo cmd, tree of manifests, etc"
 "      cmd: list useful command from gerrit"
 "  connect: check if input account can access branch in gitproject on server"
-"   server: check server list or status"
+"   server: check predefined git web server list or status"
 "    debug: show variable REPO, REPP, REPPFILE, GITT variable used in script"
 "   forall: repoforal for revv branch commands"
 "     user: check if account is existed & get account info "
