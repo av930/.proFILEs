@@ -1453,14 +1453,13 @@ EOF
     [ -z "$1" ] && info "use default server: ${GITT_REMOTE:-${REPP_REMOTE}}"        ;oriserver=${1:-${GITT_REMOTE:-${REPP_REMOTE}}} ;
     server=$( getServer ${oriserver} subdomain ); port=$(getServer ${oriserver} port)
 
-
-    dnlog [$user][$server][$oriserver][$gitproject][$branch]
-    clog "should be this format:" "[testaccount][$oriserver][$server][$gitproject][$branch]"
+    clog "should be this format:ex)" "[testaccount][$oriserver][$server][$gitproject][$branch]"
+    dnlog [$user] [$server] [$oriserver] [$gitproject] [$branch]
 
     under "step1: check gerrit permission for ${user} from WEB(HTTP) by account admin[${ACCOUNT}]\n"
-    showRUN revvcheck_server ${oriserver} log
-    showRUN revvcheck_account ${oriserver} ${user} log
-    showRUN revvcheck_permission ${oriserver} ${user} ${gitproject} ${branch} read
+    showRUN revvcheck_server ${oriserver} log                                              ;wave
+    showRUN revvcheck_account ${oriserver} ${user} log                                     ;wave
+    showRUN revvcheck_permission ${oriserver} ${user} ${gitproject} ${branch} read         ;wave
 
     under "step2: check git permission for ${user} from SERVER(SSH) user[${user}]\n"
     showRUN reppcheck_server ${server} ${user} ${port} ${gitproject} ${branch}
@@ -2266,6 +2265,7 @@ function revvcheck_server(){
     fi
     #$DEBUG ["$server"]["$port"]
 
+    ## gerrit api에 access가 가능한지를 gerrit version을 제대로 return하는지 여부로 판단한다.
     [ "${flag}" = "log" ] && info "curl -su ${user}:${key} ${server}/a/config/server/version |sed '1d'| jq -cC '.'"
     REVV_VER=$(curl -su ${user}:${key} ${server}/a/config/server/version |sed '1d'| jq -cC '.')
     if ! [[ "${REVV_VER}" =~ [2-9].[0-9].[0-9]* ]]; then REVV_VER='NA'; err "gerrit is not working, please check"; return 1; fi
@@ -2361,7 +2361,7 @@ function revvcheck_permission(){
     ret=$(echo "${log}" |sed '1d'| jq -c '.')
     ! [[ "${ret#*:}" =~ 200 ]] && err "check gerrit project error: ${log}" && return 1
     echo "ok. gerrit account[${REVV_USER}] can access by[read]: ${oriproject}"
-
+    echo ${linemi}
 
     bar inline "step1.4-gerritserver: [remote] check if ${user} can access branch on the project (checked by $ACCOUNT)"
     clog try "check git/branch is correct and can access it [case sensitive]"
@@ -2464,7 +2464,7 @@ EOF
             [ "$extra" != "none" ] && bar inline "check if account is existed & get account info "
             curl -su ${user}:${key} ${server}/a/accounts/?suggest\&q=${source} |sed '1d'|jq -cC .[]|pCount
 
-            [ "$(cat /tmp/__s_um)" -ne 1 ] && return 0
+            [ "$(cat /tmp/pCount)" -ne 1 ] && return 0
 
             if [ "$extra" != "none" ]; then
                 bar inline "list group name which account belongs to"
@@ -2621,7 +2621,7 @@ EOF
             curl -su ${user}:${key} ${server}/a/projects/?m=${project} |sed '1d' > $file
             clog "matching project: "  $(cat $file| jq -C 'keys[]'| pCount)
 
-            [ "$(cat /tmp/__s_um)" -ne 1 ] && return 0
+            [ "$(cat /tmp/pCount)" -ne 1 ] && return 0
             #cat $file| jq --arg jq_var "${server}/admin/repos/" -c '$jq_var + .[].id' | nl
             local temps=http://$(getServer $server subdomain)
             echo $temps$(curl -su ${user}:${key} ${server}/a/projects/?m=${project} |sed '1d' | jq -rM '..|select(contains("gitweb?")?)')
@@ -2670,9 +2670,9 @@ function revvaccess(){
     [ -z "$user" ] && user=$ACCOUNT
     local SEP='~'
     case ${cmd}${SEP}${subcmd} in
-       help~*)  cat <<-EOF
-				usage) revv access    na <project>                                            #read permission from project and its parents
-				   ex) revv access    na vendor/qct/sa515m/sa515m_modem/modem_proc            #read permission
+       *~help)  cat <<-EOF
+				usage) revv access    na <project>                                            #get permission list from project and its parents
+				   ex) revv access    na vendor/qct/sa515m/sa515m_modem/modem_proc            #get permission list
 				usage) revv accessadd na <project>  <group> <'branch-regexp'>                 #add migration permission to a group
 				   ex) revv accessadd na qct/modem  26my_migrator '^refs/heads/26my_migg_.'   #add migration permission to 26my_migrator
 
@@ -2683,18 +2683,49 @@ EOF
                 curl -su ${user}:${key} $url_gerrit/access |sed '1d' > $file
 
                 bar inline "show inherit parent permission git and grandparent"
-                cat $file|jq  '.inherits_from|del(.web_links)'
+                cat $file|jq '.inherits_from|{name,id,parent,state}|del(.web_links)'
 
                 bar inline "show permission defined group in current git"
-                cat $file|jq --arg jq_var "${server}" -c '.groups[] | {url: (.url | gsub("#"; $jq_var)), name}'
+
+                #cat $file|jq --arg jq_var "${server}" -c '.groups[]|select(.url != null and .url != "") | {url: (.url | gsub("#"; $jq_var)), name}' |pCount
+                ## group.url이 null일때는 실제 null이라는 문자열로 replace를 하고, null이 아닐때는 #를 server주소로 변경해준다.
+                cat $file|jq --arg jq_var "${server}" -c '.groups[]| {url:(.url| if .==null then "null" else gsub("#"; $jq_var) end), name}' |pCount
 
                 bar inline "show permission setting in current git"
-                ## json을 tostring(문자열로변환)하고, gsub으로 문자열을 replace한후, stdin으로 부터 awk를 통해 아래와 같은 변환식파일을 만들어놓고
+                ## json중 group에서 url경우에는 null이라는 문자열로 변경하고, 있을때는#대신 server주소를 넣고, name경우에는 /를 _로 변경하고 tostring(문자열로변환)하고, gsub으로 문자열을 replace한다.
                 ## 3fe63d48b76~,jlr_vcm_developer
                 ## 3fcc47cb801~,mustang_tm_reviewer
-                ## 변환식이 들어있는 파일을 stdin으로 sed로 입력받아 실제 파일인 $file을 변경한다.
+                ## stdin으로 부터 awk를 통해 아래와 같은 변환식파일을 만들어놓고, 변환식이 들어있는 파일을 stdin으로 sed로 입력받아 실제 파일인 $file을 변경한다.
                 ## 그런데 실제파일중에 일부인 .local부분만 필요함으로 그 부분을 process substition오로 입력받아서 처리한다.
-                cat $file|jq -crM '.groups[] | tostring | gsub("{|\"|}";"")| gsub("url.*uuid-|name:";"")' |awk -F, '{print "s/"$1"/"$2"/g;"}' |sed -f - <(cat $file|jq '.local')
+                ## 이때 jq -C '.local'로 처리했지만, compact하게 출력하기 위해 jq -cC '.local|to_entries | map({(.key): .})[][][]' 를 사용할수도 있다.
+
+                cat $file|jq --arg jq_var "${server}" -crM \
+                '.groups[]| {url:(.url| if .==null then "null" else gsub("#"; $jq_var) end), name:(.name| gsub("/"; "_"))} |tostring |gsub("{|\"|}";"") |gsub("url.*uuid-|name:";"")'|\
+                awk -F, '{print "s/"$1"/"$2"/g;"}'> $tempfile
+
+                ## compact하게 나오지 않고 full display를 하는 경우
+                ## [ "$(cat /tmp/pCount)" -gt 10 ] && { read -t 2 -p "Press Ctrl+C not to see more ..."; cat $tempfile|sed -f - <(cat $file|jq -C '.local'); }
+
+                ## compact display
+                cat $tempfile| sed -f - <(cat $file |jq -cC '.local |
+                walk(if type == "object" then
+                    del(.force) |
+                    if .action == "ALLOW" then del(.action) else . end
+                else . end)|
+                with_entries(.value |= (.permissions|.[]))|
+                keys[] as $k | {($k): .[$k]}
+                ')
+
+                wave
+                ##cat rule.txt | sed -f - <(cat /tmp/tmp.frgiex2IBv | jq '.local|walk(if type == "object" then del(.force) else . end)')
+                cat <<- EOL
+				cat $file|jq --arg jq_var "${server}" -crM '.groups[]| {url:(.url| if .==null then "null" else gsub("#"; \$jq_var) end), name:(.name| gsub("/"; "_"))} |tostring |gsub("{|\"|}";"") |gsub("url.*uuid-|name:";"")'|awk -F, '{print "s/"\$1"/"\$2"/g;"}' > $tempfile
+				cat $tempfile| sed -f - <(cat $file |jq -C '.local')
+EOL
+
+                #cat $file|jq --arg jq_var "${server}" -crM '.groups[]| {url:(.url| if .==null then "null" else gsub("#"; $jq_var) end), name}| tostring | gsub("{|\"|}";"")| gsub("url.*uuid-|name:";"")'|\
+                #    sed 's:/: :g' |awk -F, '{print "s/"$1"/"$2"/g;"}' |sed -f - <(cat $file|jq '.local') > b.txt
+                # cat $file|jq -cC '.local|to_entries | map({(.key): .})[][][]'
 
 
     ;; accessadd~*)
@@ -3130,7 +3161,6 @@ case "$1" in
     ;;   debug)      reppcheck_initvar gittrevv        &&  revvdebug "${@:2}"
     ;;  forall)      reppcheck_initvar repprevv        &&  revvforall "${@:2}"
     ;;  commit)      reppcheck_initvar repprevv        &&  revvcommit "${@:2}"
-       #pass revv access* such as 'revv accessadd'
     ;; access*)      reppcheck_initvar repprevv        &&  revvaccess "${@:1}"
     ;; branch*)      reppcheck_initvar repprevv        &&  revvbranch "${@:1}"
     ;;project*)      reppcheck_initvar repprevv        &&  revvproject "${@:1}"

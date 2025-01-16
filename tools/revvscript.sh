@@ -1,8 +1,8 @@
 ###### revv script template
 ## usage
-# repo forall -evc bash 'revvscript.sh' branch 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog master 
-# repo forall -evc bash 'revvscript.sh' branchlist 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog \* 
-# repo forall -evc bash -ex 'revvscript.sh' branchlist 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog \* 
+# repo forall -evc bash 'revvscript.sh' branch 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog master
+# repo forall -evc bash 'revvscript.sh' branchlist 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog \*
+# repo forall -evc bash -ex 'revvscript.sh' branchlist 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog \*
 
 ## description
 # repo forall . -c bash 'cmd.sh'                                    # for current git only, make SHELL variable valid
@@ -59,7 +59,7 @@ target=$3      #branch-name, parent-project-name
 source=$4      #base-branch-name
 
 ## default variable & functions
-BAR="~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+linewave="~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 NCOL='\e[0m'; YELLOW='\e[1;33m'; RED='\e[1;31m'; GREEN='\e[1;32m';
 JSON_IDFY=")]}'"
 tempr=/tmp/revv.ret
@@ -142,7 +142,7 @@ case ${cmd}${SEP}${target} in
     ;; branch*~@branch) target="${CURR_branch}"
           ;; project*~) :
         ;; branchlist~) : ##allow target=null
-           ;; branch*~) err "target is null, stop some commands may be not stopped, must check"; exit 1; 
+           ;; branch*~) err "target is null, stop some commands may be not stopped, must check"; exit 1;
 esac
 case $source in
     @branch) source="${CURR_branch}"
@@ -162,7 +162,7 @@ esac
 
 
 ## print HEAD for each git project
-printf "${BAR}\n${YELLOW}%-10.10b${NCOL} remote:%-12.12b | project:%-84.84b %s\n" \
+printf "${linewave}\n${YELLOW}%-10.10b${NCOL} remote:%-12.12b | project:%-84.84b %s\n" \
        "[${REPO_I}/${REPO_COUNT}]" "${REPO_REMOTE}" "${REPO_PROJECT}" #"| branch:${CURR_branch}"
 
 
@@ -207,12 +207,12 @@ case ${CURR_branch} in
         esac
         set +o noglob
 
-        ## parse result & 
+        ## parse result &
         case $cmd in
         branch*)   PRINT_INFO='{ref,revision}';;
         project*)  PRINT_INFO='{name,parent}' ;;
         esac
-        
+
         if [ "$(cat ${tempf} | head -1)" = "${JSON_IDFY}" ]; then
             if [ "$(cat ${tempf} | sed -n '2p')" = "[]" ]; then clog "executed" "result is nothing"; cat ${tempf} | tail -n +3;  RET=FAIL1
             elif [ "$(cat ${tempf} | sed -n '2p')" = "{" ]; then cat "${tempf}" | sed "1d" | jq -cC ".|${PRINT_INFO}"; RET=OKAY1
@@ -229,5 +229,5 @@ case ${CURR_branch} in
 
         if "${sflag}"; then err "stopped by stopflag"; exit 1; fi
         #show result summury of each git repository after running a command
-        printf "%4.4s: [%4.4s] %s\n" "${RET}" "${CURR_n}" "${CURR_project}" >> ${tempr}        
+        printf "%4.4s: [%4.4s] %s\n" "${RET}" "${CURR_n}" "${CURR_project}" >> ${tempr}
 esac;
