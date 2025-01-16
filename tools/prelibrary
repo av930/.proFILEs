@@ -26,14 +26,15 @@ lineup="￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣
 linedn="______________________________________________________________________________________"
 linemi="~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 linedb="〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓"
-
+linewave="~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 
 ## ---------------------------------------------------------------------------
 ## one-line function : 간단한 공용함수
 ## fuction has the captital : 외부에서 호출하지 않아야 하는 함수
 ## fuction has the only lowcase  : 외부에서 호출이 예상되는 함수
 ## dnlog, dbar, log can printf special charactor >> << | || , etc
-log()    { printf "%b\\n" "${*}"  ;}
+wave()   { printf "${linewave}\n";}
+log()    { printf "%b\\n" "${*}" ;}
 dnlog()  { printf "%b\\n" "${YELLOW}$1 ${NCOL} ${@:2}";}
 dlog()   { printf "%b" "${yellow}$1 ${NCOL} ${@:2}";}
 clog()   { log "${cyan}$1 ${NCOL} ${@:2}"  ;}
@@ -41,7 +42,8 @@ info()   { log "${GREEN}INFO: ${NCOL} ${*}"  ;}
 warn()   { log "${YELLOW}WARN: ${NCOL} ${*}" ;}
 err()    { log "${RED}ERROR: ${NCOL} ${*}" > /dev/stderr ;}
 #pCount() { tee >(let sum="$(wc -l) + ${1:-0}"; clog "#count:" "$((sum<0?0:+sum))" ); }
-pCount() { tee >(let sum="$(wc -l) + ${1:-0}"; clog "#count:" "$((sum<0?0:+sum))"; echo $sum > /tmp/__s_um; ); }
+pCount() { tee >(let sum="$(wc -l) + ${1:-0}"; clog "#count:" "$((sum<0?0:+sum))"; echo $sum > /tmp/pCount; ); }
+
 
 
 #${2:+[$2] }: if $2 exist, use '[$2] '
