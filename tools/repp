@@ -2151,8 +2151,8 @@ function  getServer() {
     case ${return_type} in                                                                    # return value
             http)    echo "${_item%:*}"                                                       # http://vgit.lge.com/na
     ;;      port)    echo "${_item##*:}"                                                      # 29420
-    #;;       sub)    echo "${_item#*://}"| awk -F[./:] '{sub(/-.*/,"",$1);print $1}'          # vgit
-    ;;       sub)    echo "${_item#*://}"| awk -F[./:] '{print $1}'          # vgit
+    #;;       sub)    echo "${_item#*://}"| awk -F[./:] '{sub(/-.*/,"",$1);print $1}'
+    ;;       sub)    echo "${_item#*://}"| awk -F[./:] '{print $1}'                           # vgit
     ;;    domain)    echo "${_item#*://}"| awk -F[./:] '{print $2"."$3}'                      # lge.com
     ;; subdomain)    echo "${_item#*://}"| awk -F[./:] '{print $1"."$2"."$3}'                 # vgit.lge.com
     ;;      path)    echo "${_item#*://}"| awk -F[./:] '{print $4}'                           # na
@@ -2653,22 +2653,25 @@ function revvaccess(){
 # $3 gitproject
 # $4 branch
     local cmd=$1
-    local subcmd=$2
+    local subcmd=$2 apifile=$2
     local server=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
     local sub=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub)
     local key=$(getServer $sub pass)
     local user=$(getServer $sub user)
 
-    local project=$3
+    local project=$3 cmdfile=$3
     local url_gerrit="${server}/a/projects/${project//'/'/'%2F'}"
     local branch=$3 #^refs/heads/26my_migg_.*
     local group=${4:-$USER} #gerrit group name
     local group_id=$(revvaccount group "$server" "$group" none none)
-    local file=$(mktemp)
-    local tempfile=$(mktemp)
+
+    local file=$(mktemp);
+    if [ ! -f "$cmdfile" ]; then cmdfile=$(mktemp); fi
+    if [ ! -f "$apifile" ]; then curl -su ${user}:${key} $url_gerrit/access |sed '1d' > $file; apifile=$file; fi
 
     [ -z "$user" ] && user=$ACCOUNT
     local SEP='~'
+    $DEBUG "KJK ${cmd}${SEP}${subcmd}"
     case ${cmd}${SEP}${subcmd} in
        *~help)  cat <<-EOF
 				usage) revv access    na <project>                                            #get permission list from project and its parents
@@ -2678,36 +2681,30 @@ function revvaccess(){
 
 				 info) repp connect help : you can check your basic access permission for a git.
 EOF
-    ;; access~*)
-                info "config: " "${server}/admin/repos/${project}"
-                curl -su ${user}:${key} $url_gerrit/access |sed '1d' > $file
+    ;; accessapiparent~*)
+                ## 입력된 project의 부모 project 정보를 출력한다.
+                cat $apifile|jq '.inherits_from|{name,id,parent,state}|del(.web_links)'
 
-                bar inline "show inherit parent permission git and grandparent"
-                cat $file|jq '.inherits_from|{name,id,parent,state}|del(.web_links)'
-
-                bar inline "show permission defined group in current git"
-
+    ;; accessapigroup~*)
                 #cat $file|jq --arg jq_var "${server}" -c '.groups[]|select(.url != null and .url != "") | {url: (.url | gsub("#"; $jq_var)), name}' |pCount
                 ## group.url이 null일때는 실제 null이라는 문자열로 replace를 하고, null이 아닐때는 #를 server주소로 변경해준다.
-                cat $file|jq --arg jq_var "${server}" -c '.groups[]| {url:(.url| if .==null then "null" else gsub("#"; $jq_var) end), name}' |pCount
+                cat $apifile|jq --arg jq_var "${server}" -c '.groups[]| {url:(.url| if .==null then "null" else gsub("#"; $jq_var) end), name}' |pCount
 
-                bar inline "show permission setting in current git"
+    ;; accessapipermission~*)
                 ## json중 group에서 url경우에는 null이라는 문자열로 변경하고, 있을때는#대신 server주소를 넣고, name경우에는 /를 _로 변경하고 tostring(문자열로변환)하고, gsub으로 문자열을 replace한다.
                 ## 3fe63d48b76~,jlr_vcm_developer
                 ## 3fcc47cb801~,mustang_tm_reviewer
                 ## stdin으로 부터 awk를 통해 아래와 같은 변환식파일을 만들어놓고, 변환식이 들어있는 파일을 stdin으로 sed로 입력받아 실제 파일인 $file을 변경한다.
                 ## 그런데 실제파일중에 일부인 .local부분만 필요함으로 그 부분을 process substition오로 입력받아서 처리한다.
                 ## 이때 jq -C '.local'로 처리했지만, compact하게 출력하기 위해 jq -cC '.local|to_entries | map({(.key): .})[][][]' 를 사용할수도 있다.
-
-                cat $file|jq --arg jq_var "${server}" -crM \
+                cat $apifile|jq --arg jq_var "${server}" -crM \
                 '.groups[]| {url:(.url| if .==null then "null" else gsub("#"; $jq_var) end), name:(.name| gsub("/"; "_"))} |tostring |gsub("{|\"|}";"") |gsub("url.*uuid-|name:";"")'|\
-                awk -F, '{print "s/"$1"/"$2"/g;"}'> $tempfile
+                awk -F, '{print "s/"$1"/"$2"/g;"}'> $cmdfile
 
                 ## compact하게 나오지 않고 full display를 하는 경우
-                ## [ "$(cat /tmp/pCount)" -gt 10 ] && { read -t 2 -p "Press Ctrl+C not to see more ..."; cat $tempfile|sed -f - <(cat $file|jq -C '.local'); }
-
+                ## [ "$(cat /tmp/pCount)" -gt 10 ] && { read -t 2 -p "Press Ctrl+C not to see more ..."; cat $cmdfile|sed -f - <(cat $file|jq -C '.local'); }
                 ## compact display
-                cat $tempfile| sed -f - <(cat $file |jq -cC '.local |
+                cat $cmdfile| sed -f - <(cat $apifile |jq -cC '.local |
                 walk(if type == "object" then
                     del(.force) |
                     if .action == "ALLOW" then del(.action) else . end
@@ -2716,17 +2713,41 @@ EOF
                 keys[] as $k | {($k): .[$k]}
                 ')
 
+    ;; access~*)
+                info "config: " "${server}/admin/repos/${project}"
+                bar inline "show inherit parent permission git and grandparent"
+                revvaccess accessapiparent $file
+
+                bar inline "show permission defined group in current git"
+                revvaccess accessapigroup $file
+
+                bar inline "show permission setting in current git"
+                revvaccess accessapipermission $file $cmdfile
+
                 wave
                 ##cat rule.txt | sed -f - <(cat /tmp/tmp.frgiex2IBv | jq '.local|walk(if type == "object" then del(.force) else . end)')
-                cat <<- EOL
-				cat $file|jq --arg jq_var "${server}" -crM '.groups[]| {url:(.url| if .==null then "null" else gsub("#"; \$jq_var) end), name:(.name| gsub("/"; "_"))} |tostring |gsub("{|\"|}";"") |gsub("url.*uuid-|name:";"")'|awk -F, '{print "s/"\$1"/"\$2"/g;"}' > $tempfile
-				cat $tempfile| sed -f - <(cat $file |jq -C '.local')
-EOL
+                ##cat $file|jq --arg jq_var "${server}" -crM '.groups[]| {url:(.url| if .==null then "null" else gsub("#"; \$jq_var) end), name:(.name| gsub("/"; "_"))} |tostring |gsub("{|\"|}";"") |gsub("url.*uuid-|name:";"")'|awk -F, '{print "s/"\$1"/"\$2"/g;"}' > $cmdfile
+                if [ -s "$cmdfile" ]; then echo "'to see more detail': cat $cmdfile| sed -f - <(cat $file |jq -C '.local')"
+                else echo "'to see parent permission': revv access $subcmd $(jq -rM '.inherits_from.name' $file)" ;fi
 
                 #cat $file|jq --arg jq_var "${server}" -crM '.groups[]| {url:(.url| if .==null then "null" else gsub("#"; $jq_var) end), name}| tostring | gsub("{|\"|}";"")| gsub("url.*uuid-|name:";"")'|\
                 #    sed 's:/: :g' |awk -F, '{print "s/"$1"/"$2"/g;"}' |sed -f - <(cat $file|jq '.local') > b.txt
                 # cat $file|jq -cC '.local|to_entries | map({(.key): .})[][][]'
-
+    ;; accessall~*)
+                ## KJK_DEBUG 여기서 부터 다시.
+                ## parent를 돌아가며 group과 permission을 출력해야 한다.
+                info "config: " "${server}/admin/repos/${project}"
+                local tempS tempP=${project}
+                bar inline "show inherit parent permission git and grandparent"
+                while [ "$tempP" != "null" ] ; do
+                    ##부모의 server주소를 추출한다.
+                    set -x
+                    echo "$tempS:$tempP"
+                    tempP="$(curl -su ${user}:${key} $url_gerrit/access |sed '1d' |jq -rM '.inherits_from.id')"
+                    tempS="$(cat $file | jq -rM '.inherits_from.web_links[] | select(.url | contains("plugins")) | .url' |sed -E 's#\/(.*)/plugins.*#\1#')"
+                    set +x
+                    revvaccess accessapiparent $tempS $tempP
+                done
 
     ;; accessadd~*)
                 clog "add migration permission $group_id $branch"
@@ -2771,6 +2792,7 @@ TEMP_JSON
 
     ;; *) echo "default functionality"
     esac
+
 }
 
 
