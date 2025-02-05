@@ -2701,7 +2701,7 @@ function revvaccess(){
 # $4 branch
     local cmd=$1
     local subcmd=$2
-    local project=$3
+    local project=${3:-${GITT_PROJECT:-${REPP_PROJECT}}}
     local group=${4:-$USER} #gerrit group name
     local branch=$5 #^refs/heads/26my_migg_.*
 
@@ -2958,6 +2958,7 @@ EOF
                 source  <(echo 'flag_forall="${@:2}"'); return 0
     ;;   branch*|?branch*) :
     ;; project*|?project*) :
+    ;;   access*|?access*) :
     ;;                  *)  err "please check usage: not registerd cmd, use 'revv forall help' "; return 1
     esac
 
@@ -3159,7 +3160,7 @@ case "$1" in
     ;;   debug)      reppcheck_initvar gittrevv        &&  revvdebug "${@:2}"
     ;;  forall)      reppcheck_initvar repprevv        &&  revvforall "${@:2}"
     ;;  commit)      reppcheck_initvar repprevv        &&  revvcommit "${@:2}"
-    ;; access*)      reppcheck_initvar repprevv        &&  revvaccess "${@:1}"
+    ;; access*)      reppcheck_initvar repgittprevv    &&  revvaccess "${@:1}"
     ;; branch*)      reppcheck_initvar repprevv        &&  revvbranch "${@:1}"
     ;;project*)      reppcheck_initvar repprevv        &&  revvproject "${@:1}"
     ;;       *)      reppcheck_initvar repprevv        &&  revvaccount "${@:1}"

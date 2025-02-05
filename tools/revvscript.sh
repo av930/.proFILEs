@@ -155,6 +155,7 @@ case $cmd in
     ;;     branchpre|branchaddpre|branchdelpre) target="${target}${REPO_RREV}"
     ;;  branchpost|branchaddpost|branchdelpost) target="${REPO_RREV}${target}"
     ;;                                project*) :
+    ;;                                 access*) :
     ;;                                       *) err "command not recongnized, check usage"; exit 1
 
 esac
@@ -202,6 +203,9 @@ case ${CURR_branch} in
                     showRUN ${cmd_project}/parent -X PUT -H "Content-Type: application/json" --data "{"parent": "${target}"}"
         ;;     projectdel)
                     echo ${CURR_url}/admin/repos/${CURR_project//'/'/'%2F'},commands; exit 0
+        ;;     accessurl)
+                    echo ${CURR_url}/admin/repos/${CURR_project//'/'/'%2F'},access;
+                    showRUN ${cmd_project}
         ;;     *)
                     err "command not recongnized!"; exit 1
         esac
@@ -210,7 +214,7 @@ case ${CURR_branch} in
         ## parse result &
         case $cmd in
         branch*)   PRINT_INFO='{ref,revision}';;
-        project*)  PRINT_INFO='{name,parent}' ;;
+        project*|access*)  PRINT_INFO='{name,parent}' ;;
         esac
 
         if [ "$(cat ${tempf} | head -1)" = "${JSON_IDFY}" ]; then
