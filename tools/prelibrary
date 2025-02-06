@@ -136,6 +136,114 @@ function checkifSHA(){
 }
 
 
+
+function  getServer() {
+## ---------------------------------------------------------------------------
+## return remote (gerrit server) info as a various type
+## format: getServer [29420|na|vgit|lamp|review] [port|http|sub|domain|subdomain|path|url|remote|debug]
+## exception: vgitxxx lampxxx will return only postfix after delimter _
+##            aaa-bbb같이 -를 포함하는 sub은 -앞의 string(aaa)만 사용한다.
+
+    local key=$1
+    local _item=$(revvserver de $key |awk -F '|' '{print $2}')
+    local return_type=$2
+
+    case ${return_type} in                                                                    # return value
+            http)    echo "${_item%:*}"                                                       # http://vgit.lge.com/na
+    ;;      port)    echo "${_item##*:}"                                                      # 29420
+    #;;       sub)    echo "${_item#*://}"| awk -F[./:] '{sub(/-.*/,"",$1);print $1}'
+    ;;       sub)    echo "${_item#*://}"| awk -F[./:] '{print $1}'                           # vgit
+    ;;    domain)    echo "${_item#*://}"| awk -F[./:] '{print $2"."$3}'                      # lge.com
+    ;; subdomain)    echo "${_item#*://}"| awk -F[./:] '{print $1"."$2"."$3}'                 # vgit.lge.com
+    ;;      path)    echo "${_item#*://}"| awk -F[./:] '{print $4}'                           # na
+    ;;       url)    echo "${_item#*://}"| awk -F[./:] '{$4="/"$4;gsub(/\/none_.*/,"",$4);print $1"."$2"."$3$4}'            # vgit.lge.com/na
+    ;;    remote)    echo "${_item#*://}"| awk -F[./:] '{print $1"_"$4}'                      # vgit_na
+    ;;      pass)    revvserver de $key  | awk -F '[[:space:]]*\\|'  '{print $4}'             # N4lIA0SoQAoUfxlmCZudjNA12344
+    ;;      user)    revvserver de $key  | awk -F '[[:space:]]*\\|'  '{print $3}'             # vc.integrator
+    ;;     debug)    echo "${_item}"                                                          # http://vgit.lge.com/na:29420
+    ;;         *)    echo "NULL";                                                             # vgit.lge.com/na:29420
+    esac
+
+}
+
+
+function revvserver(){
+## ---------------------------------------------------------------------------
+# encoding as variable: code env <keyname> <key>
+# encoding as file: code en <keyfile> <key>
+# decode de <keyfile>
+local temp temp_var
+local cmd=$1 tag=$2 key=$3
+    case $cmd in
+       gen) #default server 접속정보 파일인 ~/.key_server를 생성한다.
+            clog ".key_server" "is generated, \nplease add your server info with http key from: https://gerrit.url.com/settings/#HTTPCredentials\n"
+        cat <<-EOF  >.key_server
+			REMOTE,KEY   |URL to GERRIT                                         |ACCOUNT         |HTTP KEY
+			vgit_na      |http://vgit.lge.com/na:29420                          |vc.integrator   |ex)N4lIA0SoQAoUfxlmCZudjNA1
+			vgit_eu      |http://vgit.lge.com/eu:29430                          |vc.integrator   |~~~
+			vgit_as      |http://vgit.lge.com/as:29440                          |vc.integrator   |~~~
+			vgit_adas    |http://vgit.lge.com/adas:29550                        |vc.integrator   |
+			devops_test  |http://vgit.lge.com/devops_test:29999                 |vc.integrator   |
+			review       |http://lamp.lge.com/review:29418                      |vc.integrator   |
+EOF
+        cat .key_server
+
+    ;;  en) #~/.key_server.en 로 암호화한다.
+            if [ -f $HOME/.key_server ]; then
+                clog "$HOME/.key_server will be converted to $HOME/.key_server.en with encrypting"
+                cat $HOME/.key_server | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey > $HOME/.key_server.en
+                rm -f $HOME/.key_server
+            else
+                clog "$HOME/.key_server.en" "could be updated by '$FUNCNAME editing' [$HOME/.key_server]"
+                err "You must create server connection info, use '$FUNCNAME gen'"; return 1
+            fi
+
+    ;;edit) #~/.key_server.en으로 부터 ~/.key_server를 생성하여 편집할수 있게 해준다.
+            cat $HOME/.key_server.en | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey >$HOME/.key_server
+            clog "$HOME/.key_server" "is decrypted from $HOME/.key_server.en"
+            [ -f "$HOME/.key_server" ] && cat $HOME/.key_server || { err "You must create server connection info, use '$FUNCNAME gen'"; return 1; }
+
+    ;;  de) #~/.key_server.en에서 server정보를 획득해온다.
+            if [ -f $HOME/.key_server.en ]; then
+                temp_var=$(cat $HOME/.key_server.en | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey |\
+                  awk -v tag="$tag" -F '[[:space:]]*\\|' '$1 == tag{print $0}')
+                if [ -n "$temp_var" ];then
+                    echo $temp_var && return 0
+                else temp_var=$(cat $HOME/.key_server.en | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey |\
+                  awk -v tag="$tag" -F '[[:space:]]*\\|' '$2 ~ tag && !found {print $0; found=1}')
+                    echo $temp_var && return 0
+                fi
+
+                err "matched http key is not existed or incorrect!";
+                clog "guide" "run '$FUNCNAME edit' and edit proper server info in .key_server"
+                return  1;
+            else
+                err "You must create server connection info, use '$FUNCNAME gen'"; return 1
+            fi
+
+    ;;check|info) #getServer 함수 test용으로 모든 format대로 제대로 출력하는지 확인할수 있다.
+            test_getServer $cmd
+    ;;help) cat <<- EOF
+			usage) revv server <cmd> <option>
+
+			revv server   gen             #generate template .key_server file for easy creation
+			revv server    en             #after update .key_server, encrypt it to .key_server.en
+			revv server  edit             #encrypted .key_server.en will be decryped to .key_server to edit
+			revv server    de vgit_na     #search vgit_na server and get info of it from .key_server.en
+			revv server  show             #show current server info from .key_server.en
+            revv server check             #check connection of server
+			revv server  info             #check connection of server and format of getServer api
+EOF
+    ;;show|*)  #현재 .key_server파일을 보여준다.
+            [ ! -f $HOME/.key_server.en ] && err "You must create server connection info, use '$FUNCNAME gen'"
+            cat $HOME/.key_server.en | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey
+
+            clog "You can refer:" "'revv server help'"
+
+    esac
+}
+
+
 #### ============================================================================
 #### predefined function
 #### ============================================================================
