@@ -1,8 +1,8 @@
 ###### revv script template
 ## usage
-# repo forall -evc bash 'revvscript.sh' branch 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog master
-# repo forall -evc bash 'revvscript.sh' branchlist 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog \*
-# repo forall -evc bash -ex 'revvscript.sh' branchlist 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog \*
+# repo forall -evc bash 'revvscript.sh' branch master
+# repo forall -evc bash 'revvscript.sh' branchlist \*
+# repo forall -evc bash -ex 'revvscript.sh' branchlist \*
 
 ## description
 # repo forall . -c bash 'cmd.sh'                                    # for current git only, make SHELL variable valid
@@ -29,7 +29,7 @@
 # revv forall setgit                                    #설정된 git정보를 없앤다. 모든 git에 적용한다.
 
 ##revv run cmd
-# revv forall branch @branch = repo forall -evc bash 'revvscript.sh' 8VJBTc1TpTLNzJRwiHa1pAnnE64SF2gprMa8+iviog branch @branch
+# revv forall branch @branch = repo forall -evc bash 'revvscript.sh' branch @branch
 # revv forall branch        master                      # 정확한 이름의 브랜치 존재여부
 # revv forall Pbranch       master                      # master branch에 대해 실행명령만 출력, 실제 실행안함
 # revv forall Dbranch       master                      # 첫번째 1개 project에 대해 실제 명령을 실행하고, 디버깅정보 출력
@@ -51,12 +51,12 @@
 # revv forall projectdel                                # manifest에 기록된 모든 프로젝트에 대해 삭제가 가능한 link제공
                                                         # gerrit은 project를 삭제할수 있는 cli cmd는 제공하지 않음.
 
+source ${proFILEdir}/tools/prelibrary
 ###### setting for env
 ## USER input
 cmd=$1         #branch, project
-key_http=$2
-target=$3      #branch-name, parent-project-name
-source=$4      #base-branch-name
+target=$2      #branch-name, parent-project-name
+source=$3      #base-branch-name
 
 ## default variable & functions
 linewave="~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
@@ -173,7 +173,7 @@ $DEBUG "CURR_branch:${CURR_branch}| CURR_upstream:${REPO_UPSTREAM}| CURR_destbra
 $DEBUG "input param: cmd: [$cmd]| target: ${target}| source: ${source}"
 $DEBUG "positional params: [$0][$1][$2][$3][${@:4}]"
 
-
+key_http=$(getServer ${CURR_remote} pass)
 cmd_branch="curl -su $REPO__$USER:${key_http} ${CURR_url}/a/projects/${CURR_project//'/'/'%2F'}/branches/${target} -o ${tempf}"
 cmd_project="curl -su $REPO__$USER:${key_http} ${CURR_url}/a/projects/${CURR_project//'/'/'%2F'} -o ${tempf}"
 ## main handler by git branch
@@ -218,12 +218,14 @@ case ${CURR_branch} in
         esac
 
         if [ "$(cat ${tempf} | head -1)" = "${JSON_IDFY}" ]; then
-            if [ "$(cat ${tempf} | sed -n '2p')" = "[]" ]; then clog "executed" "result is nothing"; cat ${tempf} | tail -n +3;  RET=FAIL1
-            elif [ "$(cat ${tempf} | sed -n '2p')" = "{" ]; then cat "${tempf}" | sed "1d" | jq -cC ".|${PRINT_INFO}"; RET=OKAY1
-            else cat "${tempf}" | sed '1d'| jq  -cC ".[]|${PRINT_INFO}";  RET=OKAY2
+        cat ${tempf} | sed 1d| jq -rM > ${tempf}__
+        mv ${tempf}__ ${tempf}
+            if [ "$(cat ${tempf} | sed -n '1p')" = "[]" ]; then clog "executed" "result is nothing"; cat ${tempf} | tail -n +3;  RET=FAIL1
+            elif [ "$(cat ${tempf} | sed -n '1p')" = "{" ]; then cat "${tempf}" | jq -cC ".|${PRINT_INFO}"; RET=OKAY1
+            else cat "${tempf}" | jq  -cC ".[]|${PRINT_INFO}";  RET=OKAY2
             fi
-        elif [ -z "$(cat ${tempf} | head -1)" ]; then clog "warn" "API well executed, but you must check the result by hand." ;  RET=OKAY3
-        else cat "${tempf}" ;  RET=FAIL2
+        elif [ -z "$(cat ${tempf})" ]; then clog "warn" "API executed, but return is not JSON, please check." ;  RET=OKAY3
+        else cat "${tempf}" ;clog "warn" "API executed, but return is not JSON, please check.";  RET=FAIL2
         fi
 
         $DEBUG [$CURR_n] [$RET] [$sflag]
