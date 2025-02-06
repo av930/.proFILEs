@@ -333,13 +333,10 @@ EOF
             if [ -z "$ask" ]; then pushd "$REPP_ROOT/${oneline[5]}"
                 #ROOTDIR="$REPP_ROOT" GROUP="${oneline[1]}" repo forall . ${ask:+--interactive} -evc bash -c "${oneline[6]}"
                 #bash -c "$(printf "%b" "REPO_ROOT="$REPP_ROOT" REPO_LREV="${oneline[0]}" REPO_GROUP="${oneline[1]}" REPO_REMOTE="${oneline[2]}" REPO_RREV="${oneline[3]}" REPO_PROJECT="${oneline[4]}" REPO_PATH="${oneline[5]}"; ${oneline[6]}")"
+                #cat <<- EOF | bash -c
+                #    REPO_ROOT="$REPP_ROOT" REPO_LREV="${oneline[0]}" REPO_GROUP="${oneline[1]}" REPO_REMOTE="${oneline[2]}" REPO_RREV="${oneline[3]}" REPO_PROJECT="${oneline[4]}" REPO_PATH="${oneline[5]}" ${oneline[6]}
+                #EOF
                 REPO_ROOT="$REPP_ROOT" REPO_LREV="${oneline[0]}" REPO_GROUP="${oneline[1]}" REPO_REMOTE="${oneline[2]}" REPO_RREV="${oneline[3]}" REPO_PROJECT="${oneline[4]}" REPO_PATH="${oneline[5]}" ${oneline[6]}
-<< COMMENT
-                cat <<- EOF | bash -s
-                    REPO_ROOT="$REPP_ROOT" REPO_LREV="${oneline[0]}" REPO_GROUP="${oneline[1]}" REPO_REMOTE="${oneline[2]}" REPO_RREV="${oneline[3]}" REPO_PROJECT="${oneline[4]}" REPO_PATH="${oneline[5]}"
-                    ${oneline[6]}
-EOF
-COMMENT
                 popd
             elif [ "$ask" = "go" ]; then opt=go; ask=''
             else
