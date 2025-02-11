@@ -239,6 +239,7 @@ CHANGE
 				usage) repp mani go                                       #cd to manifest dir
 				usage) repp mani gen <outfile>
 				   ex) repp mani gen current.xml                          #default out: ${REPPFILE_XML}
+				usage) repp mani find <string>                            #find string in current used xmls
 				usage) repp mani change <revision|name|path|remote|upstream|dest-branch|groups|dest|src|etc> <str> <filter>
 				   ex) repp mani change                                   #show command how to change manifest in detail, not change directly
 				   ex) repp mani change remote vgit_new                   #show command: change "any string" to "vgit_new" in all remote field
@@ -716,7 +717,7 @@ function reppmanidb(){
     readarray -d'|' -t item_default < <(cat  ${REPPFILE_JSON} |jq -j '.default|.revision,"|",.groups,"|",.remote,"|",.upstream,"|",."dest-branch","|",.name,"|",.path,"|"')
     ## get <remote.alias> from json
     #declare -p items_alias
-    readarray -t items_alias < <(cat  ${REPPFILE_JSON} |jq -jr '.remote[]|select(.alias!=null)|.name,"=",.alias')
+    readarray -t items_alias   < <(cat  ${REPPFILE_JSON} |jq -jr '.remote[]|select(.alias!=null)|.name,"=",.alias')
     readarray -t items_project < <(cat  ${REPPFILE_JSON}|jq -jr '.project[]|.revision,"|",.groups,"|",.remote,"|",.upstream,"|",."dest-branch","|",.name,"|",.path,"|\n"'|sort)
 
     ## save to array
@@ -740,22 +741,22 @@ function reppmanidb(){
             ## 칼럼순서대로 1:revision, 2:group, 3:remote, 4:upstream, 5:dest_branch, 6:rrev, 7:project, 8:path
             ##process item according to index
             case ${index} in
-                #revision: if ok, truncate digit to 6
+                #1.revision: if ok, truncate digit to 6
                   0)   [ "${item}" = "null" ] && { err "${lineout}[${index}]"; return 1; }; itemlrev=${item}; #item=${item:0:6};
-                #group : assign default value, if value is not defined
+                #2.group : assign default value, if value is not defined
                 ;;1)   [ "${item}" = "null" ] && item="all,default"
-                #remote: replace alias by original name
+                #3.remote: replace alias by original name
                 ;;2)   [ "${item}" = "null" ] && warn "${lineout}[${index}] remote is null"
                        for alias in ${items_alias[@]};do [ "${item}" = "${alias%=*}" ] && item="${alias#*=}";done
-                #name, path: if null stop, it is mandatory
-                ;;5) [ "${item}" = "null" ] && warn "${lineout} name is null"
-                ;;6) [ "${item}" = "null" ] && warn "${lineout} path is null"
-                #upstream:
+                #7.project(name), 8.path: if null stop, it is mandatory
+                ;;5)   [ "${item}" = "null" ] && warn "${lineout} name is null"
+                ;;6)   [ "${item}" = "null" ] && warn "${lineout} path is null"
+                #4.upstream:
                 ;;3)   itemrrev=${item}
-                #dest-branch: decide revision from upstream
+                #5.dest-branch, 6.rrev(revision is generated)
                 ;;4)   if   [ "${item}" = "${itemrrev}" ]; then [ "${item}" = "null" ] && item="${item}|${itemlrev}" || item="${item}|${itemrrev}"
                        else [ "${itemrrev}" = "null" ] && item="${item}|${itemlrev}" || item="${item}|${itemrrev}"
-                            warn "pull/push address is different (${line})";
+                            info "pull/push address is different (${line})";
                        fi
             esac
             index=$(( ++index ))
@@ -791,13 +792,10 @@ function reppmanidb(){
     ## 핵심colume만 비교하기 위해 추출
     local matchlinenum_json matchlinenum_repo
     touch ${REPPFILE_CSV}
-    awk -v FS="|" '{print $1"|"$3"|"$6"|"$7"|"$8}' ${REPPFILE_CSV}.json > ${REPPFILE_CSV}.json.cmp
-    awk -v FS="|" '{print $1"|"$3"|"$6"|"$7"|"$8}' ${REPPFILE_CSV}.repo > ${REPPFILE_CSV}.repo.cmp
+    awk -v FS="|" '{print $1"|"$6"|"$7"|"$8}' ${REPPFILE_CSV}.json > ${REPPFILE_CSV}.json.cmp
+    awk -v FS="|" '{print $1"|"$6"|"$7"|"$8}' ${REPPFILE_CSV}.repo > ${REPPFILE_CSV}.repo.cmp
     if ! diff -q -B ${REPPFILE_CSV}.json.cmp ${REPPFILE_CSV}.repo.cmp &>/dev/null
     then ## json과 repo가 다르다면 (manifest자체에 문제가 있거나, json parsing이 제대로 안된경우)
-        warn "${REPP_PATH}/${REPPFILE_MANI}\n        has mismatch  between 'repo manifest' and 'repo forall'"
-        clog "bad case:content different" "join 'repo' and 'json' info"
-
         ## repo.cmp파일에서 한줄씩읽어 json.cmp에서 match라인을 찾으면, 해당 라인을 json에서 DB로 넣고, 못찾으면 repo에서 DB로 넣어라
         while read -r line && [[ -n ${line} ]]; do
             matchlinenum_json=$(grep -nx "$line" ${REPPFILE_CSV}.json.cmp| cut -d: -f1) ##match라인 num구하기
@@ -808,11 +806,16 @@ function reppmanidb(){
             fi
         done < ${REPPFILE_CSV}.repo.cmp
 
+        bar inline "${REPPFILE_CSV}"
+        clog "bad case:content different" "join 'repo' and 'json' info"
+        warn "${REPP_PATH}/${REPPFILE_MANI}\n        has mismatch  between 'repo manifest' and 'repo forall'"
+        diff -B <(awk -v FS="|" '{print $1"|"$7"|"$8}' ${REPPFILE_CSV}.json) <(awk -v FS="|" '{print $1"|"$7"|"$8}' ${REPPFILE_CSV})
     else ## repp.csv.json와 repp.csv.repo가 같은 경우 (정상적으로 잘 만들어진경우)
-        clog "good case:exactly same" "generated from manifest and verfied by repo"
         cp ${REPPFILE_CSV}.json ${REPPFILE_CSV}
+        bar inline "${REPPFILE_CSV}"
+        clog "good case:exactly same" "generated from manifest and verfied by repo"
     fi
-    bar inline "${REPPFILE_CSV}"
+
 
     ##git submodule이 설정되어 있는 경우를 수집한다.
     #repo forall -cj4 '[ -s .gitmodules ] && printf "%80s" "${REPO_PATH} $(cat .gitmodules|grep -oP "(?<=path \= ).*")"' > ${REPPFILE_CSV}.submodule
