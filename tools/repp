@@ -730,10 +730,9 @@ function reppmanidb(){
     local linein lineout count=0
     local lrev group remote upstream dest_branch rrev project path
 
-    time for lines in $(printf "%s\n" $(declare -p items_project| sed -e 's/declare.*=(//' -e 's/\[[0-9]\+\]=//g' |tr -d \")); do
+    time for lines in $(printf "%s\n" $(declare -p items_project| sed -e 's/declare.*=(//' -e 's/\[[0-9]\+\]=//g' |tr -d \"|tr -d \) )); do
         readarray -d '|' -t linein <<< "$lines"
         lineout=""
-
         ##get project info, if null assign default value
                lrev=${linein[0]##*=};        [ "$lrev" = "null" ] &&        lrev=${line_default[0]##*=}
               group=${linein[1]##*=};       [ "$group" = "null" ] &&       group=${line_default[1]##*=}
@@ -742,25 +741,34 @@ function reppmanidb(){
         dest_branch=${linein[4]##*=}; [ "$dest_branch" = "null" ] && dest_branch=${line_default[4]##*=}
             project=${linein[5]##*=};     [ "$project" = "null" ] &&     project=${line_default[5]##*=}
                path=${linein[6]##*=};        [ "$path" = "null" ] &&        path=${line_default[6]##*=}
+               path=$(echo "$path" | tr -d '\r\n')
+               #printf "[%s] %s" $((count++)) "${path}"
 
         ## 칼럼순서대로 1:revision, 2:group, 3:remote, 4:upstream, 5:dest_branch, 6:rrev, 7:project, 8:path
         ##process item according to index
         [ "$lrev" = "null"  ] && { err "${lineout}[${index}]"; return 1; } || lineout+="${lrev}|"
         [ "$group" = "null" ] && lineout+="all,default" || lineout+="${group}|"
         #3.remote: replace alias by original name
-        echo ${items_alias[@]}| while read -d'|' alias && [ -n "${alias[@]}" ]; do [ "${remote}" = "${alias%%=*}" ] && break; done
-        remote="${alias##*=}"; lineout+="${remote/%|/}|"
+
+        echo ${items_alias[@]}| while read -d'|' alias && [ -n "${alias[@]}" ]; do
+            if [ "${remote}" = "${alias%%=*}" ]; then
+                remote="${alias##*=}";
+                break;
+            fi
+        done
+        lineout+="${remote}|"
+        #remote="${alias##*=}"; lineout+="${remote}"
         #4.upstream:
         lineout+="${upstream}|"
         #5.dest-branch, 6.rrev(revision is generated)
-        if [ "$dest_branch" = "$upstream" ]; then [ "$dest_branch" = "null" ] && lineout+="$dest_branch|$lrev" || lineout+="$dest_branch|$rrev"
-        else [ "$upstream" = "null" ] && lineout+="$dest_branch|$lrev" || lineout+="$dest_branch|$rrev"
+        if [ "$dest_branch" = "$upstream" ]; then [ "$dest_branch" = "null" ] && lineout+="${dest_branch}|${lrev}|" || lineout+="${dest_branch}|${upstream}|"
+        else [ "$upstream" = "null" ] && lineout+="${dest_branch}|${lrev}|" || lineout+="${dest_branch}|${upstream}|"
             info "pull/push url is diff: $(printf "[%-60.60s] %-40.40s %-40.40s" $project $dest_branch $upstream)";
         fi
 
         #7.project(name), 8.path: if null stop, it is mandatory
         [ "$project" = "null" ] && { err "${lineout} name is null"; return 1; } || lineout+="${project}|"
-        [    "$path" = "null" ] && { err "${lineout} name is null"; return 1; } || lineout+="${path}"
+        [    "$path" = "null" ] && { err "${lineout} name is null"; return 1; } || lineout+="${path}|"
         #printf "[%s] %s\n" $((count++)) "${lineout}"
         mani_out+=(${lineout})
     done
@@ -789,7 +797,6 @@ function reppmanidb(){
 
     ## 핵심colume만 비교하기 위해 추출
     local matchlinenum_json matchlinenum_repo
-    touch ${REPPFILE_CSV}
     awk -v FS="|" '{print $1"|"$6"|"$7"|"$8}' ${REPPFILE_CSV}.json > ${REPPFILE_CSV}.json.cmp
     awk -v FS="|" '{print $1"|"$6"|"$7"|"$8}' ${REPPFILE_CSV}.repo > ${REPPFILE_CSV}.repo.cmp
     if ! diff -q -B ${REPPFILE_CSV}.json.cmp ${REPPFILE_CSV}.repo.cmp &>/dev/null
