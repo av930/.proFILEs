@@ -717,56 +717,61 @@ function reppmanidb(){
     readarray -d'|' -t item_default < <(cat  ${REPPFILE_JSON} |jq -j '.default|.revision,"|",.groups,"|",.remote,"|",.upstream,"|",."dest-branch","|",.name,"|",.path,"|"')
     ## get <remote.alias> from json
     #declare -p items_alias
-    readarray -t items_alias   < <(cat  ${REPPFILE_JSON} |jq -jr '.remote[]|select(.alias!=null)|.name,"=",.alias')
-    readarray -t items_project < <(cat  ${REPPFILE_JSON}|jq -jr '.project[]|.revision,"|",.groups,"|",.remote,"|",.upstream,"|",."dest-branch","|",.name,"|",.path,"|\n"'|sort)
+    #readarray -t items_alias   < <(cat  ${REPPFILE_JSON} |jq -jr '.remote[]|select(.alias!=null)|.name,"=",.alias')
+    readarray -t items_alias   < <(cat  ${REPPFILE_JSON} |jq -jr '.remote[]|select(.alias!=null)|.name,"=",.alias,"|"')
+    readarray -t items_project < <(cat ${REPPFILE_JSON} | jq -r '.project[]|{revision,groups,remote,upstream,"dest-branch",name,path} + .| to_entries | map("\(.key)=\(.value)") | join("|")'| sort)
 
+    time_start=$(date +%s.%N)
     ## save to array
     local mani_out=()
     printf "takes time at first, creating .repp dir & DB files by analysing manifest\n\n"
     ## read one line from items_project array
     local line count=0
     for line in "${items_project[@]}"; do
-        $DEBUG ${line}
         ##read one item from line by '|'
         local index=0 itemlrev itemrrev
         local lineout=''
+        local key val
         while read -d'|' item; do
-            $DEBUG "[%s] %s\n" "${index}" "${item}"
-            ## remove return
-            item=${item//$'\r'}
+            key="${item%%=*}"
+            val="${item##*=}"
+            $DEBUG "[%s] %s=%s\n" "${index}" "$key" "$val"
 
             ##preprocessor, override value from default
-            [ "${item}" = "null" ] && item=${item_default[index]};
+            [ "${val}" = "null" ] && val=${item_default[index]}
 
             ## 칼럼순서대로 1:revision, 2:group, 3:remote, 4:upstream, 5:dest_branch, 6:rrev, 7:project, 8:path
             ##process item according to index
-            case ${index} in
+            case $key in
                 #1.revision: if ok, truncate digit to 6
-                  0)   [ "${item}" = "null" ] && { err "${lineout}[${index}]"; return 1; }; itemlrev=${item}; #item=${item:0:6};
+                  revision)     [ "$val" = "null" ] && { err "${lineout}[${index}]"; return 1; }; itemlrev=$val; #item=${item:0:6};
                 #2.group : assign default value, if value is not defined
-                ;;1)   [ "${item}" = "null" ] && item="all,default"
+                ;;groups)       [ "$val" = "null" ] && val="all,default"
                 #3.remote: replace alias by original name
-                ;;2)   [ "${item}" = "null" ] && warn "${lineout}[${index}] remote is null"
-                       for alias in ${items_alias[@]};do [ "${item}" = "${alias%=*}" ] && item="${alias#*=}";done
+                ;;remote)       [ "$val" = "null" ] && warn "${lineout}[${index}] remote is null"
+                                echo ${items_alias[@]}| while read -d'|' alias && [ -n "${alias[@]}" ]; do [ "$val" = "${alias%%=*}" ] && break; done
+                                val="${alias##*=}"; val="${val/%|/}"
                 #7.project(name), 8.path: if null stop, it is mandatory
-                ;;5)   [ "${item}" = "null" ] && warn "${lineout} name is null"
-                ;;6)   [ "${item}" = "null" ] && warn "${lineout} path is null"
+                ;;name)         [ "$val" = "null" ] && warn "${lineout} name is null"
+                ;;path)         [ "$val" = "null" ] && warn "${lineout} path is null"
                 #4.upstream:
-                ;;3)   itemrrev=${item}
+                ;;upstream)     itemrrev=$val
                 #5.dest-branch, 6.rrev(revision is generated)
-                ;;4)   if   [ "${item}" = "${itemrrev}" ]; then [ "${item}" = "null" ] && item="${item}|${itemlrev}" || item="${item}|${itemrrev}"
-                       else [ "${itemrrev}" = "null" ] && item="${item}|${itemlrev}" || item="${item}|${itemrrev}"
-                            info "pull/push address is different (${line})";
-                       fi
+                ;;dest-branch)  if   [ "$val" = "${itemrrev}" ]; then [ "$val" = "null" ] && val="$val|${itemlrev}" || val="$val|${itemrrev}"
+                                else [ "${itemrrev}" = "null" ] && val="$val|${itemlrev}" || val="$val|${itemrrev}"
+                                info "pull/push url is diff: $(awk -v FS="|" '{printf "[%-60.60s] %-40.40s %-40.40s ", $6,$4,$5}' <<<${line})";
+                                fi
+                ;;*)            case $key in
+                                sync-s) printf "${key}[${val}] in \ngit[$line]\n"
+                                ;;linkfile|*) :
+                                esac
             esac
             index=$(( ++index ))
-            lineout+="${item:+"${item}|"}"
-        done <<< "${line}"
+            lineout+="${val:+"${val}|"}"
+        done <<< "${line}|"
         count=$(( ++count ))
-        #(( ${count} > 10 )) && break
+        #(( count > 3 )) && break
         #$DEBUG "%s\n" "${lineout}"
-        #printf "%s\n" "${lineout}"
-        #lineout+="${itemrrev}"
         mani_out+=(${lineout})
     done
 
@@ -780,6 +785,8 @@ function reppmanidb(){
     ## RREV is created by upper logic
     ##NEEDTO improve: each field $1 $2 ... should be replaced $N_LREV $N_GROUP ...
     #N_LREV=0 N_GROUP=1 N_REMOTE=2 N_UPSTREAM=3 N_DEST_BRANCH=4 N_REPO_RREV=5 N_PROJECT=6 N_PATH=7
+
+    echo "$(date +%s.%N) - $time_start" | bc -l
 
     #### repo forall로 db를 일단 생성해놓고, 이때 json파일이 생성되지 않았다면 repp.csv로 대체한다.
     repo forall -j1 -c 'echo "${REPO_LREV}|all,default|${REPO_REMOTE}|${REPO_UPSTREAM}|${REPO_DEST_BRANCH}|${REPO_RREV}|${REPO_PROJECT}|${REPO_PATH}"' |sort > ${REPPFILE_CSV}.repo
@@ -816,6 +823,8 @@ function reppmanidb(){
         clog "good case:exactly same" "generated from manifest and verfied by repo"
     fi
 
+    ## manifest에 .groups, .remote, .upstream, ."dest-branch", .path 값외에 특별한 옵션이 있는경우 출력해준다.
+    #cat ${REPPFILE_JSON} | jq -cC '.project[] | del(.groups, .remote, .upstream, ."dest-branch", .path) | select(length > 1) | {revision} + .'
 
     ##git submodule이 설정되어 있는 경우를 수집한다.
     #repo forall -cj4 '[ -s .gitmodules ] && printf "%80s" "${REPO_PATH} $(cat .gitmodules|grep -oP "(?<=path \= ).*")"' > ${REPPFILE_CSV}.submodule
@@ -827,6 +836,11 @@ function reppmanidb(){
     #cat ${REPPFILE_JSON}|jq -jr '.project[]|.groups,"|",.remote,"|",.upstream,"|",."dest-branch","|",.revision,"|",.name,"|",.path,"\n"'
     #cat ${REPPFILE_JSON}|jq -jr '.project[]|.groups," ",.remote," ",.upstream," ",."dest-branch"," ",.revision," ",.name," ",.path,"\n"'
     #cat ${REPPFILE_JSON}|jq -cM '.project[]|{groups,remote,upstream,"dest-branch",revision,name,path}'|tr -d 'repp"'
+    #cat ${REPPFILE_JSON} | jq -cC '.project[] | del(.groups, .remote, .upstream, ."dest-branch", .path) | select(length > 1) | {revision} + .'
+    #value만 string으로
+    #cat ${REPPFILE_JSON} | jq -r '.project[] | del(.groups, .remote, .upstream, ."dest-branch", .name, .path) | select(length > 1) | "\(.revision)|\(.[])"'
+    #key/value를 string으로
+    #cat ${REPPFILE_JSON} | jq -cC '.project[] | {revision,groups,remote,upstream,"dest-branch",name,path} + .| to_entries | map("\(.key)=\(.value)") | join("|")'
 }
 
 
@@ -3339,3 +3353,4 @@ else  ##if sourced
     echo "[WELCOME] repp & gitt utility is applied for current shell"
     ##hide local function, need to implements
 fi
+
