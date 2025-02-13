@@ -690,26 +690,21 @@ return 0
 
 function reppmanidb(){
 ## ---------------------------------------------------------------------------
-# find git repository with path and project name with regexp
+# create DB from comparing repo manifest and repo forall
 # $1 command
-# usage: reppmanidb
-
+# usage: force gen> reppmanidb gen, gen or reuse> reppmanidb
     local cmd=$1
     case $cmd in
         gen) if [ -d "${REPP_DIR}" ] && [[ "${REPP_DIR}" =~ ".repp" ]]; then rm -rf ${REPP_DIR}; fi
       ;;  *) [ -f "${REPPFILE_CSV}" ] && { $DEBUG "\${REPPFILE_CSV}:${REPPFILE_CSV} reused above file or you can remove and refresh repository info"; return 0; }
     esac
-
-    (( "$(reppversion ver 2>/dev/null)" < 230 )) && {
-        reppversion toggle
-        warn "automatically update to latest repo version, you can restore 'repp version toggle'"
-    }
+    (( "$(reppversion ver 2>/dev/null)" < 230 )) && { reppversion toggle; warn "automatically update to latest repo version, you can restore 'repp version toggle'"; }
 
     ## generate json from manifest, #suppress all log for generation json
     [ -d ${REPP_DIR} ] || mkdir ${REPP_DIR}
     repo manifest -r --json -o ${REPPFILE_JSON} &>/dev/null
     if (( "$(reppversion ver 2>/dev/null)" > 220 )) && ! [ -s ${REPPFILE_JSON} ]; then
-        warn "check if you are in mirror repo, use source repo not mirror
+        warn "check if you are in mirror repo, use source repo NOT mirror
         or failed by manifest error, check with 'repo manifest -r --json'"
     fi
 
@@ -720,17 +715,18 @@ function reppmanidb(){
     ## get <remote.alias> from json
     #readarray -t items_alias   < <(cat  ${REPPFILE_JSON} |jq -jr '.remote[]|select(.alias!=null)|.name,"=",.alias')
     readarray -t items_alias   < <(cat  ${REPPFILE_JSON} |jq -jr '.remote[]|select(.alias!=null)|.name,"=",.alias,"|"')
+    ## get all <project> from json
+    #cat ${REPPFILE_JSON} | jq -cC '.project[] | del(.groups, .remote, .upstream, ."dest-branch", .path) | select(length > 1) | {revision} + .'
     readarray -t items_project < <(cat ${REPPFILE_JSON} | jq -r '.project[]|{revision,groups,remote,upstream,"dest-branch",name,path} + .| to_entries | map("\(.key)=\(.value)") | join("|")'| sort)
 
-    ##elapsed time;  time_start=$(date +%s.%N)
     ## save to array
     local mani_out=()
     printf "takes time at first, creating .repp dir & DB files by analysing manifest\n\n"
     ## read one line from items_project array
     local linein lineout count=0
-    local lrev group remote upstream dest_branch rrev project path
+    local lrev group remote upstream dest_branch project path
 
-    time for lines in $(printf "%s\n" $(declare -p items_project| sed -e 's/declare.*=(//' -e 's/\[[0-9]\+\]=//g' |tr -d \"|tr -d \) )); do
+    for lines in $(printf "%s\n" $(declare -p items_project| sed -e 's/declare.*=(//' -e 's/\[[0-9]\+\]=//g' |tr -d \"|tr -d \) )); do
         readarray -d '|' -t linein <<< "$lines"
         lineout=""
         ##get project info, if null assign default value
@@ -746,7 +742,7 @@ function reppmanidb(){
 
         ## 칼럼순서대로 1:revision, 2:group, 3:remote, 4:upstream, 5:dest_branch, 6:rrev, 7:project, 8:path
         ##process item according to index
-        [ "$lrev" = "null"  ] && { err "${lineout}[${index}]"; return 1; } || lineout+="${lrev}|"
+        [ "$lrev" = "null"  ] && { err "${lineout}"; return 1; } || lineout+="${lrev}|"
         [ "$group" = "null" ] && lineout+="all,default" || lineout+="${group}|"
         #3.remote: replace alias by original name
 
@@ -777,15 +773,11 @@ function reppmanidb(){
     ## make result output
     #declare -p mani_out
     printf "%s\n" "${mani_out[@]}" >  ${REPPFILE_CSV}.json
-    #current
-    local prnmsg='%s|%12.12s|%8.8s|%-32.32s|%-32.32s|%-32.32s|%-74.74s|%.80s'
+    local prnmsg='%s|%12.12s|%8.8s|%-32.32s|%-32.32s|%-32.32s|%-74.74s|%.80s|%s'
     printf "${prnmsg}\n" ${mani_out[*]//|/ } > ${REPPFILE_TXT}
 
-    ## RREV is created by upper logic
-    ##NEEDTO improve: each field $1 $2 ... should be replaced $N_LREV $N_GROUP ...
-    #N_LREV=0 N_GROUP=1 N_REMOTE=2 N_UPSTREAM=3 N_DEST_BRANCH=4 N_REPO_RREV=5 N_PROJECT=6 N_PATH=7
-    ##elapsed time
-    #echo "$(date +%s.%N) - $time_start" | bc -l
+    ##elapsed time start:  time_start=$(date +%s.%N)
+    ##elapsed time end  :  echo "$(date +%s.%N) - $time_start" | bc -l
 
     #### repo forall로 db를 일단 생성해놓고, 이때 json파일이 생성되지 않았다면 repp.csv로 대체한다.
     repo forall -j1 -c 'echo "${REPO_LREV}|all,default|${REPO_REMOTE}|${REPO_UPSTREAM}|${REPO_DEST_BRANCH}|${REPO_RREV}|${REPO_PROJECT}|${REPO_PATH}"' |sort > ${REPPFILE_CSV}.repo
@@ -800,7 +792,14 @@ function reppmanidb(){
     awk -v FS="|" '{print $1"|"$6"|"$7"|"$8}' ${REPPFILE_CSV}.json > ${REPPFILE_CSV}.json.cmp
     awk -v FS="|" '{print $1"|"$6"|"$7"|"$8}' ${REPPFILE_CSV}.repo > ${REPPFILE_CSV}.repo.cmp
     if ! diff -q -B ${REPPFILE_CSV}.json.cmp ${REPPFILE_CSV}.repo.cmp &>/dev/null
-    then ## json과 repo가 다르다면 (manifest자체에 문제가 있거나, json parsing이 제대로 안된경우)
+    then ## json과 repo가 다르다면
+        ## case1. manifest에 대한 json parsing이 제대로 안된경우가 있는지 확인하는 용도 (repo manifest 자체 bug 감지)
+        ## case2. manifest자체에 문제가 있는경우 (upstream, dest-branch, submodule등 미미하게 다른 설정을 감지)
+        ## case3. commit이나 branch를 추가/변경하여 소스의 변경을 확인하는 경우(manifest를 받았을때와 작업후 변경사항 감지)
+        ## 확인방법, A. 먼저 repp.csv.json.cmp와 repp.csv.repo.cmp를 비교하여 다른부분을 찾고
+        ##          B. repp.csv.json과 repp.csv(repo.csv.repo기준으로 생성됨)를 비교하여 최종 어떻게 달라졌는지 확인
+
+
         ## repo.cmp파일에서 한줄씩읽어 json.cmp에서 match라인을 찾으면, 해당 라인을 json에서 DB로 넣고, 못찾으면 repo에서 DB로 넣어라
         while read -r line && [[ -n ${line} ]]; do
             matchlinenum_json=$(grep -nx "$line" ${REPPFILE_CSV}.json.cmp| cut -d: -f1) ##match라인 num구하기
@@ -820,9 +819,6 @@ function reppmanidb(){
         bar inline "${REPPFILE_CSV}"
         clog "good case:exactly same" "generated from manifest and verfied by repo"
     fi
-
-    ## manifest에 .groups, .remote, .upstream, ."dest-branch", .path 값외에 특별한 옵션이 있는경우 출력해준다.
-    #cat ${REPPFILE_JSON} | jq -cC '.project[] | del(.groups, .remote, .upstream, ."dest-branch", .path) | select(length > 1) | {revision} + .'
 
     ##git submodule이 설정되어 있는 경우를 수집한다.
     #repo forall -cj4 '[ -s .gitmodules ] && printf "%80s" "${REPO_PATH} $(cat .gitmodules|grep -oP "(?<=path \= ).*")"' > ${REPPFILE_CSV}.submodule
