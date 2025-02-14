@@ -144,20 +144,6 @@ function reppmani(){
                     #repo manifest --json 2> /dev/null | jq -jr '.project[]|.revision,"|",.groups,"|",.remote,"|",.upstream,"|",."dest-branch","|",.name,"|",.path,"|\n"' > ${REPPFILE_TXT}
                 fi
     ;;    go)   gittgo mani
-    ;;script)   cd "$REPP_DIR"
-                ## 추후 REPO_UPSTREAM,REPO_DEST_BRANCH가 필요하면 $4,$5를 넣어야 한다.
-				cat <<-GUIDE_CSV > "$REPPFILE_SCRIPT"
-				Refer, GUIDE:, ,http://collab.lge.com/main/display/~joongkeun.kim/reppscript
-				REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPO_SCRIPT
-GUIDE_CSV
-                ## txt 파일인 $REPPFILE_CSV로 부터 구분자인 '|'와 콤마(,)를 포함하는 파일을
-                ##                                구분자로 ','로 하고 세미콜론(;)을 포함하는 csv로 file로 만드는 작업
-                #cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=","; ORS="\n";}{print "\042\042\075\042"$1"\042","\042"$2"\042,"$3","$6","$7","$8}' >> "$REPPFILE_SCRIPT"
-                cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=",";}{gsub(/,/,":",$2);print "\042\042\075\042"$1"\042",$2","$3","$6","$7","$8}' >> "$REPPFILE_SCRIPT"
-                #cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=",";}{gsub(/,/,":",$2);print $1","$2","$3","$6","$7","$8}' >> "$REPPFILE_SCRIPT"
-                bar inline "$REPPFILE_SCRIPT"
-                clog "${REPPFILE_SCRIPT##*/} file is generated" "you can put your commands ${REPPFILE_SCRIPT##*/} and then run by 'repp script'"
-
     ;;  info)   ##get global variable and repo init command.
                 reppget_repcmd info
 
@@ -280,6 +266,19 @@ function reppscript(){
 			echo ${REPO_REMOTE} && echo ${REPO_RREV}                     #multiple commands with &&
 EOF
         return 0
+        ;;gen)   cd "$REPP_DIR"
+            ## 추후 REPO_UPSTREAM,REPO_DEST_BRANCH가 필요하면 $4,$5를 넣어야 한다.
+            cat <<-GUIDE_CSV > "$REPPFILE_SCRIPT"
+            Refer, GUIDE:,,,http://collab.lge.com/main/display/~joongkeun.kim/reppscript
+            REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPO_SCRIPT
+GUIDE_CSV
+            ## txt 파일인 $REPPFILE_CSV로 부터 구분자인 '|'와 콤마(,)를 포함하는 파일을
+            ##                                구분자로 ','로 하고 세미콜론(;)을 포함하는 csv로 file로 만드는 작업
+            #cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=","; ORS="\n";}{print "\042\042\075\042"$1"\042","\042"$2"\042,"$3","$6","$7","$8}' >> "$REPPFILE_SCRIPT"
+            cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=",";}{gsub(/,/,":",$2);print "\042\042\075\042"$1"\042",$2","$3","$6","$7","$8}' >> "$REPPFILE_SCRIPT"
+            #cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=",";}{gsub(/,/,":",$2);print $1","$2","$3","$6","$7","$8}' >> "$REPPFILE_SCRIPT"
+            bar inline "$REPPFILE_SCRIPT"
+            clog "${REPPFILE_SCRIPT##*/} file is generated" "you can put your commands ${REPPFILE_SCRIPT##*/} and then run by 'repp script'"
     esac
 
     local count total opt ask
@@ -692,7 +691,7 @@ function reppmanidb(){
 ## ---------------------------------------------------------------------------
 # create DB from comparing repo manifest and repo forall
 # $1 command
-# usage: force gen> reppmanidb gen, gen or reuse> reppmanidb
+# usage: reppmanidb is used only by function call.
     local cmd=$1
     case $cmd in
         gen) if [ -d "${REPP_DIR}" ] && [[ "${REPP_DIR}" =~ ".repp" ]]; then rm -rf ${REPP_DIR}; fi
@@ -2576,11 +2575,11 @@ function revvpermission(){
 
     case ${cmd} in
     ##accessapiparent, accessapigroup, accessapipermission 함수는 직접호출용으로 만들어진것으로 아니며, revv access로 부터 호출되도록 구현되었다.
-    accessapigroup)
+    accessgroup*) bar inline "show permission group"
                 ## group.url이 null일때는 실제 null이라는 문자열로 replace를 하고, null이 아닐때는 #를 server주소로 변경해준다.
                 #cat $file|jq --arg jq_var "${server}" -c '.groups[]| {url:(.url| if .==null then "null" else gsub("#"; $jq_var) end), name}'
-                cat $file|jq -c '.groups[]| {name}'
-    ;; accessapipermission)
+                cat $file|jq -c '.groups[]| {name}' >&2
+    ;; accesspermission*) bar inline "show permission setting"
                 ## json중 group에서 url경우에는 null이라는 문자열로 변경하고, 있을때는#대신 server주소를 넣고, name경우에는 /를 _로 변경하고 tostring(문자열로변환)하고, gsub으로 문자열을 replace한다.
                 ## 3fe63d48b76~,jlr_vcm_developer
                 ## 3fcc47cb801~,mustang_tm_reviewer
@@ -2595,15 +2594,10 @@ function revvpermission(){
                 ## compact하게 나오지 않고 full display를 하는 경우
                 ## [ "$(cat /tmp/pCount)" -gt 10 ] && { read -t 2 -p "Press Ctrl+C not to see more ..."; cat $cmdfile|sed -f - <(cat $file|jq -C '.local'); }
                 ## compact display
-                cat $cmdfile| sed -f - <(cat $file |jq -cC '.local |
-                walk(if type == "object" then
-                    del(.force) |
-                    if .action == "ALLOW" then del(.action) else . end
-                else . end)|
-                with_entries(.value |= (.permissions|.[]))|
-                keys[] as $k | {($k): .[$k]}
-                ')
-    ;; accessapiparent)
+                ## jq -cC '.local |to_entries[] | .value.permissions | to_entries[] | {key: .key, value: .value}') 여기서 action과 force값을 제외
+                cat $cmdfile| sed -f - <(cat $file | jq -cC '.local | to_entries[] | .value.permissions | to_entries[] |
+                    {key: .key, value: (.value | walk(if type == "object" then del(.action, .force) else . end))}') >&2
+    ;; accessparents*) bar inline "show permission parents git"
                 ## 입력된 project의 부모 project 정보를 stdout, stderr로 동시 출력한다.
                 cat $file|jq 'if .inherits_from then .inherits_from | {name, id, parent, state} | del(.web_links) else "No more parents" end' >&2
     ;; *) :
@@ -2632,9 +2626,16 @@ function revvaccess(){
 
     [ -z "$user" ] && user=$ACCOUNT
     case ${cmd} in
-       *~help)  cat <<-EOF
-				usage) revv access    na <project>                                            #get permission list from project and its parents
-				   ex) revv access    na vendor/qct/sa515m/sa515m_modem/modem_proc            #get permission list
+           help)  cat <<-EOF
+				usage) revv access[all|add|group|groupall|permission|permissionall|parents|parentsall]   na <project>
+				   ex) revv access              na vendor/qct/sa515m/sa515m_modem/modem_proc  #get permission info for current git
+				   ex) revv accessall           na vendor/qct/sa515m/sa515m_modem/modem_proc  #get all permission info including parents
+				   ex) revv accessgroup         na vendor/qct/sa515m/sa515m_modem/modem_proc  #get permission group for current git
+				   ex) revv accessgroupall      na vendor/qct/sa515m/sa515m_modem/modem_proc  #get permission group including parents
+				   ex) revv accesspermission    na vendor/qct/sa515m/sa515m_modem/modem_proc  #get permission setting for current git
+				   ex) revv accesspermissionall na vendor/qct/sa515m/sa515m_modem/modem_proc  #get permission setting including parents
+				   ex) revv accessparents       na vendor/qct/sa515m/sa515m_modem/modem_proc  #get permission parents for current git
+				   ex) revv accessperentsall    na vendor/qct/sa515m/sa515m_modem/modem_proc  #get permission parents including parents
 				usage) revv accessadd na <project>  <group> <'branch-regexp'>                 #add migration permission to a group
 				   ex) revv accessadd na qct/modem  26my_migrator '^refs/heads/26my_migg_.'   #add migration permission to 26my_migrator
 
@@ -2663,6 +2664,10 @@ TEMP_JSON
                 #cat $file|jq --arg jq_var "${server}" -crM '.groups[]| {url:(.url| if .==null then "null" else gsub("#"; $jq_var) end), name}| tostring | gsub("{|\"|}";"")| gsub("url.*uuid-|name:";"")'|\
                 #    sed 's:/: :g' |awk -F, '{print "s/"$1"/"$2"/g;"}' |sed -f - <(cat $file|jq '.local') > b.txt
                 # cat $file|jq -cC '.local|to_entries | map({(.key): .})[][][]'
+                case ${cmd} in accessgroup*|accesspermission*|accessparents*|accessall|access) :
+                               ;;*) revvaccess help; return 1
+                esac
+
                 while [ "$project" != "null" ] ; do
                     local file=$(mktemp);
                     ##현재 project의 access정보를 가져온다.
@@ -2673,16 +2678,15 @@ TEMP_JSON
                     ##cat rule.txt | sed -f - <(cat /tmp/tmp.frgiex2IBv | jq '.local|walk(if type == "object" then del(.force) else . end)')
                     ##cat $file|jq --arg jq_var "${server}" -crM '.groups[]| {url:(.url| if .==null then "null" else gsub("#"; \$jq_var) end), name:(.name| gsub("/"; "_"))} |tostring |gsub("{|\"|}";"") |gsub("url.*uuid-|name:";"")'|awk -F, '{print "s/"\$1"/"\$2"/g;"}'
                     wave
-                    bar inline "show permission defined group in current git"
-                    revvpermission accessapigroup $file
-
-                    bar inline "show permission setting in current git"
-                    revvpermission accessapipermission $file
-
-                    bar inline "show inherit parent permission git and grandparent"
-                    [ "$(revvpermission accessapiparent $file)" = "No more parents" ] && break
-                    [ "$cmd" = "access" ] && break; ##accessall일때는 반복
-
+                    case ${cmd} in
+                        accessgroup*|\
+                        accesspermission*|\
+                        accessparents*)     [ "$(revvpermission ${cmd} $file)" = "No more parents" ] && break
+                        ;;accessall|access)      revvpermission accessgroup $file
+                                                 revvpermission accesspermission $file
+                                            [ "$(revvpermission accessparent $file)" = "No more parents" ] && break
+                    esac
+                    [[ ! "$cmd" =~ "all" ]] && break; ##accessall일때는 반복
                     ##부모 project의 이름을 가져온다.
                     #cat $file |jq -rM '.inherits_from.web_links[] | select(.url | contains("plugins")) | .url' |sed -E 's#\/(.*)/plugins.*#\1#'
                     project="$(cat $file |jq -rM '.inherits_from.id')"
