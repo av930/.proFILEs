@@ -240,6 +240,61 @@ EOF
 }
 
 
+function reppfor(){
+    local cmd=$1
+    local arg opt cmd pro sep pre script
+    if [ ! "$cmd" = "gen" ]; then
+        cp $REPPFILE_CSV $REPPFILE_FORALL
+        for arg in "$@"; do case $arg in
+            -*c*)   [ -z "$pro" ] && { sep="$arg"; pro="$opt"; } || { opt+="$arg"; pre+="$opt"; }; opt=
+            ;;*\ *) cmd=$(printf "'%s' " "$arg"); pre+="$opt"; opt=
+            ;;*)    opt+=$(printf "%s " "$arg");
+            esac
+        done
+        $DEBUG "pro~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" "$pro"
+        $DEBUG "sep~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" "$sep"
+        $DEBUG "pre~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" "$pre"
+        $DEBUG "cmd~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" "$cmd"
+        $DEBUG "opt~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" "$opt"
+        script=${REPP_DIR}/reppscript.sh
+        printf "%s" "$pre $cmd $opt" > $script
+
+        local tempf=$(mktemp)
+        set -x
+        for arg in $pro; do
+            if [ "$arg" = "." ]; then
+                [ -z "${GITT_PROJECT}" ] && { if gittcheck_isgitproject; then reppcheck_initvar gitt; fi; }
+                arg=${GITT_PROJECT}
+            fi
+            cat "$REPPFILE_FORALL"| awk -F'|' -v vp="$arg" 'NR > 1 && $7 ~ vp' >> "$tempf";
+        done
+        mv $tempf $REPPFILE_FORALL
+set +x
+        return 0
+    fi
+
+    ## 추후 REPO_UPSTREAM,REPO_DEST_BRANCH가 필요하면 $4,$5를 넣어야 한다.
+    cat <<-GUIDE_CSV > "$REPPFILE_FORALL"
+	Refer, GUIDE:,,,http://collab.lge.com/main/display/~joongkeun.kim/reppforall,defaultscript>>>,${script:=NONE}
+	REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPO_SCRIPT
+GUIDE_CSV
+
+    ## txt 파일인 $REPPFILE_CSV로 부터 sha-code를 6자리로 줄이고
+    ##                                구분자인 '|'와 콤마(,)를 포함하는 파일을
+    ##                                구분자로 ','로 하고 세미콜론(;)을 포함하는 csv로 file로 만드는 작업
+    #cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=","; ORS="\n";}{print "\042\042\075\042"$1"\042","\042"$2"\042,"$3","$6","$7","$8}' >> "$REPPFILE_FORALL"
+    #cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=",";}{gsub(/,/,":",$2);print $1","$2","$3","$6","$7","$8}' >> "$REPPFILE_FORALL"
+    cat "$REPPFILE_CSV"| awk 'BEGIN{FS="|"; OFS=",";}{gsub(/,/,":",$2);print "\042\042\075\042"$1"\042",$2","$3","$6","$7","$8}' >> "$REPPFILE_FORALL"
+
+
+    [ -f "$REPPFILE_FORALL" ] && bar inline "$REPPFILE_FORALL"
+    [ -f "$REPPFILE_FORALL" ] && clog "${REPPFILE_FORALL##*/}:" "you can put your commands ${REPPFILE_FORALL##*/} and then run by 'repp forall'"
+    [ -f "$script" ]          && bar inline "$script"
+    [ -f "$script" ]          && clog "${script##*/}:" "${REPPFILE_FORALL##*/} can call script ${script##*/} by describing."
+    return 0
+}
+
+
 
 function reppforall(){
 ## ---------------------------------------------------------------------------
@@ -255,7 +310,7 @@ function reppforall(){
 			usage) repp forall gen                                      #generate script to do process manifest job such as (repo forall -c)
 				       1. 'repp forall gen' will save reppforall.csv into .repp dir in root path
 				       2. put muli-cmds in REPO_SCRIPT column like cmd1;cmd2|cmd3;cmd4;
-				       3. run by 'repp scrpt'. it will ask how to run it ex) run all at once or run 1 by 1.
+				       3. run by 'repp forall'. it will ask how to run it ex) run all at once or run 1 by 1.
 
 			 info) repo variables: $REPO_LREV, $REPO_GROUP, $REPO_REMOTE, $REPO_RREV, $REPO_PROJECT, $REPO_PATH, $REPO_ROOT
 			                       #not supported: REPO_I, REPO_COUNT, REPO_INNERPATH, REPO_OUTERPATH, REPO_UPSTREAM, REPO_DEST_BRANCH
@@ -267,22 +322,18 @@ function reppforall(){
 			echo ${REPO_REMOTE} |grep -o vgit; echo ${REPO_REMOTE}       #multiple commands with |
 			echo ${REPO_REMOTE} && echo ${REPO_RREV}                     #multiple commands with &&
 EOF
-        return 0
-        ;;gen)   cd "$REPP_DIR"
-            ## 추후 REPO_UPSTREAM,REPO_DEST_BRANCH가 필요하면 $4,$5를 넣어야 한다.
-            cat <<-GUIDE_CSV > "$REPPFILE_FORALL"
-			Refer, GUIDE:,,,http://collab.lge.com/main/display/~joongkeun.kim/reppforall
-			REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPO_SCRIPT
-GUIDE_CSV
-            ## txt 파일인 $REPPFILE_CSV로 부터 sha-code를 6자리로 줄이고
-            ##                                구분자인 '|'와 콤마(,)를 포함하는 파일을
-            ##                                구분자로 ','로 하고 세미콜론(;)을 포함하는 csv로 file로 만드는 작업
-            #cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=","; ORS="\n";}{print "\042\042\075\042"$1"\042","\042"$2"\042,"$3","$6","$7","$8}' >> "$REPPFILE_FORALL"
-            cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=",";}{gsub(/,/,":",$2);print "\042\042\075\042"$1"\042",$2","$3","$6","$7","$8}' >> "$REPPFILE_FORALL"
-            #cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=",";}{gsub(/,/,":",$2);print $1","$2","$3","$6","$7","$8}' >> "$REPPFILE_FORALL"
-            bar inline "$REPPFILE_FORALL"
-            clog "${REPPFILE_FORALL##*/} file is generated" "you can put your commands ${REPPFILE_FORALL##*/} and then run by 'repp forall'"
-        return 0
+            return 0
+        ;;backup)   cd "$REPP_DIR"
+            echo KJK_DEBUG
+            printf '${REPO_LREV}|all,default|${REPO_REMOTE}|${REPO_UPSTREAM}|${REPO_DEST_BRANCH}|${REPO_RREV}|${REPO_PROJECT}|${REPO_PATH}|'
+            ##single quote를 포함하여 입력한 문자열을 그대로 출력한다.
+            for cmd in "$@"; do if [[ "$cmd" =~ \  ]];
+            then echo -n "'$cmd' "
+            else echo -n "$cmd "
+            fi; done
+            return 0
+        ;; '') :
+        ;;  *) reppfor "$@";  return 0
     esac
 
     local count total opt ask
@@ -1419,41 +1470,6 @@ SSH_COMMAND
 #$(getServer ${oriserver} subdomain) #vgit.lge.com
 #repo forall -c 'echo \${REPO_REMOTE}:\${REPO_PROJECT}:\${REPO_PATH}:\${REPO_LREV}:\${REPO_RREV}' > ~/repo.test/repo.result
         #[ ${_item%:*} = "${REPO_REMOTE}" ] && printf "[%-60.50s] " "${REPO_I}/${REPO_COUNT}/${REPO_PROJECT}" && ssh $REPO__${USER}@$0 -p ${_item#*:} gerrit ls-projects --prefix ${REPO_PROJECT} -b ${REPO_RREV} --limit 1
-}
-
-
-
-#reppforall joongkeun.kim na tsu_25.5my_release
-function reppforall_(){
-## ---------------------------------------------------------------------------
-# check if an account in server can access code-review server by SSH protocol
-
-    printf '${REPO_LREV}|all,default|${REPO_REMOTE}|${REPO_UPSTREAM}|${REPO_DEST_BRANCH}|${REPO_RREV}|${REPO_PROJECT}|${REPO_PATH}|'
-    ##single quote를 포함하여 입력한 문자열을 그대로 출력한다.
-    for cmd in "$@"; do
-    if [[ "$cmd" =~ \  ]];
-    then echo -n "'$cmd' "
-    else echo -n "$cmd "
-    fi
-  done
-
-
-
-#eval "$(printf "%s %q echo '%s'" "repo forall" "$@")"
-#    cat <<- EOF > out.txt
-# repo forall $@
-# EOF
-#printf "repo forall %sj1 'echo \"\${REPO_LREV}|all,default|\${REPO_REMOTE}|\${REPO_UPSTREAM}|\${REPO_DEST_BRANCH}|\${REPO_RREV}|\${REPO_PROJECT}|\${REPO_PATH}|'%s'\"'|sort > a.txt" "$@"
-
-#printf "repo forall %s '%s'" "$@"
-#cmdarray=( "$@" )
-#eval "$(printf "%s %q echo '%s'" "repo forall" "${cmdarray[@]}")"
-
-# cmd=$(printf "'%s'" "$@")
-# repo forall . -c 'cat << EOF | bash -s
-# printf "${REPO_LREV}|all,default|${REPO_REMOTE}|${REPO_UPSTREAM}|${REPO_DEST_BRANCH}|${REPO_RREV}|${REPO_PROJECT}|${REPO_PATH}|"
-# printf "'%s'" "$REPO__$@"
-# EOF' "$cmd"
 }
 
 
