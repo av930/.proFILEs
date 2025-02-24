@@ -55,7 +55,7 @@ altscreen on
 # rendition so kc
 
 ## increase the scroll buffer
-defscrollback         40000           # default: 100,
+defscrollback         990000           # default: 100,
 
 ## to enable 256-color support in vim on the screen
 term screen-256color
