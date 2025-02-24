@@ -241,51 +241,57 @@ EOF
 
 
 function reppfor(){
-    local cmd=$1
-    local arg opt cmd pro sep pre script
+## ---------------------------------------------------------------------------
+# parse repp forall < projec -c 'cmd' option>
+
+    local script cmd=$1
+    local tempf=$(mktemp)
+    ## repo forall . -cj4 ' ~~~ ' 명령어 parsing
+    reppcheck_initvar reppgitt
+
     if [ ! "$cmd" = "gen" ]; then
-        cp $REPPFILE_CSV $REPPFILE_FORALL
+        local arg opt cmd pro sep pre
         for arg in "$@"; do case $arg in
-            -*c*)   [ -z "$pro" ] && { sep="$arg"; pro="$opt"; } || { opt+="$arg"; pre+="$opt"; }; opt=
+            -*c*)   [ -z "$pro" ] && { sep="$arg"; pro="$opt"; [ -z "$pro" ] && pro=all; opt= ; } || { opt+="$arg"; continue; }
             ;;*\ *) cmd=$(printf "'%s' " "$arg"); pre+="$opt"; opt=
             ;;*)    opt+=$(printf "%s " "$arg");
             esac
         done
-        $DEBUG "pro~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" "$pro"
-        $DEBUG "sep~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" "$sep"
-        $DEBUG "pre~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" "$pre"
-        $DEBUG "cmd~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" "$cmd"
-        $DEBUG "opt~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" "$opt"
+
+        ## repo forall 명령어를 파일로 생성
         script=${REPP_DIR}/reppscript.sh
         printf "%s" "$pre $cmd $opt" > $script
+        chmod +x $script
 
-        local tempf=$(mktemp)
-        set -x
+        [ "$pro" = ". " ] && pro=${GITT_PROJECT}  #set as current git project
+        [ "$pro" = "all" ] && pro='.'             #match all git project
+
+        $DEBUG "pro~~~~~~" "$pro"; $DEBUG "sep~~~~~~" "$sep"; $DEBUG "pre~~~~~~" "$pre";
+        $DEBUG "cmd~~~~~~" "$cmd"; $DEBUG "opt~~~~~~" "$opt"; $DEBUG "script~~~~~~" "$script"
+
+        ## csv에서 repo forall로 들어온 project만 추출하여 reppforall.csv 생성
         for arg in $pro; do
-            if [ "$arg" = "." ]; then
-                [ -z "${GITT_PROJECT}" ] && { if gittcheck_isgitproject; then reppcheck_initvar gitt; fi; }
-                arg=${GITT_PROJECT}
-            fi
-            cat "$REPPFILE_FORALL"| awk -F'|' -v vp="$arg" 'NR > 1 && $7 ~ vp' >> "$tempf";
+            ## project가 존재하면 추출하고, 명령어(script)도 같이 기술한다.)
+            #cat "${REPPFILE_CSV}"| awk -F'|' -v vp="$arg" 'NR > 1 && $7 ~ vp' >> "$tempf";
+            cat "${REPPFILE_CSV}"| awk -F'|' -v vp="$arg" -v script="$pre '$script' $opt" 'NR > 1 && $7 ~ vp {print $0 script}' >> "$tempf"
         done
-        mv $tempf $REPPFILE_FORALL
-set +x
-        return 0
     fi
 
+    ## reppforall.csv heading 생성
     ## 추후 REPO_UPSTREAM,REPO_DEST_BRANCH가 필요하면 $4,$5를 넣어야 한다.
     cat <<-GUIDE_CSV > "$REPPFILE_FORALL"
 	Refer, GUIDE:,,,http://collab.lge.com/main/display/~joongkeun.kim/reppforall,defaultscript>>>,${script:=NONE}
 	REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPO_SCRIPT
 GUIDE_CSV
 
+    ## repoforall.csv body 생성
     ## txt 파일인 $REPPFILE_CSV로 부터 sha-code를 6자리로 줄이고
     ##                                구분자인 '|'와 콤마(,)를 포함하는 파일을
     ##                                구분자로 ','로 하고 세미콜론(;)을 포함하는 csv로 file로 만드는 작업
     #cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=","; ORS="\n";}{print "\042\042\075\042"$1"\042","\042"$2"\042,"$3","$6","$7","$8}' >> "$REPPFILE_FORALL"
     #cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=",";}{gsub(/,/,":",$2);print $1","$2","$3","$6","$7","$8}' >> "$REPPFILE_FORALL"
-    cat "$REPPFILE_CSV"| awk 'BEGIN{FS="|"; OFS=",";}{gsub(/,/,":",$2);print "\042\042\075\042"$1"\042",$2","$3","$6","$7","$8}' >> "$REPPFILE_FORALL"
-
+    [ ! -s $tempf ] && cp "${REPPFILE_CSV}" $tempf
+    cat $tempf| awk 'BEGIN{FS="|"; OFS=",";}{gsub(/,/,":",$2);print "\042\042\075\042"$1"\042",$2","$3","$6","$7","$8","$9}' >> "$REPPFILE_FORALL"
 
     [ -f "$REPPFILE_FORALL" ] && bar inline "$REPPFILE_FORALL"
     [ -f "$REPPFILE_FORALL" ] && clog "${REPPFILE_FORALL##*/}:" "you can put your commands ${REPPFILE_FORALL##*/} and then run by 'repp forall'"
@@ -1779,8 +1785,8 @@ function gittinfo(){
     ;;esac
     clog "review repository url :" ${GIT_SITE}                                     #http review url
     clog "review commit url     :" $( echo "$GIT_SITE" |sed -E "s#http:(.*)admin/repos/(.*)#https:\1q/project:\2+branch:"\$GITT_BRANCH"#")
-    clog "source browser gitiles: " ${GIT_SITE/"${review_gerrit}"/"plugins/gitiles"}/+/refs/heads/${GITT_BRANCH}                #source from gitiles
-    clog "source browser gerrit : " ${GIT_SITE/"${review_gerrit}/"/"gitweb?p="}.git\;a=shortlog\;h=refs/heads/${GITT_BRANCH}    #source from gerrit
+    clog "source browser gitiles:" ${GIT_SITE/"${review_gerrit}"/"plugins/gitiles"}/+/refs/heads/${GITT_BRANCH}                #source from gitiles
+    clog "source browser gerrit :" ${GIT_SITE/"${review_gerrit}/"/"gitweb?p="}.git\;a=shortlog\;h=refs/heads/${GITT_BRANCH}    #source from gerrit
 
     bar inline "git clone & push commands"
     clog " git clone:" "git clone ${GITT_URL} -b ${GITT_BRANCH}"               #make git clone command
