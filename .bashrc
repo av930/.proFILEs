@@ -125,7 +125,7 @@ alias sc$ECHO='_bar "Usage"; printf "
     screen -ls | tail -n +2 | head -n -2 | awk {print $1} | xargs -I {} screen -S {} -X quit
     screen -U -R -c ${proFILEdir}/.screenrc_spilt
 "'
-
+alias scfile='_bar "log save to $HOME/screen.file.log"; screen -X hardcopy -h ~/screen.file.log'
 alias sc${TAG}='screen -ls'
 alias sc="screen -U -RR -c ~/.proFILEs/.screenrc ~/.proFILEs/scw"
 alias scx='_bar "kill all screen session"; _killscreen'
