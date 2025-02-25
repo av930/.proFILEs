@@ -275,10 +275,8 @@ function reppfor(){
             ## project가 존재하면 추출하고, 명령어(script)도 같이 기술한다.)
             #cat "${REPPFILE_CSV}"| awk -F'|' -v vp="$arg" -v vc="$pre '$script' $opt" '$7 ~ vp {print $0 script}' >> "$tempf"
             ##awk에서 success or failure를 return하려면 아래와 같이 직접적으로 exit 구문으로 명시해줘야 한다.
-            set -x
             cat "${REPPFILE_CSV}"| awk -F'|' -v vp="$arg" -v vc="$pre $script $opt" '$7 ~ vp {print $0 vc; found=1} END {if (found) exit 0; else exit 1}' >> "$tempf"
             if [ $? -ne 0 ]; then err "project [$arg] is not existed, if force to continue, edit direct : ${REPPFILE_FORALL}"; return 1; fi
-        set +x
         done
     fi
 
@@ -400,11 +398,13 @@ EOF
         if [ -f "${cmd}" ]; then
             ## file content is not null, change to linux file format, same to sed -i 's/\x0D$//' file
             if $(file "${cmd}"| grep CRLF ); then sed -i 's/.$//' "${cmd}"; fi
-            ## source로 호출할지, 그냥 호출할지 결정
-            if $(cat "${cmd}"| grep ^bash ); then cmd="${cmd}";else cmd=". ${cmd}"; fi
+            ## file 임으로 현재 shell에 적용시키기 위해 source로 호출
+            cmd=". ${cmd}"
         else
-            ## file이 아니면 csv에 직접 입력한 명령어로 인식
-            cmd=$(printf "eval %s" "${cmd}");
+            if $(echo "${cmd}"| grep ^bash > /dev/null);
+            then cmd="$(echo ${cmd}| sed 's/ -[^ ]*c[^ ]*//')";                     ## bash 이면 -cj등의 옵션을 제외하고 bash script.sh 를 호출하도록 수정
+            else cmd=$(printf "eval %s" "${cmd}"); ## file이 아니면 csv에 직접 입력한 명령어로 인식
+            fi
         fi
 
         ## if opt=go   , ask=any  : excute all at once
@@ -416,7 +416,9 @@ EOF
             #cat <<- EOF | bash -c
             #    REPO_ROOT="$REPP_ROOT" REPO_LREV="${oneline[0]}" REPO_GROUP="${oneline[1]}" REPO_REMOTE="${oneline[2]}" REPO_RREV="${oneline[3]}" REPO_PROJECT="${oneline[4]}" REPO_PATH="${oneline[5]}" ${oneline[6]}
             #EOF
+            set -x
             REPO_ROOT="$REPP_ROOT" REPO_LREV="${oneline[0]}" REPO_GROUP="${oneline[1]}" REPO_REMOTE="${oneline[2]}" REPO_RREV="${oneline[3]}" REPO_PROJECT="${oneline[4]}" REPO_PATH="${oneline[5]}" ${cmd}
+            set +x
             popd
         elif [ "$ask" = "go" ]; then opt=go; ask=''
         else
