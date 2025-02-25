@@ -6,8 +6,8 @@
 ###---------------------------------------------------------- DEBUG OPTION
 #DEBUG=["echo -e"|:], : means no-operation
 ## DEBUG=[ : | "printf ${RED}%s${NCOL}\n" ]
-DEBUG=:
-#DEBUG="printf ${RED}%s${NCOL}\n"
+#DEBUG=:
+DEBUG="printf ${RED}%s${NCOL}\n"
 
 PATH_FULL=$(realpath "$BASH_SOURCE")
 PATH_DIR="${PATH_FULL%/*}"
@@ -244,7 +244,7 @@ function reppfor(){
 ## ---------------------------------------------------------------------------
 # parse repp forall < projec -c 'cmd' option>
 
-    local script cmd=$1
+    local script ret=0 cmd=$1
     local tempf=$(mktemp)
     ## repo forall . -cj4 ' ~~~ ' 명령어 parsing
     reppcheck_initvar reppgitt
@@ -260,7 +260,9 @@ function reppfor(){
 
         ## repo forall 명령어를 파일로 생성
         script=${REPP_DIR}/reppscript.sh
-        printf "%s" "$pre $cmd $opt" > $script
+        ## 명령어에 존재하는 single quote 처리
+        [ -z "$pre" ] && printf "%s\n" "${cmd:1:-2} $opt" > $script || printf "%s\n" "$pre ${cmd} $opt" > $script
+        #printf "%s" "$pre ${cmd} $opt" > $script
         chmod +x $script
 
         [ "$pro" = ". " ] && pro=${GITT_PROJECT}  #set as current git project
@@ -272,8 +274,10 @@ function reppfor(){
         ## csv에서 repo forall로 들어온 project만 추출하여 reppforall.csv 생성
         for arg in $pro; do
             ## project가 존재하면 추출하고, 명령어(script)도 같이 기술한다.)
-            #cat "${REPPFILE_CSV}"| awk -F'|' -v vp="$arg" 'NR > 1 && $7 ~ vp' >> "$tempf";
-            cat "${REPPFILE_CSV}"| awk -F'|' -v vp="$arg" -v script="$pre '$script' $opt" 'NR > 1 && $7 ~ vp {print $0 script}' >> "$tempf"
+            #cat "${REPPFILE_CSV}"| awk -F'|' -v vp="$arg" -v vc="$pre '$script' $opt" '$7 ~ vp {print $0 script}' >> "$tempf"
+            ##awk에서 success or failure를 return하려면 아래와 같이 직접적으로 exit 구문으로 명시해줘야 한다.
+            cat "${REPPFILE_CSV}"| awk -F'|' -v vp="$arg" -v vc="$pre $script $opt" '$7 ~ vp {print $0 vc; found=1} END {if (found) exit 0; else exit 1}' >> "$tempf"
+            if [ $? -ne 0 ]; then err "project [$arg] is not existed, if force to continue, edit direct : ${REPPFILE_FORALL}"; return 1; fi
         done
     fi
 
@@ -329,15 +333,6 @@ function reppforall(){
 			echo ${REPO_REMOTE} && echo ${REPO_RREV}                     #multiple commands with &&
 EOF
             return 0
-        ;;backup)   cd "$REPP_DIR"
-            echo KJK_DEBUG
-            printf '${REPO_LREV}|all,default|${REPO_REMOTE}|${REPO_UPSTREAM}|${REPO_DEST_BRANCH}|${REPO_RREV}|${REPO_PROJECT}|${REPO_PATH}|'
-            ##single quote를 포함하여 입력한 문자열을 그대로 출력한다.
-            for cmd in "$@"; do if [[ "$cmd" =~ \  ]];
-            then echo -n "'$cmd' "
-            else echo -n "$cmd "
-            fi; done
-            return 0
         ;; '') :
         ;;  *) reppfor "$@";  return 0
     esac
@@ -369,16 +364,21 @@ EOF
         fi
     done
 
-    ## go나 enter를 입력하면 결과 실행
-    ## arrayline에는 전체 $REPPFILE_FORALL 파일이 들어가있고, 거기서 1 line인씩 읽어 array oneline에 넣어서 처리함.
-    read -p $'\n\n[go:execute all |  enter:execute by asking |  ctrl+c:break] :' opt
+
+    ## repp forall 입력시 전체를 어떻게 실행할지 1회 물어본후
+    local opt ask outfile cmd
+    read -p $'\n\n[enter:execute by asking |go:run all|save: run&save reppforall.log| ctrl+c:break] :' opt
+    [ "$opt" = "save" ] && outfile="> ${REPP_DIR}/reppforall.log"
+
     for ((count=1,total=0; count<${#arrayline[@]}; count++ )); do
         readarray -t -d\` oneline <<< "${arrayline[$count]}"
+        ## xargs로 preceding/tailing space를 제거한다.
         if [[ -n $(echo ${oneline[6]} | xargs) ]]; then
 
-            oneline[6]=$(printf "%b" "${oneline[6]}"| sed 's/^"\(.*\)"$/\1/')
+            cmd=$(printf "%b" "${oneline[6]}"| sed 's/^"\(.*\)"$/\1/')
             under "[$((total=total+1))] ${oneline[4]}\n"
-            bbar cyan "${oneline[5]}" "${oneline[6]}\n"
+            bbar cyan "${oneline[5]}" "${cmd}\n"
+            ## 각 repository마다 다시 한번씩 물어보게 된다. go를 입력하면 나머지는 물어보지 않고 바로 실행한다.
             [ "$opt" = "" ] && read -p '[enter:run next| go:run all| other:skip next| ctrl+c:break all] :' ask;
 
             ## prompt와 result 구분라인----------------------------------------- 를 출력한다.
@@ -395,7 +395,12 @@ EOF
                 #cat <<- EOF | bash -c
                 #    REPO_ROOT="$REPP_ROOT" REPO_LREV="${oneline[0]}" REPO_GROUP="${oneline[1]}" REPO_REMOTE="${oneline[2]}" REPO_RREV="${oneline[3]}" REPO_PROJECT="${oneline[4]}" REPO_PATH="${oneline[5]}" ${oneline[6]}
                 #EOF
-                REPO_ROOT="$REPP_ROOT" REPO_LREV="${oneline[0]}" REPO_GROUP="${oneline[1]}" REPO_REMOTE="${oneline[2]}" REPO_RREV="${oneline[3]}" REPO_PROJECT="${oneline[4]}" REPO_PATH="${oneline[5]}" ${oneline[6]}
+
+                ## file content is not null, change to linux file format, same to sed -i 's/\x0D$//' file
+                set -x
+                if [ -f "${cmd}" ] && $(file "${cmd}"| grep CRLF ) ; then sed -i 's/.$//' "${cmd}"; fi
+                REPO_ROOT="$REPP_ROOT" REPO_LREV="${oneline[0]}" REPO_GROUP="${oneline[1]}" REPO_REMOTE="${oneline[2]}" REPO_RREV="${oneline[3]}" REPO_PROJECT="${oneline[4]}" REPO_PATH="${oneline[5]}" ${cmd}
+                set +x
                 popd
             elif [ "$ask" = "go" ]; then opt=go; ask=''
             else
@@ -1642,9 +1647,7 @@ function gitt_initvar(){
     #git config --get-regexp remote.*.projectname|cut -d' ' -f2
     temp=$(git config --get-regexp remote.* |grep -e "projectname" |head -1|cut -f2 -d' ')
     if [ -n "${GITT_PROJECT}" ] && [ "${temp}" = "${GITT_PROJECT}" ]; then return 0; else GITT_PROJECT=${temp}; fi
-    if [ -z "${GITT_PROJECT}" ]; then
-        GITT_PROJECT=$(git config --get-regexp remote.* |grep -Ee "(url)" |head -1| sed  "s#.*${REPP_REF}/##")
-    fi
+    if [ -z "${GITT_PROJECT}" ]; then GITT_PROJECT=$(git config --get-regexp remote.* |grep -Ee "(url)" |head -1| sed  "s#.* \(.*\)/#\1#"); fi
 
     #NEEDTO WORK: find more secure way to get current branch revision
     GITT_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null| sed 's:.*/::')
@@ -1784,7 +1787,7 @@ function gittinfo(){
     ;;''|*)             GIT_SITE=$(printf "%s/${review_gerrit}/%s" "$(echo ${GITT_REVIEW}|sed -E 's#(.*)[/]$#\1#')" ${GITT_PROJECT} )
     ;;esac
     clog "review repository url :" ${GIT_SITE}                                     #http review url
-    clog "review commit url     :" $( echo "$GIT_SITE" |sed -E "s#http:(.*)admin/repos/(.*)#https:\1q/project:\2+branch:"\$GITT_BRANCH"#")
+    clog "review commit url     :" $(echo "$GIT_SITE" |sed -E "s#http:(.*)admin/repos/(.*)#https:\1q/project:\2+branch:"${GITT_BRANCH}"#")
     clog "source browser gitiles:" ${GIT_SITE/"${review_gerrit}"/"plugins/gitiles"}/+/refs/heads/${GITT_BRANCH}                #source from gitiles
     clog "source browser gerrit :" ${GIT_SITE/"${review_gerrit}/"/"gitweb?p="}.git\;a=shortlog\;h=refs/heads/${GITT_BRANCH}    #source from gerrit
 
