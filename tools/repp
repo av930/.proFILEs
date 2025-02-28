@@ -240,15 +240,23 @@ EOF
 }
 
 
-function reppfor(){
+
+function reppforgen(){
 ## ---------------------------------------------------------------------------
 # parse repp forall < projec -c 'cmd' option>
 
-    local script ret=0 cmd=$1
+    local ret=0 cmd=$1
     local tempf=$(mktemp)
     ## repo forall . -cj4 ' ~~~ ' 명령어 parsing
     reppcheck_initvar reppgitt
 
+    ## reppforall.csv heading 생성
+    ## (CSV file을 처리하기 위해 최종 처리전까지는 windows format으로 처리)
+    ## 추후 REPO_UPSTREAM,REPO_DEST_BRANCH가 필요하면 $4,$5를 넣어야 한다.
+    printf "Refer, GUIDE:,,,http://collab.lge.com/main/display/~joongkeun.kim/reppforall,defaultscript>>>,${script:=NONE},\r\n\
+REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPP_SCRIPT,REPP_RESULT,\r\n" > $REPPFILE_FORALL
+
+    ## repoforall.csv의 body를 생성
     if [ ! "$cmd" = "gen" ]; then
         local arg opt cmd pro sep pre
         for arg in "$@"; do case $arg in
@@ -258,52 +266,83 @@ function reppfor(){
             esac
         done
 
-        ## repo forall 명령어를 파일로 생성
-        script=${REPP_DIR}/reppscript.sh
         ## 명령어에 존재하는 single quote 처리
-        [ -z "$pre" ] && printf "%s\n" "${cmd:1:-2} $opt" > $script || printf "%s\n" "$pre ${cmd} $opt" > $script
-        #printf "%s" "$pre ${cmd} $opt" > $script
-        chmod +x $script
+        [ -z "$pre" ] && printf "%s\n" "${cmd:1:-2} $opt" > $REPPFILE_SCRIPT || printf "%s\n" "$pre ${cmd} $opt" > $REPPFILE_SCRIPT
+        #printf "%s" "$pre ${cmd} $opt" > $REPPFILE_SCRIPT
+        chmod +x $REPPFILE_SCRIPT
 
         [ "$pro" = ". " ] && pro=${GITT_PROJECT}  #set as current git project
         [ "$pro" = "all" ] && pro='.'             #match all git project
         $DEBUG "pro~~~~~~" "$pro"; $DEBUG "sep~~~~~~" "$sep"; $DEBUG "pre~~~~~~" "$pre";
-        $DEBUG "cmd~~~~~~" "$cmd"; $DEBUG "opt~~~~~~" "$opt"; $DEBUG "script~~~~~~" "$script"
+        $DEBUG "cmd~~~~~~" "$cmd"; $DEBUG "opt~~~~~~" "$opt"; $DEBUG "script~~~~~~" "$REPPFILE_SCRIPT"
 
         ## csv에서 repo forall로 들어온 project만 추출하여 reppforall.csv 생성
         for arg in $pro; do
             ## project가 존재하면 추출하고, 명령어(script)도 같이 기술한다.)
-            #cat "${REPPFILE_CSV}"| awk -F'|' -v vp="$arg" -v vc="$pre '$script' $opt" '$7 ~ vp {print $0 script}' >> "$tempf"
+            #cat "${REPPFILE_CSV}"| awk -F'|' -v vp="$arg" -v vc="$pre '$REPPFILE_SCRIPT' $opt" '$7 ~ vp {print $0 script}' >> "$tempf"
             ##awk에서 success or failure를 return하려면 아래와 같이 직접적으로 exit 구문으로 명시해줘야 한다.
-            cat "${REPPFILE_CSV}"| awk -F'|' -v vp="$arg" -v vc="$pre $script $opt" '$7 ~ vp {print $0 vc; found=1} END {if (found) exit 0; else exit 1}' >> "$tempf"
+            cat "${REPPFILE_CSV}"| awk -F'|' -v vp="$arg" -v vc="$pre $REPPFILE_SCRIPT $opt" '$7 ~ vp {print $0 vc; found=1} END {if (found) exit 0; else exit 1}' >> "$tempf"
             if [ $? -ne 0 ]; then err "project [$arg] is not existed, if force to continue, edit direct : ${REPPFILE_FORALL}"; return 1; fi
         done
     fi
-
-    ## reppforall.csv heading 생성
-    ## 추후 REPO_UPSTREAM,REPO_DEST_BRANCH가 필요하면 $4,$5를 넣어야 한다.
-    cat <<-GUIDE_CSV > "$REPPFILE_FORALL"
-	Refer, GUIDE:,,,http://collab.lge.com/main/display/~joongkeun.kim/reppforall,defaultscript>>>,${script:=NONE}
-	REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPO_SCRIPT
-GUIDE_CSV
-
-    ## repoforall.csv body 생성
+    ## excel에서 편집할수 있도록 repoforall.csv body 생성
     ## txt 파일인 $REPPFILE_CSV로 부터 sha-code를 6자리로 줄이고
     ##                                구분자인 '|'와 콤마(,)를 포함하는 파일을
     ##                                구분자로 ','로 하고 세미콜론(;)을 포함하는 csv로 file로 만드는 작업
     #cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=","; ORS="\n";}{print "\042\042\075\042"$1"\042","\042"$2"\042,"$3","$6","$7","$8}' >> "$REPPFILE_FORALL"
     #cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=",";}{gsub(/,/,":",$2);print $1","$2","$3","$6","$7","$8}' >> "$REPPFILE_FORALL"
+    ##RS='\n'는 ctrl+M을 제거하고 \r\n로 대체하기 위해서 사용
     [ ! -s $tempf ] && cp "${REPPFILE_CSV}" $tempf
-    cat $tempf| awk 'BEGIN{FS="|"; OFS=",";}{gsub(/,/,":",$2);print "\042\042\075\042"$1"\042",$2","$3","$6","$7","$8","$9}' >> "$REPPFILE_FORALL"
+    cat $tempf| awk 'BEGIN{FS="|"; OFS=","; ORS="\r\n"}{gsub(/,/,":",$2);print "\042\042\075\042"$1"\042",$2","$3","$6","$7","$8","$9","}' >> "$REPPFILE_FORALL"
 
     [ -f "$REPPFILE_FORALL" ] && bar inline "$REPPFILE_FORALL"
     [ -f "$REPPFILE_FORALL" ] && clog "${REPPFILE_FORALL##*/}:" "you can put your commands ${REPPFILE_FORALL##*/} and then run by 'repp forall'"
-    [ -f "$script" ]          && bar inline "$script"
-    [ -f "$script" ]          && clog "${script##*/}:" "${REPPFILE_FORALL##*/} can call script ${script##*/} by describing."
+    [ -f "$REPPFILE_SCRIPT" ] && bar inline "$REPPFILE_SCRIPT"
+    [ -f "$REPPFILE_SCRIPT" ] && clog "${REPPFILE_SCRIPT##*/}:" "${REPPFILE_FORALL##*/} can call script ${REPPFILE_SCRIPT##*/} by describing."
     return 0
 }
 
+##아래는 repp forall을 test하는 방법을 기술한다.
+<< TEST
+1. 아래 명령으로 reppforall.csv를 생성한다.
+2. REPP_SCRIPT 영역에 test에 필요한 command 넣고 저장한다.
+3. repp forall로 위에서 기록한 모든 command를 제대로 실행하는지 확인한다.
+repp forall tiger/services/ethmgr vendor/qct/sa515m/apps_proc/src/data vendor/qct/sa515m/clo/le/OTA/build  vendor/qct/sa515m/clo/le/OTA/system/core -cj1 bash -c 'case ${REPO_RREV} in
+    ext_adp_s|ext_hero_s)
+        git status
+        if [ "${REPO_PROJECT}" = "non_HLOS" ] || \
+           [ "${REPO_PROJECT}" = "platform/Settings" ]; then
+            echo git checkout ${HOME}
+        else
+            git log -1
+        fi;;
+    *) printf "\n------------[${REPO_PATH} $1 $2]\n";;
+esac;' $USER $PWD
 
+REPP_SCRIPT 항목에 한 cell에 한명령씩 넣어야 함
+bash -c /data001/vc.integrator/mirror/tsu_26my_release/src_current/.repp/reppscript.sh aaa bbb
+/data001/vc.integrator/mirror/tsu_26my_release/src_current/.repp/reppscript.sh
+"bash -c 'case ${REPO_RREV} in
+    ext_adp_s|ext_hero_s)
+        git status
+        git log -1
+    ;;*) printf "\n------------[${REPO_PATH} $1 $2]\n"
+esac;'  $USER $PWD"
+echo "${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}"
+revv accessall ${REPO_REMOTE} ${REPO_PROJECT}
+"bash -c 'case ${REPO_RREV} in
+    ext_adp_s|ext_hero_s)
+        git status
+        if [ "${REPO_PROJECT}" = "non_HLOS" ] || \
+           [ "${REPO_PROJECT}" = "platform/Settings" ]; then
+            echo git checkout ${HOME}
+        else
+            git log -1
+        fi;;
+    *) printf "\n------------[${REPO_PATH} $1 $2]\n";;
+esac;'  $USER $PWD"
+
+TEST
 
 function reppforall(){
 ## ---------------------------------------------------------------------------
@@ -333,78 +372,74 @@ function reppforall(){
 EOF
             return 0
         ;; '') :
-        ;;  *) reppfor "$@";  return 0
+        ;;  *) reppforgen "$@";  return 0
     esac
 
-    local count total opt ask
-    #change comma to backquato and replace carrige return to null
+    local fileencoding
+    [ ! -f "$REPPFILE_FORALL" ]  && { err "file is not existed!"; return 1; }
+    cp "$REPPFILE_FORALL" "$REPPFILE_FORALL.out" ##KJK_DEBUG REMOVE
+
+    ## change reppscript.sh to linux file format, same to sed -i 's/\x0D$//' file
+    grep -q $'\r' "$REPPFILE_FORALL" && fileencoding=windows || fileencoding=linux
+    if [ "$fileencoding" = "windows" ]; then sed -i 's/\r$/$/' "$REPPFILE_SCRIPT";fi
+
+    ##read whole csv to array, $7 REPP_SCRIPT column 까지 출력
+    #REPO_LREV 찾으면 found=1로 설정후 다음줄 처리
+    #REPO_LREV (found 1이고) REPP_SCRIPT가 비어있지 않으면
     #gsub(/("|=)/,"",$1)          : change number to text
     #sed 's/,/`/g'                : change csv to txt
     #gsub(/""/,"\"",$7)           : change csv string "" to normal "
     #gsub(/\r/,"",$7)             : remove carrige return
+    #그런후 마지막으로 출력, 즉 REPP_SCRIPT가 있는 line만 출력
+    #cat "$REPPFILE_FORALL"| awk 'BEGIN{FS=","; RS="\r\n"; OFS="`"; ORS="\n"; found=0} /^REPO_LREV/ {found=1; next} found && ($1 !~ /^[0-9a-f]{10,}/ || $7 ~ /[[:print:]]+/) \
+    #{gsub(/("|=)/,"",$1); gsub(/""/,"\"",$7); gsub(/\r/,"",$7);print $1"`"$2"`"$3"`"$4"`"$5"`"$6"`"$7}'> "$REPPFILE_FORALL".tmp
+    #readarray -t arrayline < <(awk 'BEGIN{RS="\r\n"} {print}' "$REPPFILE_FORALL.tmp")
+    readarray -d $'\r\n' -t arrayline < <(cat "$REPPFILE_FORALL"| awk 'BEGIN{FS=","; RS="\r\n"; OFS="`"; ORS="\r\n"; found=0} /^REPO_LREV/ {found=1; next} found && ($1 !~ /^[0-9a-f]{10,}/ || $7 ~ /[[:print:]]+/) \
+    {gsub(/("|=)/,"",$1); gsub(/""/,"\"",$7); gsub(/\r/,"",$7);print $1"`"$2"`"$3"`"$4"`"$5"`"$6"`"$7}')
 
-    [ ! -f "$REPPFILE_FORALL" ]  && { err "file is not existed!"; return 1; }
 
-    ##read whole csv to array
-    cat "$REPPFILE_FORALL"| awk 'BEGIN{FS=",";}{gsub(/("|=)/,"",$1);gsub(/""/,"\"",$7);gsub(/\r/,"",$7);\
-        print $1"`"$2"`"$3"`"$4"`"$5"`"$6"`"$7}' > "$REPPFILE_FORALL".tmp
-    readarray -t arrayline < <(tail -n +$(cat $REPPFILE_FORALL.tmp|grep -n ^REPO_LREV|cut -d':' -f1) $REPPFILE_FORALL.tmp)
-
-    ## 두번째 line부터 첫번 line2, col from 1st col(watch $bash[0], awk[1]) !!
-    ## 먼저 실행할 내용을 보여주고
-    for ((count=1,total=0; count<${#arrayline[@]}; count++ )); do
+    ##REPO_XXX로 시작하는 heading 을 제외하고 그 다음줄 부터 처리, count=1
+    ##먼저 실행할 내용을 보여주고
+    local count total cmd pro
+    local oneline=()
+    for ((count=0,total=0; count<${#arrayline[@]}; count++ )); do
         ##read oneline to array
         readarray -t -d\` oneline <<< "${arrayline[$count]}"
-        #oneline[8]=$(echo "${oneline[6]}"| sed -z 's/\n$//')
-        #declare -p oneline
+        #declare -p oneline | sed 's/\[/\n[/g'
+
+        pro=${oneline[4]}
+        cmd=$(echo ${oneline[6]} | xargs -0)
         ## 만약 6번째 item이 print가능한 명령이 존재하면 명령을 보여줘라.
-        if [[ -n $(echo ${oneline[6]} | xargs) ]]; then
-            oneline[6]=$(printf "%b" "${oneline[6]}"| sed 's/^"\(.*\)"$/\1/')
-            bbar cyan "[$((total=total+1))] ${oneline[4]}" "${oneline[6]}\n"
+        if [[ -n "${cmd}" ]]; then
+            cmd=$(printf "%b" "${cmd}"| sed 's/^"\(.*\)"$/\1/')
+            bbar cyan "[$((total=total+1))] ${pro}" "${cmd}\n"
         fi
         (( $total == 0 )) && { err "No matched git project is found in $REPPFILE_FORALL" ; return 1; }
     done
 
-
-    ## repp forall 입력시 전체를 어떻게 실행할지 1회 물어본후
-    local opt ask outfile cmd
+    ## repp forall 입력시 전체를 어떻게 실행할지 1회 물어본후, 각 명령어 실행시미다 다시 물어본다.
+    local opt ask outfile cmd= pro=
+    local __ret='OK'
     read -p $'\n\n[enter:execute by asking |go:run all|save: run&save reppforall.log| ctrl+c:break] :' opt
     [ "$opt" = "save" ] && outfile="> ${REPP_DIR}/reppforall.log"
 
-    for ((count=1,total=0; count<${#arrayline[@]}; count++ )); do
+    touch ${REPP_DIR}/temp.sh && chmod +x ${REPP_DIR}/temp.sh
+    for ((count=0,total=0; count<${#arrayline[@]}; count++ )); do
         readarray -t -d\` oneline <<< "${arrayline[$count]}"
 
         ## leading, trailing space 제거
-        cmd=$(echo ${oneline[6]} | xargs)
+        cmd=${oneline[6]}
 
-        #cmd=$(echo ${oneline[6]} | xargs)
         ## 만약 6번째 item에 명령이 없으면 skip
         if [[ -z "$cmd" ]];then continue; fi
 
-        ## double quote로 감싸 있으면 제거
-        cmd=$(printf "%b" "${cmd}"| sed 's/^"\(.*\)"$/\1/')
-
-        ## single quote로 감싸 있으면 제거
-        [[ $cmd == \'*\' ]] && cmd=${cmd:1:-1}
-        #echo "$cmd" | awk -v FS="," '{gsub(/""/,"\"",$7); gsub(/\r/,"",$7); print $7}'
-
-        under "[$((total=total+1))] ${oneline[4]}\n"
-        bbar cyan "${oneline[5]}" "${cmd}\n"
-        ## 각 repository마다 다시 한번씩 물어보게 된다. go를 입력하면 나머지는 물어보지 않고 바로 실행한다.
-        [ "$opt" = "" ] && read -p '[enter:run next| go:run all| other:skip next| ctrl+c:break all] :' ask;
-
-        ## prompt와 result 구분라인----------------------------------------- 를 출력한다.
+        ## 현재 context에서 실행을 위해 source로 file로 만들어 호출한다.
         bbar cyan "" "\n"
-        if [ -f "${cmd}" ]; then
-            ## file content is not null, change to linux file format, same to sed -i 's/\x0D$//' file
-            if $(file "${cmd}"| grep CRLF ); then sed -i 's/.$//' "${cmd}"; fi
-            ## file 임으로 현재 shell에 적용시키기 위해 source로 호출
-            cmd=". ${cmd}"
-        else
-            if $(echo "${cmd}"| grep ^bash > /dev/null);
-            then cmd="$(echo ${cmd}| sed 's/ -[^ ]*c[^ ]*//')";                     ## bash 이면 -cj등의 옵션을 제외하고 bash script.sh 를 호출하도록 수정
-            else cmd=$(printf "eval %s" "${cmd}"); ## file이 아니면 csv에 직접 입력한 명령어로 인식
-            fi
+        if [ -f "${cmd}" ]; then cmd=". ${cmd}"
+        else ##command 자체를 file로 변환하여 처리
+            #echo "${cmd}"| awk 'BEGIN {RS=""; FS="\n"} {gsub(/^['\''"]|['\''"]$/, ""); print}' "~~~"만 삭제
+            echo "${cmd}"| awk 'BEGIN {RS=""; FS="\n"} {gsub(/^["'\''"]|["'\''"]$/, ""); print}' > ${REPP_DIR}/temp.sh #"~~~", '~~~'둘다 삭제
+            cmd=". ${REPP_DIR}/temp.sh"
         fi
 
         ## if opt=go   , ask=any  : excute all at once
@@ -412,13 +447,17 @@ EOF
         ## if opt=enter, ask=value: skip one cmd, value is not 'go'
         ## if opt=enter, ask=go   : execute leftover without asking
         ## if     break, stop all : ctrl + c
-        if [ -z "$ask" ]; then pushd "$REPP_ROOT/${oneline[5]}"
-            #cat <<- EOF | bash -c
-            #    REPO_ROOT="$REPP_ROOT" REPO_LREV="${oneline[0]}" REPO_GROUP="${oneline[1]}" REPO_REMOTE="${oneline[2]}" REPO_RREV="${oneline[3]}" REPO_PROJECT="${oneline[4]}" REPO_PATH="${oneline[5]}" ${oneline[6]}
-            #EOF
-            set -x
+        under "[$((total=total+1))] ${oneline[4]}\n"
+        bbar cyan "${oneline[5]}" "${cmd}\n"
+        ## 각 repository마다 다시 한번씩 물어보게 된다. go를 입력하면 나머지는 물어보지 않고 바로 실행한다.
+        [ "$opt" = "" ] && read -p '[enter:run next| go:run all| other:skip next| ctrl+c:break all] :' ask;
+        if [ -z "$ask" ]; then pushd "$REPP_ROOT/${oneline[5]}";
             REPO_ROOT="$REPP_ROOT" REPO_LREV="${oneline[0]}" REPO_GROUP="${oneline[1]}" REPO_REMOTE="${oneline[2]}" REPO_RREV="${oneline[3]}" REPO_PROJECT="${oneline[4]}" REPO_PATH="${oneline[5]}" ${cmd}
-            set +x
+            #windows파일인지 linux파일인지 판단
+            if [ "$fileencoding" = "windows" ];
+            then sed -i "\#${oneline[4]}# s|$(printf '\r\n')|,${__ret}&|" "$REPPFILE_FORALL.out"
+            else sed -i "\#${oneline[4]}# s|$|,${__ret}&|" "$REPPFILE_FORALL.out"
+            fi
             popd
         elif [ "$ask" = "go" ]; then opt=go; ask=''
         else
@@ -1636,6 +1675,7 @@ function repp_initvar(){
     #repp.csv.lfs                                #repp.csv항목중에 git lfs로 구성된 git list
     #repp.csv.submodule                          #repp.csv항목이 소유한 git submodule list
     REPPFILE_FORALL=${REPP_DIR}/reppforall.csv   #repp forall 작업을 진행하기 위한 script. repp forall gen로 생성됨. 구분자(,)
+    REPPFILE_SCRIPT=${REPP_DIR}/reppscript.sh    #repp forall로 만들어져 reppforall.csv에서 호출되는 default script
     #reppforall.csv.tmp                          #reppforall.csv를 실제 실행할때 구분자(`)로 변경하여 처리하기 위한 중간파일
 
     if [[ $ret -eq 1 ]]; then
