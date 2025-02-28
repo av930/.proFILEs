@@ -380,7 +380,7 @@ EOF
 
     ## change reppscript.sh to linux file format, same to sed -i 's/\x0D$//' file
     grep -q $'\r' "$REPPFILE_FORALL" && fileencoding=windows || fileencoding=linux
-    if [ "$fileencoding" = "windows" ]; then sed -i 's/\r$/$/' "$REPPFILE_INSCRIPT";fi
+    if [ "$fileencoding" = "windows" ] && [ -f "$REPPFILE_INSCRIPT" ]; then sed -i 's/\r$/$/' "$REPPFILE_INSCRIPT";fi
 
     ##read whole csv to array, $7 REPP_SCRIPT column 까지 출력
     #REPO_LREV 찾으면 found=1로 설정후 다음줄 처리
@@ -418,9 +418,10 @@ EOF
 
     ## repp forall 입력시 전체를 어떻게 실행할지 1회 물어본후, 각 명령어 실행시미다 다시 물어본다.
     local opt ask outfile cmd= pro=
-    local __ret='OK'
+    local __ret='NONE'
     read -p $'\n\n[enter:execute by asking |go:run all| ctrl+c:break] :' opt
 
+    > $REPPFILE_TMSCRIPT.csv
     touch $REPPFILE_TMSCRIPT && chmod +x $REPPFILE_TMSCRIPT
     for ((count=0,total=0; count<${#arrayline[@]}; count++ )); do
         readarray -t -d\` oneline <<< "${arrayline[$count]}"
@@ -447,15 +448,16 @@ EOF
         ## if opt=enter, ask=go   : execute leftover without asking
         ## if     break, stop all : ctrl + c
         under "[$((total=total+1))] ${oneline[4]}\n"
-        bbar cyan "${oneline[5]}" "${cmd}\n"
+        bbar cyan "${oneline[5]}" "$(cat $REPPFILE_TMSCRIPT)\n"
         ## 각 repository마다 다시 한번씩 물어보게 된다. go를 입력하면 나머지는 물어보지 않고 바로 실행한다.
         [ "$opt" = "" ] && read -p '[enter:run next| go:run all| other:skip next| ctrl+c:break all] :' ask;
         if [ -z "$ask" ]; then pushd "$REPP_ROOT/${oneline[5]}";
             REPO_ROOT="$REPP_ROOT" REPO_LREV="${oneline[0]}" REPO_GROUP="${oneline[1]}" REPO_REMOTE="${oneline[2]}" REPO_RREV="${oneline[3]}" REPO_PROJECT="${oneline[4]}" REPO_PATH="${oneline[5]}" ${cmd}
+            [ $? -eq 0 ] && __ret='OKAY' || __ret='FAIL'
             #windows파일인지 linux파일인지 판단
             if [ "$fileencoding" = "windows" ];
-            then sed -i "\#${oneline[4]}# s|$(printf '\r\n')|,${__ret}&|" "$REPPFILE_FORALL"
-            else sed -i "\#${oneline[4]}# s|$|,${__ret}&|" "$REPPFILE_FORALL"
+            then awk -v count="$((count+3))" -v ret="$__ret" 'NR==count {sub(/\r$/, ret"\r"); print $0}' "$REPPFILE_FORALL" >> $REPPFILE_TMSCRIPT.csv
+            else awk -v count="$((count+3))" -v ret="$__ret" 'NR==count {sub(/$/, ret"\n"); print $0}' "$REPPFILE_FORALL"   >> $REPPFILE_TMSCRIPT.csv
             fi
             popd
         elif [ "$ask" = "go" ]; then opt=go; ask=''
@@ -2775,6 +2777,8 @@ TEMP_JSON
                     local file=$(mktemp);
                     ##현재 project의 access정보를 가져온다.
                     curl -su ${user}:${key} ${server}/a/projects/${project//'/'/'%2F'}/access |sed '1d' > $file
+
+                    if [ ! -s "$file" ] || $(cat $file | grep -q 'Not found'); then { err "${project} is not existed"; break; }; fi
                     info "config: " "${server}/admin/repos/${project},access"
                     clog "rawfile:" "cat $file|jq -cC '.'"
 
