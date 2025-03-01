@@ -396,6 +396,8 @@ EOF
     readarray -d $'\r\n' -t arrayline < <(cat "$REPPFILE_FORALL"| awk 'BEGIN{FS=","; RS="\r\n"; OFS="`"; ORS="\r\n"; found=0} /^REPO_LREV/ {found=1; next} found && ($1 !~ /^[0-9a-f]{10,}/ || $7 ~ /[[:print:]]+/) \
     {gsub(/("|=)/,"",$1); gsub(/""/,"\"",$7); gsub(/\r/,"",$7);print $1"`"$2"`"$3"`"$4"`"$5"`"$6"`"$7}')
 
+    ## reppforall_result.csv에 실행결과를 출력한다.
+    cat "$REPPFILE_FORALL"| awk '$1~/REPO_LREV/ {print; exit} {print}' > ${REPPFILE_FORALL%\.*}_result.csv
 
     ##REPO_XXX로 시작하는 heading 을 제외하고 그 다음줄 부터 처리, count=1
     ##먼저 실행할 내용을 보여주고
@@ -456,9 +458,10 @@ EOF
             [ $? -eq 0 ] && __ret='OKAY' || __ret='FAIL'
             #windows파일인지 linux파일인지 판단
             if [ "$fileencoding" = "windows" ];
-            then awk -v count="$((count+3))" -v ret="$__ret" 'NR==count {sub(/\r$/, ret"\r"); print $0}' "$REPPFILE_FORALL" >> $REPPFILE_TMSCRIPT.csv
-            else awk -v count="$((count+3))" -v ret="$__ret" 'NR==count {sub(/$/, ret"\n"); print $0}' "$REPPFILE_FORALL"   >> $REPPFILE_TMSCRIPT.csv
+            then awk -v count="$((count+3))" -v ret="$__ret" 'BEGIN{RS=ORS="\r\n"} NR==count {print $0,ret}' "$REPPFILE_FORALL" >> ${REPPFILE_FORALL%\.*}_result.csv
+            else awk -v count="$((count+3))" -v ret="$__ret" 'BEGIN{RS=ORS="\n"} NR==count {print $0,ret}' "$REPPFILE_FORALL"   >> ${REPPFILE_FORALL%\.*}_result.csv
             fi
+
             popd
         elif [ "$ask" = "go" ]; then opt=go; ask=''
         else
