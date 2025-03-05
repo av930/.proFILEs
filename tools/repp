@@ -421,7 +421,9 @@ EOF
     for ((count=0,total=0; count<${#arrayline[@]}; count++ )); do
         readarray -t -d\` oneline <<< "${arrayline[$count]}"
 
+        ## project가 비워있으면 skip
         pro=${oneline[4]}; [ -z "$pro" ] && break
+
         ## leading, trailing space 제거
         cmd=${oneline[6]}
 
@@ -461,7 +463,7 @@ EOF
         ## 각 repository마다 다시 한번씩 물어보게 된다. go를 입력하면 나머지는 물어보지 않고 바로 실행한다.
         read -p "$(echo -e "\n\n${yellow}[enter:run next| go:run all| other:skip next| ctrl+c:break all]:${NCOL}")" ask
         if [ -z "$ask" ]; then pushd "$REPP_ROOT/${oneline[5]}";
-            REPO_ROOT="$REPP_ROOT" REPO_LREV="${oneline[0]}" REPO_GROUP="${oneline[1]}" REPO_REMOTE="${oneline[2]}" REPO_RREV="${oneline[3]}" REPO_PROJECT="${oneline[4]}" REPO_PATH="${oneline[5]}" ${cmd}
+            REPO_ROOT="$REPP_ROOT" REPO_LREV="$(echo ${oneline[0]}|xargs)" REPO_GROUP="${oneline[1]}" REPO_REMOTE="${oneline[2]}" REPO_RREV="${oneline[3]}" REPO_PROJECT="${oneline[4]}" REPO_PATH="${oneline[5]}" ${cmd}
 
             # ## REPP_RESULT값이 설정되지 않았을때에 대한 default값 설정
             # if [ "$__ret" = "NONE" ]; then [ $? -eq 0 ] && __ret='OKAY' || __ret='FAIL'; fi
