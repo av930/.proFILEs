@@ -312,13 +312,13 @@ REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPP_SCRIPT,RE
 1. 아래 명령으로 reppforall.csv를 생성한다.
 2. REPP_SCRIPT 영역에 test에 필요한 command 넣고 저장한다.
 3. repp forall로 위에서 기록한 모든 command를 제대로 실행하는지 확인한다.
-bash /data001/vc.integrator/mirror/tsu_26my_release/src_current/.repp/reppscript.sh - $USER $PWD
-/data001/vc.integrator/mirror/tsu_26my_release/src_current/.repp/reppscript.sh
+bash /data001/vc.integrator/mirror/tsu_26my_release/src_current/.repp/repp_inscript.sh - $USER $PWD
+/data001/vc.integrator/mirror/tsu_26my_release/src_current/.repp/repp_inscript.sh
 bash -c 'case ${REPO_RREV} in
     ext_adp_s|ext_hero_s)
         git status
         git log -1
-    ;;*) printf "\n------------${REPO_PATH}[%s]\n" "$1 $2"
+    ;;*) printf "\n${REPO_PATH}[%s]\n" "$1 $2"
 esac;' - $USER $PWD
 echo "${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}"
 revv accessall ${REPO_REMOTE} ${REPO_PROJECT}
@@ -331,7 +331,7 @@ bash -c 'case ${REPO_RREV} in
         else
             git log -1
         fi
-    ;;*) printf "\n------------${REPO_PATH}[%s]\n" "$1 $2"
+    ;;*) printf "\n${REPO_PATH}[%s]\n" "$1 $2"
 esac;' - $USER $PWD
 
 TEST
@@ -405,7 +405,7 @@ EOF
         cmd=$(echo ${oneline[6]} | xargs -0)
         ## 만약 6번째 item이 print가능한 명령이 존재하면 명령을 보여줘라.
         if [[ -n "${cmd}" ]]; then
-            cmd=$(printf "%b" "${cmd}"| sed 's/^"\(.*\)"$/\1/')
+            printf -v cmd "%-.100s" "${cmd//\\n/}"
             bbar cyan "[$((total=total+1))] ${pro}" "${cmd}\n"
         fi
         (( $total == 0 )) && { err "No matched git project is found in $REPPFILE_FORALL" ; return 1; }
@@ -947,8 +947,13 @@ function reppmanidb(){
 
         bar inline "${REPPFILE_CSV}"
         clog "bad case:content different" "join 'repo' and 'json' info"
-        warn "${REPP_PATH}/${REPPFILE_MANI}\n        has mismatch  between 'repo manifest' and 'repo forall'"
+        warn "${REPP_PATH}/${REPPFILE_MANI}\n        has mismatch  between 'repo manifest' and 'repo forall' and the reason why..."
+        echo "case1: new repositories created that not described in manifest"
+        echo "case2: new commits are added to existing repository, therefore the revision is changed"
+        wave
         diff -B <(awk -v FS="|" '{print $1"|"$7"|"$8}' ${REPPFILE_CSV}.json) <(awk -v FS="|" '{print $1"|"$7"|"$8}' ${REPPFILE_CSV})
+
+
     else ## repp.csv.json와 repp.csv.repo가 같은 경우 (정상적으로 잘 만들어진경우)
         cp ${REPPFILE_CSV}.json ${REPPFILE_CSV}
         bar inline "${REPPFILE_CSV}"
