@@ -35,8 +35,8 @@ source <(cat <<'EOF'
     git config --global alias.alias 'config --get-regexp ^alias\.'
     git config --global alias.st 'status'
     git config --global alias.ci 'commit --verbose'
-    git config --global alias.loga 'log --oneline --decorate --graph -n 20 --all'
-    git config --global alias.logo "log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr)%Creset %C(blue)<%an>%Creset' --abbrev-commit --date=relative"
+    git config --global alias.loga 'log --color=always --oneline --decorate --graph -n 20 --all'
+    git config --global alias.logo "log --color=always --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr)%Creset %C(blue)<%an>%Creset' --abbrev-commit --date=relative"
     git config --global alias.tagcur 'describe --tags --abbrev=0 --match'
     git config --global alias.diffc 'difftool -t bc'
     git config --global alias.diffv 'difftool -t vimdiff'
@@ -948,8 +948,8 @@ function reppmanidb(){
         bar inline "${REPPFILE_CSV}"
         clog "bad case:content different" "join 'repo' and 'json' info"
         warn "${REPP_PATH}/${REPPFILE_MANI}\n        has mismatch  between 'repo manifest' and 'repo forall' and the reason why..."
-        echo "case1: new repositories created that not described in manifest"
-        echo "case2: new commits are added to existing repository, therefore the revision is changed"
+        echo "existing project: new commits are added to existing repository, therefore the revision is changed from manifest"
+        echo "     new project: new repositories created that not described in manifest, by build time download or manual work"
         wave
         diff -B <(awk -v FS="|" '{print $1"|"$7"|"$8}' ${REPPFILE_CSV}.json) <(awk -v FS="|" '{print $1"|"$7"|"$8}' ${REPPFILE_CSV})
 
@@ -1836,9 +1836,12 @@ function gittinfo(){
 # TODO: clone command
     local TEMP
     local review_gerrit=admin/repos
+
+    ## git path
     bar inline "git path"
     clog 'current git path:' "${GITT_PATH}"
 
+    ## git remote info
     ## "error: must check" must be checked!!!
     bar inline "show all remote info"
     clog ' remote:' ${GITT_REMOTE:="error: must check"}                        #remote name
@@ -1867,25 +1870,32 @@ function gittinfo(){
     clog "source browser gitiles:" ${GIT_SITE/"${review_gerrit}"/"plugins/gitiles"}/+/refs/heads/${GITT_BRANCH}                #source from gitiles
     clog "source browser gerrit :" ${GIT_SITE/"${review_gerrit}/"/"gitweb?p="}.git\;a=shortlog\;h=refs/heads/${GITT_BRANCH}    #source from gerrit
 
+    ## git clone & push command
     bar inline "git clone & push commands"
     clog " git clone:" "git clone ${GITT_URL} -b ${GITT_BRANCH}"               #make git clone command
     TEMP=$(printf "git push $GITT_REMOTE HEAD:refs/heads/%s" ${GITT_BRANCH})
     clog " git push review:" ${TEMP/\/heads/\/for}                             #make git push command for
     clog " git push direct:" $TEMP                                             #make git push command head
 
-    bar inline "recent commit info"                                            #extract last commit info
+    ## git recent local command
+    bar inline "recent local commit info"                                      #extract last commit info
     git show --stat --oneline HEAD
+    if ! diff -qB <(git rev-parse ORIG_HEAD) <(git rev-parse HEAD); then       #current head is changed
+        clog "git changed: " "new commit is added"
+        git log --color=always --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr)%Creset %C(blue)<%an>%Creset' --abbrev-commit --date=relative ORIG_HEAD..HEAD
+    fi
 
-
+    ## git submodule & lfs
     pushd "${GITT_PATH:?"You are not in git project"}"
     bar inline "git submodule & git lfs"
     ## sub module 정보가 있으면 출력
     if [ -f .gitmodules ]; then info "$( cat .gitmodules|grep -oP "(?<=path \= ).*" |xargs -I{} bash -c '[ -e {}/.git ] && echo "this git HAS active git-submodule: [{}]" || echo "this git has not active git-submodule: [{}]"' )"; fi
     if [ ! -f .gitmodules ] && [ -n "$(awk -v VAR=${GITT_PATH} 'VAR~$2{print $2}' ${REPPFILE_CSV}.submodule)" ]; then info "this git IS git-submodule: [${GITT_PATH/$REPP_ROOT/}]"; fi
     ## lfs 정보가 있으면 출력
-    [ -n "$(grep ${GITT_PATH/$REPP_ROOT\//} ${REPPFILE_CSV}.lfs)" ] && { info "this git HAS git-lfs file"; git lfs ls-files; }
+    if [ -f "${REPPFILE_CSV}.lfs" ] && [ -n "$(grep ${GITT_PATH/$REPP_ROOT\//} ${REPPFILE_CSV}.lfs)" ]; then info "this git HAS git-lfs file"; git lfs ls-files;
     popd
 
+    ## git last sync time
     bar inline "last synced time"                                              #extract sync time
     oldIFS=${IFS}; IFS='';
     if [ -f ${GITT_PATH}/.git/FETCH_HEAD ]; then clog "last manifest-synced date: " $(stat -c %y ${GITT_PATH}/.git/FETCH_HEAD );
