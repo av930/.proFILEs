@@ -1892,7 +1892,7 @@ function gittinfo(){
     if [ -f .gitmodules ]; then info "$( cat .gitmodules|grep -oP "(?<=path \= ).*" |xargs -I{} bash -c '[ -e {}/.git ] && echo "this git HAS active git-submodule: [{}]" || echo "this git has not active git-submodule: [{}]"' )"; fi
     if [ ! -f .gitmodules ] && [ -n "$(awk -v VAR=${GITT_PATH} 'VAR~$2{print $2}' ${REPPFILE_CSV}.submodule)" ]; then info "this git IS git-submodule: [${GITT_PATH/$REPP_ROOT/}]"; fi
     ## lfs 정보가 있으면 출력
-    if [ -f "${REPPFILE_CSV}.lfs" ] && [ -n "$(grep ${GITT_PATH/$REPP_ROOT\//} ${REPPFILE_CSV}.lfs)" ]; then info "this git HAS git-lfs file"; git lfs ls-files;
+    if [ -f "${REPPFILE_CSV}.lfs" ] && [ -n "$(grep ${GITT_PATH/$REPP_ROOT\//} ${REPPFILE_CSV}.lfs)" ]; then info "this git HAS git-lfs file"; git lfs ls-files; fi
     popd
 
     ## git last sync time
