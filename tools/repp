@@ -878,9 +878,10 @@ function reppmanidb(){
         ## 칼럼순서대로 1:revision, 2:group, 3:remote, 4:upstream, 5:dest_branch, 6:rrev, 7:project, 8:path
         ##process item according to index
         [ "$lrev" = "null"  ] && { err "${lineout}"; return 1; } || lineout+="${lrev}|"
-        [ "$group" = "null" ] && lineout+="all,default" || lineout+="${group}|"
-        #3.remote: replace alias by original name
+        [ "$group" = "null" ] && lineout+="all,default|" || lineout+="${group}|"
 
+        #KJK_DEBUG [ "$remote" == "v9" ] && { set -x; read -p "KJK_DEBUG"; } || set +x
+        #3.remote: replace alias by original name
         echo ${items_alias[@]}| while read -d'|' alias && [ -n "${alias[@]}" ]; do
             if [ "${remote}" = "${alias%%=*}" ]; then
                 remote="${alias##*=}";
