@@ -241,8 +241,6 @@ EOF
 
 : <<'COMMENT'
 수정할것
-1. group에 : 들어가는 것
-2. path뒤에 | 분리 제대로 안되는것 O
 3. REPO_사용자 define 변수 넣는것
 4. repp forall  -c 가 잘못되어서 repo forall -c 호출하지 않도록 방어코드 넣는것
 5. repp_tmscript.sh 가 또다시 repp_inscript.sh를 호출하는것 (즉, bash -c를 그냥 script 파일로 넣자.)
@@ -250,7 +248,10 @@ COMMENT
 
 function reppforgen(){
 ## ---------------------------------------------------------------------------
-# parse repp forall < projec -c 'cmd' option>
+# 입력된 repp forall < projec -c 'cmd' option> 분석하여, reppforall.csv, repp_inscript.sh 파일을 생성한다.
+
+    under "Welcome to reppforall generator\n"
+    clog "${REPPFILE_FORALL},\n${REPPFILE_INSCRIPT}" "will be generated, please wait a few seconds"
 
     local ret=0 cmd=$1
     local tempf=$(mktemp)
@@ -280,7 +281,7 @@ REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPP_SCRIPT,RE
 
         [ "$pro" = ". " ] && pro=${GITT_PROJECT}  #set as current git project
         [ "$pro" = "all" ] && pro='.'             #match all git project
-         [[ $pre = bash*-*c* ]] && pre='bash'             #match all git project
+        [[ $pre = bash*-*c* ]] && pre='bash'      #match all git project
 
 
         ##repp forall tiger/services/ethmgr tiger/metas/meta-tiger  -cj1 bash -c '[ -z "${REPO_RREV}" ] && echo ${REPO_PROJECT}' $USER $PWD
@@ -300,12 +301,14 @@ REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPP_SCRIPT,RE
     ## excel에서 편집할수 있도록 repoforall.csv body 생성
     ## txt 파일인 $REPPFILE_CSV로 부터 sha-code를 6자리로 줄이고
     ##                                구분자인 '|'와 콤마(,)를 포함하는 파일을
-    ##                                구분자로 ','로 하고 세미콜론(;)을 포함하는 csv로 file로 만드는 작업
+    ##                                구분자로 ','로 하고 콜론(:)을 포함하는 csv로 file로 만드는 작업
     #cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=","; ORS="\n";}{print "\042\042\075\042"$1"\042","\042"$2"\042,"$3","$6","$7","$8}' >> "$REPPFILE_FORALL"
     #cat "$REPPFILE_CSV"| colrm 7 40| awk 'BEGIN{FS="|"; OFS=",";}{gsub(/,/,":",$2);print $1","$2","$3","$6","$7","$8}' >> "$REPPFILE_FORALL"
     ##RS='\n'는 ctrl+M을 제거하고 \r\n로 대체하기 위해서 사용
     [ ! -s $tempf ] && cp "${REPPFILE_CSV}" $tempf
     cat $tempf| awk 'BEGIN{FS="|"; OFS=","; ORS="\r\n"}{gsub(/,/,":",$2);print "\042\042\075\042"$1"\042",$2","$3","$6","$7","$8","$9","}' >> "$REPPFILE_FORALL"
+    ## column 2에 존재하는 :를 ,으로 바꾼다.
+    #cat $tempf| awk 'BEGIN{FS="|"; OFS=","; ORS="\r\n"}{if ($2~/,/) {$2="\""$2"\""};print "\042\042\075\042"$1"\042",$2","$3","$6","$7","$8","$9","}' >> "$REPPFILE_FORALL"
 
     [ -f "$REPPFILE_FORALL" ] && bar inline "$REPPFILE_FORALL"
     [ -f "$REPPFILE_FORALL" ] && clog "${REPPFILE_FORALL##*/}:" "you can put your commands ${REPPFILE_FORALL##*/} and then run by 'repp forall'"
@@ -340,16 +343,21 @@ bash -c 'case ${REPO_RREV} in
         fi
     ;;*) printf "\n${REPO_PATH}[%s]\n" "$1 $2"
 esac;' - $USER $PWD
-
 TEST
 
 
 function reppforall(){
 ## ---------------------------------------------------------------------------
-# run command(.repp/reppwork.csv) as like repo for all
-#
-    ## change from a csv file with separator ',' but containing semi-colon in item.
-    ##          to a txt file with separator '`' but containing seme-colon in item.
+# repp forall -c일때는 reppforgen로 연결하고
+# repp forall 일때는 reppforall.csv 를 읽어 실행한다.
+
+    if [[ "$@" =~ '`' ]]; then
+        clog "backquote(\`)" "is not supported 'repp forall' command"
+        err "you can't use backquote, use \$(cmd)" instead of \`cmd\`;
+        return 1;
+    fi
+    ## change from csv file with separator ',' but containing semi-colon in item.
+    ##          to txt file with separator '`' but containing seme-colon in item.
 
     local cmd=$1
     case $cmd in
@@ -382,7 +390,8 @@ EOF
     grep -q $'\r' "$REPPFILE_FORALL" && fileencoding=windows || fileencoding=linux
     if [ "$fileencoding" = "windows" ] && [ -f "$REPPFILE_INSCRIPT" ]; then sed -i 's/\r$/$/' "$REPPFILE_INSCRIPT";fi
 
-    ##read whole csv to array, $7 REPP_SCRIPT column 까지 출력
+
+    ##전체 csv를 읽어 array로 바꾸는 작업으로 이를 위해 먼저 reppforall.csv의 구분자를 comma(,)에서 backquote(``)로 바꾼다.
     #REPO_LREV 찾으면 found=1로 설정후 다음줄 처리
     #REPO_LREV (found 1이고) REPP_SCRIPT가 비어있지 않으면
     #gsub(/("|=)/,"",$1)          : change number to text
@@ -902,7 +911,7 @@ function reppmanidb(){
         #5.dest-branch, 6.rrev(revision is generated)
         if [ "$dest_branch" = "$upstream" ]; then [ "$dest_branch" = "null" ] && lineout+="${dest_branch}|${lrev}|" || lineout+="${dest_branch}|${upstream}|"
         else [ "$upstream" = "null" ] && lineout+="${dest_branch}|${lrev}|" || lineout+="${dest_branch}|${upstream}|"
-            info "pull/push url is diff: $(printf "[%-60.60s] %-40.40s %-40.40s" $project $dest_branch $upstream)";
+            info "$(printf "[%-60.60s] pull/push url is diff [%-40.40s] [%-40.40s]" $project $dest_branch $upstream)";
         fi
 
         #7.project(name), 8.path: if null stop, it is mandatory
