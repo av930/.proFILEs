@@ -241,9 +241,8 @@ EOF
 
 : <<'COMMENT'
 수정할것
-3. REPO_사용자 define 변수 넣는것
-4. repp forall  -c 가 잘못되어서 repo forall -c 호출하지 않도록 방어코드 넣는것
-5. repp_tmscript.sh 가 또다시 repp_inscript.sh를 호출하는것 (즉, bash -c를 그냥 script 파일로 넣자.)
+1. REPO_사용자 define 변수 넣는것
+2. repp_tmscript.sh 가 또다시 repp_inscript.sh를 호출하는것 (즉, bash -c를 그냥 script 파일로 넣자.)
 COMMENT
 
 function reppforgen(){
@@ -261,8 +260,8 @@ function reppforgen(){
     ## reppforall.csv heading 생성
     ## (CSV file을 처리하기 위해 최종 처리전까지는 windows format으로 처리)
     ## 추후 REPO_UPSTREAM,REPO_DEST_BRANCH가 필요하면 $4,$5를 넣어야 한다.
-    printf "Refer, GUIDE:,,,http://collab.lge.com/main/display/~joongkeun.kim/reppforall,defaultscript>>>,${script:=NONE},\r\n\
-REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPP_SCRIPT,REPP_RESULT,\r\n" > $REPPFILE_FORALL
+    printf "Refer,http://collab.lge.com/main/display/~joongkeun.kim/reppforall,,REPP_VAR1,NONE,REPP_VAR2,NONE,\r\n\
+REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPP_SCRIPT,\r\n" > $REPPFILE_FORALL
 
     ## repoforall.csv의 body를 생성
     if [ ! "$cmd" = "gen" ]; then
@@ -346,6 +345,7 @@ esac;' - $USER $PWD
 TEST
 
 
+
 function reppforall(){
 ## ---------------------------------------------------------------------------
 # repp forall -c일때는 reppforgen로 연결하고
@@ -390,9 +390,12 @@ EOF
     grep -q $'\r' "$REPPFILE_FORALL" && fileencoding=windows || fileencoding=linux
     if [ "$fileencoding" = "windows" ] && [ -f "$REPPFILE_INSCRIPT" ]; then sed -i 's/\r$/$/' "$REPPFILE_INSCRIPT";fi
 
+    ## define custom variable REPP_VAR1, REPP_VAR2
+    eval $(awk -F',' '$1 ~ /Refer/ {print $4"="$5}' "$REPPFILE_FORALL")
+    eval $(awk -F',' '$1 ~ /Refer/ {print $6"="$7}' "$REPPFILE_FORALL")
 
     ##전체 csv를 읽어 array로 바꾸는 작업으로 이를 위해 먼저 reppforall.csv의 구분자를 comma(,)에서 backquote(``)로 바꾼다.
-    #REPO_LREV 찾으면 found=1로 설정후 다음줄 처리
+    #REPO_LREV 찾으면 그 다음줄부터 처리하게 되는데, 이를위해 awk에서 found=1로 설정후 다음줄로 이동
     #REPO_LREV (found 1이고) REPP_SCRIPT가 비어있지 않으면
     #gsub(/("|=)/,"",$1)          : change number to text
     #sed 's/,/`/g'                : change csv to txt
@@ -427,6 +430,8 @@ EOF
         (( $total == 0 )) && { err "No matched git project is found in $REPPFILE_FORALL" ; return 1; }
     done
 
+    bbar green "check user custom variable" "REPP_VAR1=$REPP_VAR1\n"
+    bbar green "                          " "REPP_VAR2=$REPP_VAR2"
     ## repp forall 입력시 전체를 어떻게 실행할지 1회 물어본후, 각 명령어 실행시미다 다시 물어본다.
     local opt ask outfile cmd= pro=
     read -p "$(echo -e "\n\n${cyan}[enter:execute by asking |go:run all| ctrl+c:break]:${NCOL}")" opt
@@ -502,7 +507,6 @@ function reppdiff(){
 ## ---------------------------------------------------------------------------
 # get repo command from exising repo project
 # $1 show repo command (default: save info to each variable such as REPP_URL, REPP_BRANCH, ...)
-
 
     local cmd=$1
     local src=$2
@@ -911,7 +915,7 @@ function reppmanidb(){
         #5.dest-branch, 6.rrev(revision is generated)
         if [ "$dest_branch" = "$upstream" ]; then [ "$dest_branch" = "null" ] && lineout+="${dest_branch}|${lrev}|" || lineout+="${dest_branch}|${upstream}|"
         else [ "$upstream" = "null" ] && lineout+="${dest_branch}|${lrev}|" || lineout+="${dest_branch}|${upstream}|"
-            info "$(printf "[%-60.60s] pull/push url is diff [%-40.40s] [%-40.40s]" $project $dest_branch $upstream)";
+            clog "pull/push url is diff" "$(printf "[%-60.60s] %-40.40s %-40.40s" $project $dest_branch $upstream)";
         fi
 
         #7.project(name), 8.path: if null stop, it is mandatory
