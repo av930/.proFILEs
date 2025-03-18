@@ -479,9 +479,9 @@ EOF
     local tmpcmd=
 
     ## leading, trailing space 제거
-    tmpcmd=$(awk -F',' '$4 ~ /REPP_PRESCRIPT/ {print $5}' "$REPPFILE_FORALL"|xargs)
+    tmpcmd=$(awk -F',' -v ORS="\n" '$4 ~ /REPP_PRESCRIPT/ {print $5}' "$REPPFILE_FORALL"|xargs)
     REPPFILE_OUT=${REPPSCRIPT_PRE} ; reppforgen_sh $tmpcmd
-    tmpcmd=$(awk -F',' '$6 ~ /REPP_POSTSCRIPT/ {print $7}' "$REPPFILE_FORALL"|xargs)
+    tmpcmd=$(awk -F',' -v ORS="\n" '$6 ~ /REPP_POSTSCRIPT/ {print $7}' "$REPPFILE_FORALL"|xargs)
     REPPFILE_OUT=${REPPSCRIPT_POST}; reppforgen_sh $tmpcmd
     echo
     bbar purple "check user common pre/post script" "\n"
