@@ -1,8 +1,12 @@
 http://collab.lge.com/main/display/~joongkeun.kim/reppforall,Refer please,,REPP_VAR1,$HOME,REPP_VAR2,$LANG
-,,,REPP_PRESCRIPT,"echo ""${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}""",REPP_POSTSCRIPT,"echo ""${REPP_VAR1}:${REPP_VAR2}:${USER}:${PWD}:${REPO_REV}"""
+,,,REPP_SCRIPTPRE,"bash -c 'case ${REPO_RREV} in
+    tiger*)
+        git status
+    ;;*) printf ""\n${REPO_LREV}[%s]\n"" ""$1 $2""
+esac;' - $USER $PWD",REPP_SCRIPTPOST,"echo ""${REPP_VAR1}:${REPP_VAR2}:${USER}:${PWD}:${REPO_LREV}"""
 REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPP_SCRIPT
 cfd15bda1b0177d2bd9d43fc42fc6a37259cf933,mcu,vgit_as,tsu_26my_release,honda/con/autosar,mcu,bash /data001/vc.integrator/mirror/tsu_26my_release/src_current/.repp/reppscript.in.sh - $USER $PWD
-b1609982542301a728d3bc20995af4eff57d05f6,hlos,vgit_as,tsu_26my_release,honda/linux/build_tsu,nad/LGE/build_tsu,/data001/vc.integrator/mirror/tsu_26my_release/src_current/.repp/reppscript.in.sh 
+b1609982542301a728d3bc20995af4eff57d05f6,hlos,vgit_as,tsu_26my_release,honda/linux/build_tsu,nad/LGE/build_tsu,/data001/vc.integrator/mirror/tsu_26my_release/src_current/.repp/reppscript.in.sh
 5f0f525839bfaa571fda8aaf572d6bf36b969a86,hlos,vgit_na,tiger_release,tiger/apps/sample,nad/LGE/tiger-src/apps/sample-apps,"bash -c 'case ${REPO_RREV} in
     ext_adp_s|ext_hero_s)
         git status
