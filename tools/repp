@@ -424,8 +424,13 @@ function reppforall(){
 			        echo ${REPO_REMOTE} && echo ${REPO_RREV}                     #multiple commands with &&
 EOF
             return 0
-        ;; test) cp -f $PATH_DIR/reppforall.test.csv $REPPFILE_FORALL
-                 info "Now, you can test repp forall functionality by 'repp forall' command"; return 0
+        ;; test) local sfile="$PATH_DIR/reppforall.test.csv"
+                cat "$sfile"| awk 'BEGIN{FS=","; RS="\r\n"; OFS="`"; ORS="\n";}  NR>=1 && NR<=3 {print $0}' > "$REPPFILE_FORALL"
+                for i in $(seq 4 1 $(awk 'BEGIN{RS="\r\n"} END{print NR}' "$sfile") ); do
+                    awk 'BEGIN{FS="|"; RS="\n"; OFS=","; ORS=",";}       NR=='$i' {gsub(/,/,":",$2);print $1","$2","$3","$6","$7","$8}' ${REPPFILE_CSV}
+                    awk 'BEGIN{FS=","; RS="\r\n"; OFS="`"; ORS="\r\n";}  NR=='$i' {if ($7!="") {print $7} else {print ""}}'             "$sfile"
+                done >> "$REPPFILE_FORALL"
+                info "Now, you can test repp forall functionality by 'repp forall' command"; return 0
         ;; go) opt='go'
         ;; '') :
         ;;  *) reppforgen_csv "$@";  return 0
@@ -1905,7 +1910,6 @@ EOF
     ;; esac
 
 }
-
 
 
 
