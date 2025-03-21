@@ -1456,11 +1456,14 @@ function reppversion(){
 			usage) repp version ver            # show only repp version number exactly
 			usage) repp version                # show repo, git, python version
 EOF
-        ;;    ver) ## only 3digit length version code is valid to compare old version
-                   VER=$(cat ${file_log} | grep "repo version"  |tr -dc '[:digit:]')
-                   echo ${VER:0:3} && return 0
         ;; toggle) reppvertoggle; return 0
     esac
+
+    ## only 3digit length version code is valid to compare old version
+    VER=$(cat ${file_log} | grep "repo version"  |tr -dc '[:digit:]')
+    [ -z $VER ] && { VER=$(repo --version | grep 'launcher version' |tr -dc '[:digit:]'); }
+    if [ "$cmd" == "ver" ]; then echo ${VER:0:3} && return 0; fi
+
     #if VER is not integer, in case of error
     [[ ${VER} != ?(-)+([0-9]) ]] && VER=000
 
@@ -1845,10 +1848,15 @@ function reppcheck_initvar(){
 # find repo, gitt, review variable
 
     local cmd=$1
+    local besttry=false
+    if  [ "${cmd:0:1}" = "O" ]; then besttry=true ; fi
     ## --------------------------------------------------------
     if [[ "${cmd}" =~ "repp" ]]; then
-        if ! repp_initvar ;then warn "you are not in repo project" && return 1; fi
-        [[ "${cmd}" =~ "mani" ]] || reppmanidb
+        if ! repp_initvar ;then #repo project가 아닐때
+            if ! "$besttry" ; then warn "you are not in repo project" && return 1;fi
+        else
+            [[ "${cmd}" =~ "mani" ]] || reppmanidb
+        fi
     fi
     ## --------------------------------------------------------
     if [[ "${cmd}" =~ "gitt" ]]; then
@@ -1905,7 +1913,7 @@ function gittinfo(){
 ## ---------------------------------------------------------------------------
 # main handler for this scriptre
 # TODO: clone command
-    local TEMP
+    local TEMP THEAD
     local review_gerrit=admin/repos
 
     ## git path
@@ -1950,10 +1958,13 @@ function gittinfo(){
 
     ## git recent local command
     bar inline "recent local commit info"                                      #extract last commit info with only 1000 character
-    git --no-pager show --stat --color=always --pretty=format:'%Cred%h%Creset %<(1000,trunc) -%C(yellow)%d%Creset %s %Cgreen(%cr)%Creset %C(blue)<%an>%Creset' HEAD
-    if ! diff -qB <(git rev-parse FETCH_HEAD) <(git rev-parse HEAD); then       #current head is changed
-        clog "git changed: " "new commit is added"
-        git --no-pager log --color=always --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr)%Creset %C(blue)<%an>%Creset' --abbrev-commit --date=relative FETCH_HEAD..HEAD
+    git --no-pager show --stat --color=always --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr)%Creset %C(blue)<%an>%Creset  %<(1000,trunc)' HEAD
+
+    # if ! diff -qB <(git rev-parse FETCH_HEAD) <(git rev-parse HEAD); then       #current head is changed
+    THEAD=$(git log -1 --pretty=format:%H%n)
+    if ! git ls-remote -h ${GITT_REMOTE}| grep "$THEAD";then
+        warn "git changed: local and remote is differ"
+        git --no-pager log --color=always --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr)%Creset %C(blue)<%an>%Creset' --abbrev-commit --date=relative HEAD.."$THEAD"
     fi
 
     ## git submodule & lfs
@@ -1961,7 +1972,7 @@ function gittinfo(){
     bar inline "git submodule & git lfs"
     ## sub module 정보가 있으면 출력
     if [ -f .gitmodules ]; then info "$( cat .gitmodules|grep -oP "(?<=path \= ).*" |xargs -I{} bash -c '[ -e {}/.git ] && echo "this git HAS active git-submodule: [{}]" || echo "this git has not active git-submodule: [{}]"' )"; fi
-    if [ ! -f .gitmodules ] && [ -n "$(awk -v VAR=${GITT_PATH} 'VAR~$2{print $2}' ${REPPFILE_CSV}.submodule)" ]; then info "this git IS git-submodule: [${GITT_PATH/$REPP_ROOT/}]"; fi
+    if [ ! -f .gitmodules ] && [ -n "$(awk -v VAR=${GITT_PATH} 'VAR~$2{print $2}' ${REPPFILE_CSV}.submodule 2>/dev/null)" ]; then info "this git IS git-submodule: [${GITT_PATH/$REPP_ROOT/}]"; fi
     ## lfs 정보가 있으면 출력
     if [ -f "${REPPFILE_CSV}.lfs" ] && [ -n "$(grep ${GITT_PATH/$REPP_ROOT\//} ${REPPFILE_CSV}.lfs)" ]; then info "this git HAS git-lfs file"; git lfs ls-files; fi
     popd
@@ -3322,7 +3333,7 @@ case "$1" in
     ##$1:below ${@:2}:parameters
           help)                                     reppmenu help "${MENU[@]}"
     ;;      '')                                     reppmenu gitt "${MENU[@]}"
-    ;;    info)     reppcheck_initvar reppgitt  &&  gittinfo
+    ;;    info)     reppcheck_initvar Oreppgitt &&  gittinfo
     ;;    show)     reppcheck_initvar gitt      &&  gittshow "${@:2}"
     ;;      go)     reppcheck_initvar gittgo    &&  gittgo "${@:2}"
     ;;  commit)     reppcheck_initvar gitt      &&  gittcommit "${@:2}"
