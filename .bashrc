@@ -143,6 +143,13 @@ function _killscreen(){
 
 ###############################
 #### utility
+alias getip='_bar "display IP info"; __get_ip'
+function __get_ip(){
+    temp="$(dig -4 @resolver1.opendns.com -t a myip.opendns.com +short)"
+    [ "$temp" = "$(curl -s ip.me)" ] && echo "PUBLIC IP of current server: $temp" || echo "check IP manually"
+    echo "LOCAL  IP of current server:" $(get_ip)
+}
+
 alias scp$ECHO='_bar "Usage"; printf "
     scp -p <port> <user>@<src-ip>:<full-path-filename> .
     scp filename -p <port> <user>@<dest-ip>:<full-path-dest-dir>/
@@ -152,7 +159,7 @@ alias scp$ECHO='_bar "Usage"; printf "
 
 alias ssh$ECHO='_bar "Usage; printf "
     ssh -p <port> <user>@<dest-ip>
-    scp ${USER}@$CURR_IP:${HOME}/filename .
+    scp ${USER}@$IP_CURR:${HOME}/filename .
 "'
 alias ssh${TAG}='_sshl(){ _bar "usage: sshl [port]" ; ssh -J localhost vc.integrator@localhost -p "$1" -t screen -dR ;}; _sshl'
 alias rsync$ECHO='_bar "usage: rsync -auvht --exclude-from=exclude.txt --port=873 172.21.74.32::$USER/SRC_DIR/* . "'

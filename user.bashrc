@@ -1,4 +1,4 @@
-# vim: set filetype=bash: 
+# vim: set filetype=bash:
 printf '[%s] called: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
 
 func_su(){
@@ -15,7 +15,7 @@ func_su(){
     expect -c "
     #spawn su -s \"${proFILEdir}/func_su.sh\" - ${acc}
     #spawn su - ${acc}
-    spawn su - ${acc} -c \"LOGIN_IP=${CURR_IP} bash\"
+    spawn su - ${acc} -c \"LOGIN_IP=${IP_CURR} bash\"
     expect {
         \"Password: \" { send \"${pd}\r\" }
     }
@@ -25,7 +25,7 @@ func_su(){
 }
 
 alias sul='_bar "auto su" ;func_su'
-if (( 8 < $(grep \/docker /proc/1/cgroup 2>/dev/null |wc -l)  )); then 
-    eval $(cat ~/.bash_aliases | grep PS1SC) 
+if (( 8 < $(grep \/docker /proc/1/cgroup 2>/dev/null |wc -l)  )); then
+    eval $(cat ~/.bash_aliases | grep PS1SC)
     [ -n "${PS1SC}" ] && PS1="${PS1SC}"
 fi

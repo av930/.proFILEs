@@ -36,22 +36,22 @@ fi
 
 # get_ip=192.168.0.1
 ##################################################################
-CURR_IP=172.0.0.1
+IP_CURR=172.0.0.1
 function get_ip(){
 readarray -t a <<<"$(hostname -I) $SSH_CONNECTION"
   for ip in ${a[@]}; do
     max=$(grep -o $ip <<< ${a[*]} | wc -l)
-    if [ $max -eq 2 ] ;then CURR_IP=$ip && echo $ip && break; fi
+    if [ $max -eq 2 ] ;then IP_CURR=$ip && echo $ip && break; fi
   done
 #return $ip
 }
 
 
-CURR_IP=$(get_ip)
+IP_CURR=$(get_ip)
 ## user specific setting
 ## ssh connection timeout value, periodically disconnected
 # TMOUT=100000 #86400 is 24 hours
-export proFILEdir proFILEdirOS LC_ALL CURR_IP get_ip TMOUT
+export proFILEdir proFILEdirOS LC_ALL IP_CURR get_ip TMOUT
 export red RED green GREEN yellow YELLOW blue BLUE cyan CYAN magenta brown NCOL
 
 
