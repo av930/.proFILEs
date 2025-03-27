@@ -24,8 +24,8 @@ fi
 
 
 if [ "$color_prompt" = yes ]; then
-    PS1="\n${debian_chroot:+($debian_chroot)}$GREEN\u@${CURR_IP}:$CYAN\$PWD\[$NCOL\$\n\$ "
-    #PS1="\n${debian_chroot:+($debian_chroot)}$GREEN\u@${CURR_IP}:$CYAN\$PWD\[\033[00m\]\$\n\$ "
+    PS1="\n${debian_chroot:+($debian_chroot)}$GREEN\u@${IP_CURR}:$CYAN\$PWD\[$NCOL\$\n\$ "
+    #PS1="\n${debian_chroot:+($debian_chroot)}$GREEN\u@${IP_CURR}:$CYAN\$PWD\[\033[00m\]\$\n\$ "
     #PS1="\n${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\$PWD\[\033[00m\]\$\n\$ "
 else
     PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '
@@ -49,7 +49,7 @@ function launch_cur_dir()
 {
     home_name=$(dirname $HOME)
     #print current path as windows type
-    #pathwithIP=$(pwd|sed "s:$home_name:\/\/${CURR_IP}"|sed 's:\/:\\:g')
+    #pathwithIP=$(pwd|sed "s:$home_name:\/\/${IP_CURR}"|sed 's:\/:\\:g')
     if [ -z $1 ]; then pathwithDrive=$(pwd|sed "s:${HOME}:Y\::"|sed 's:\/:\\:g')
     else pathwithDrive=$(readlink -f $1|sed "s:${HOME}:Y\::"|sed 's:\/:\\:g')
     fi
