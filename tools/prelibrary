@@ -56,18 +56,18 @@ under()  {
 }
 
 showline(){
-printf 'usage:        log "| $PPID" "special\\t\\tchar\\n":';         log "| $PPID" "special\t\tchar\n"
-printf 'usage:       dlog "| $PPID" "special\\t\\tchar\\n":';        dlog "| $PPID" "special\t\tchar\n"
-printf 'usage:      dnlog "| $PPID" "special\\t\\tchar\\n":';       dnlog "| $PPID" "special\t\tchar\n"
-printf 'usage:       clog "| $PPID" "special\\t\\tchar\\n":';        clog "| $PPID" "special\t\tchar\n"
-printf 'usage:       info "| $PPID" "special\\t\\tchar\\n":';        info "| $PPID" "special\t\tchar\n"
-printf 'usage:       warn "| $PPID" "special\\t\\tchar\\n":';        warn "| $PPID" "special\t\tchar\n"
-printf 'usage:        err "| $PPID" "special\\t\\tchar\\n":';         err "| $PPID" "special\t\tchar\n"
-printf 'usage:       wave "| $PPID" "special\\t\\tchar\\n":';        wave "| $PPID" "special\t\tchar\n"
-printf 'usage:      under "| $PPID" "special\\t\\tchar\\n":';       under "| $PPID" "special\t\tchar\n"
-printf 'usage:bbar purple "| $PPID" "special\\t\\tchar\\n":'; bbar purple "| $PPID" "special\t\tchar\n"
-printf 'usage: bar inline "| $PPID" "special\\t\\tchar\\n":'; bar inline  "| $PPID" "special\t\tchar\n"
-printf 'usage:bar outline "| $PPID" "special\\t\\tchar\\n":'; bar outline "| $PPID" "special\t\tchar\n"
+printf 'usage:        log "|HEAD $PPID" "BODY Hello World \\t\\tcharEND\\n":';         log "|HEAD $PPID" "BODY Hello World \t\tcharEND\n"
+printf 'usage:       dlog "|HEAD $PPID" "BODY Hello World \\t\\tcharEND\\n":';        dlog "|HEAD $PPID" "BODY Hello World \t\tcharEND\n"
+printf 'usage:      dnlog "|HEAD $PPID" "BODY Hello World \\t\\tcharEND\\n":';       dnlog "|HEAD $PPID" "BODY Hello World \t\tcharEND\n"
+printf 'usage:       clog "|HEAD $PPID" "BODY Hello World \\t\\tcharEND\\n":';        clog "|HEAD $PPID" "BODY Hello World \t\tcharEND\n"
+printf 'usage:       info "|HEAD $PPID" "BODY Hello World \\t\\tcharEND\\n":';        info "|HEAD $PPID" "BODY Hello World \t\tcharEND\n"
+printf 'usage:       warn "|HEAD $PPID" "BODY Hello World \\t\\tcharEND\\n":';        warn "|HEAD $PPID" "BODY Hello World \t\tcharEND\n"
+printf 'usage:        err "|HEAD $PPID" "BODY Hello World \\t\\tcharEND\\n":';         err "|HEAD $PPID" "BODY Hello World \t\tcharEND\n"
+printf 'usage:       wave "|HEAD $PPID" "BODY Hello World \\t\\tcharEND\\n":';        wave "|HEAD $PPID" "BODY Hello World \t\tcharEND\n"
+printf 'usage:      under "|HEAD $PPID" "BODY Hello World \\t\\tcharEND\\n":';       under "|HEAD $PPID" "BODY Hello World \t\tcharEND\n"
+printf 'usage:bbar purple "|HEAD $PPID" "BODY Hello World \\t\\tcharEND\\n":'; bbar purple "|HEAD $PPID" "BODY Hello World \t\tcharEND\n"
+printf 'usage: bar inline "|HEAD $PPID" "BODY Hello World \\t\\tcharEND\\n":'; bar inline  "|HEAD $PPID" "BODY Hello World \t\tcharEND\n"
+printf 'usage:bar outline "|HEAD $PPID" "BODY Hello World \\t\\tcharEND\\n":'; bar outline "|HEAD $PPID" "BODY Hello World \t\tcharEND\n"
 }
 
 #pCount() { tee >(let sum="$(wc -l) + ${1:-0}"; clog "#count:" "$((sum<0?0:+sum))" ); }

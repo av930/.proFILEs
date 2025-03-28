@@ -257,7 +257,7 @@ function reppforgen_csv(){
     ## (CSV file을 처리하기 위해 최종 처리전까지는 windows format으로 처리)
     ## 추후 REPO_UPSTREAM,REPO_DEST_BRANCH가 필요하면 $4,$5를 넣어야 한다.
     printf "http://collab.lge.com/main/display/~joongkeun.kim/reppforall,Refer please,,REPP_VAR1,NONE,REPP_VAR1,NONE,\r\n\
-,,,REPP_SCRIPTPRE,:NONE,REPP_SCRIPTPOST,:NONE,\r\n\
+,,,REPP_SCRIPTPRE,: NONE,REPP_SCRIPTPOST,: NONE,\r\n\
 REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPP_SCRIPT,\r\n" > $REPPFILE_FORALL
 
     ## repoforall.csv의 body를 생성
@@ -330,8 +330,8 @@ REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPP_SCRIPT,\r
 1. 아래 명령으로 reppforall.csv를 생성한다.
 2. REPP_SCRIPT 영역에 test에 필요한 command 넣고 저장한다.
 3. repp forall로 위에서 기록한 모든 command를 제대로 실행하는지 확인한다.
-bash /data001/vc.integrator/mirror/tsu_26my_release/src_current/.repp/repp_inscript.sh - $USER $PWD
-/data001/vc.integrator/mirror/tsu_26my_release/src_current/.repp/repp_inscript.sh
+bash /data001/vc.integrator/mirror/tsu_26my_release/src_current/.repp/reppscript.in.sh - $USER $PWD
+/data001/vc.integrator/mirror/tsu_26my_release/src_current/.repp/reppscript.in.sh
 bash -c 'case ${REPO_RREV} in
     ext_adp_s|ext_hero_s)
         git status
@@ -357,10 +357,9 @@ TEST
 
 function reppforgen_sh(){
 ## ---------------------------------------------------------------------------
-# repp forall -c일때는 reppforgen로 연결하고
-## 입력된 command의 특수문자나 잘못된 quote나 error 구문이 있는지 검사한다.
+## 입력된 command의 특수문자나 잘못된 quote나 error 구문이 있는지 검사하고 수정한다.
 #echo "${cmd}"| awk 'BEGIN {RS=""; FS="\n"} {gsub(/^['\''"]|['\''"]$/, ""); print}'   #"~~~"만 삭제
-#"~~~", '~~~'둘다 삭제, 아래 구문은 정확히 동작하는것 같지가 않음. 그냥 현상태 유지바람.
+#"~~~", '~~~'둘다 삭제
     [ -z "$REPPFILE_OUT" ] && { err "generated file name must be ready"; return 1; }
     cmd=$(echo "${@}"| awk 'BEGIN {RS=""; FS="\n"} {gsub(/^["'\''"]|["'\''"]$/, ""); print}')
 
@@ -413,7 +412,7 @@ function reppforall(){
 			        info) repo variables: $REPO_LREV, $REPO_GROUP, $REPO_REMOTE, $REPO_RREV, $REPO_PROJECT, $REPO_PATH, $REPO_ROOT
 			              #not supported: REPO_I, REPO_COUNT, REPO_INNERPATH, REPO_OUTERPATH, REPO_UPSTREAM, REPO_DEST_BRANCH
 			usage) repp forall -c '<cmd>'                                        #generate reppforall.csv and repp_inscript.sh including <cmd>
-			usage) repp forall test                                              #copy reppforall.test.csv to reppforall.csv to test repp forall functionality
+			usage) repp forall testgen                                           #copy reppforall.test.csv to reppforall.csv to test repp forall functionality
 			usage) repp forall                                                   #run repo forall by using reppforall.csv
 			usage) repp forall go                                                #run repo forall without asking
 
@@ -424,7 +423,7 @@ function reppforall(){
 			        echo ${REPO_REMOTE} && echo ${REPO_RREV}                     #multiple commands with &&
 EOF
             return 0
-        ;; test) local sfile="$PATH_DIR/reppforall.test.csv"
+        ;; testgen) local sfile="$PATH_DIR/reppforall.test.csv"
                 cat "$sfile"| awk 'BEGIN{FS=","; RS="\r\n"; OFS="`"; ORS="\n";}  NR>=1 && NR<=3 {print $0}' > "$REPPFILE_FORALL"
                 for i in $(seq 4 1 $(awk 'BEGIN{RS="\r\n"} END{print NR}' "$sfile") ); do
                     awk 'BEGIN{FS="|"; RS="\n"; OFS=","; ORS=",";}       NR=='$i' {gsub(/,/,":",$2);print $1","$2","$3","$6","$7","$8}' ${REPPFILE_CSV}
@@ -437,7 +436,7 @@ EOF
     esac
 
     local fileencoding
-    [ ! -f "$REPPFILE_FORALL" ]  && { err "file is not existed!"; return 1; }
+    [ ! -f "$REPPFILE_FORALL" ]  && { err "file[${REPPFILE_FORALL}] is not existed!"; return 1; }
 
     ## change reppscript.sh to linux file format, same to sed -i 's/\x0D$//' file
     grep -q $'\r' "$REPPFILE_FORALL" && fileencoding=windows || fileencoding=linux
@@ -502,8 +501,8 @@ EOF
     bbar purple "REPP_SCRIPTPOST" "\n$(cat ${REPPSCRIPT_POST})\n"
 
     ## repp forall 입력시 전체를 어떻게 실행할지 1회 물어본후, 각 명령어 실행시미다 다시 물어본다.
-    local ask outfile cmd= pro=
-    [ "$opt" != "go" ] && read -p "$(echo -e "\n\n${cyan}[enter:execute by asking |go:run all| ctrl+c:break]:${NCOL}")" opt
+    local ask outfile ccmd cmd= pro=
+    [ "$opt" != "go" ] && read -p "$(echo -e "\n\n${cyan}[enter:execute by asking |go:run all | ctrl+c:break]:${NCOL}")" opt
     if [ "$opt" != "" ] && [ "$opt" != "go" ]; then err "you have to input either 'enter' or 'go' "; return 1 ; fi
 
 
@@ -521,6 +520,7 @@ EOF
         if [[ -z "$cmd" ]];then continue; fi
 
         ## 현재 context에서 실행을 위해 source로 file로 변환하여 호출한다.
+        ## pre script + user command script + post script를 합쳐 실행파일을 만들고 이를 source로 실행할수 있도록 cmd에 할당한다.
         if [ -f "${cmd}" ]; then cmd=". ${cmd}"
         else REPPFILE_OUT=${REPPSCRIPT_TMP}; reppforgen_sh "${cmd}";
             cat $REPPSCRIPT_PRE $REPPSCRIPT_TMP $REPPSCRIPT_POST > $REPPSCRIPT_TM
@@ -533,9 +533,15 @@ EOF
         ## if opt=enter, ask=go   : execute leftover without asking
         ## if     break, stop all : ctrl + c
         under "[$((total=total+1))] ${oneline[4]}\n"
-        bbar cyan "${oneline[5]}" "\n$(cat $REPPSCRIPT_TMP)\n"
+        ccmd=$(cat $REPPSCRIPT_TMP)
+        bbar cyan "${oneline[5]}" "\n${ccmd}\n"
         ## 각 repository마다 다시 한번씩 물어보게 된다. go를 입력하면 나머지는 물어보지 않고 바로 실행한다.
-        [ "$opt" = "" ] && read -p "$(echo -e "\n\n${yellow}[enter:run next| go:run all| other:skip next| ctrl+c:break all]:${NCOL}")" ask
+        [ "$opt" = "" ] && read -p "$(echo -e "\n\n${yellow}[enter:run next| go:run all| show:show script cmd& ask again| other:skip next| ctrl+c:break all]:${NCOL}")" ask
+        if [ "$ask" = "show" ]; then
+            [ -f "${ccmd}" ] && { dlog "script detail" "${ccmd}\n"; cat "${ccmd}"; } || dlog "command detail" "${ccmd}\n"
+            bbar cyan "${oneline[5]}" "\n${ccmd}\n"
+            read -p "$(echo -e "\n\n${yellow}[enter:run next| go:run all| other:skip next| ctrl+c:break all]:${NCOL}")" ask
+        fi
         if [ -z "$ask" ]; then pushd "$REPP_ROOT/${oneline[5]}";
             REPO_ROOT="$REPP_ROOT" REPO_LREV="$(echo ${oneline[0]}|xargs)" REPO_GROUP="${oneline[1]}" REPO_REMOTE="${oneline[2]}" REPO_RREV="${oneline[3]}" \
             REPO_PROJECT="${oneline[4]}" REPO_PATH="${oneline[5]}" REPP_VAR1="${REPP_VAR1}" REPP_VAR2="${REPP_VAR2}" ${cmd}
@@ -1022,9 +1028,9 @@ function reppmanidb(){
 
         bar inline "${REPPFILE_CSV}"
         clog "bad case:content different" "join 'repo' and 'json' info"
-        warn "${REPP_PATH}/${REPPFILE_MANI}\n        has mismatch  between 'repo manifest' and 'repo forall' and the reason why..."
-        echo "existing project: new commits are added to existing repository, therefore the revision is changed from manifest"
-        echo "     new project: new repositories created that not described in manifest, by build time download or manual work"
+        warn "${REPP_PATH}/${REPPFILE_MANI}\n        has mismatch  between 'repo manifest' and 'repo forall' \nand the reason why..."
+        echo "1.existing project: new commits are added to existing repository, therefore the revision is changed from manifest"
+        echo "2.     new project: new repositories created that not described in manifest, by build time download or manual work"
         wave
         diff -B <(awk -v FS="|" '{print $1"|"$7"|"$8}' ${REPPFILE_CSV}.json) <(awk -v FS="|" '{print $1"|"$7"|"$8}' ${REPPFILE_CSV})
 
@@ -1784,6 +1790,8 @@ function repp_initvar(){
     return $ret
 
 }
+
+
 
 function gitt_initvar(){
 ## ---------------------------------------------------------------------------
