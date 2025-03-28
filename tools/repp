@@ -327,7 +327,7 @@ REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPP_SCRIPT,\r
 
 ##아래는 repp forall을 test하는 방법을 기술한다.
 << TEST
-1. 아래 명령으로 reppforall.csv를 생성한다.
+1. repp forall -c '아래 명령'으로 reppforall.csv를 생성한다.
 2. REPP_SCRIPT 영역에 test에 필요한 command 넣고 저장한다.
 3. repp forall로 위에서 기록한 모든 command를 제대로 실행하는지 확인한다.
 bash /data001/vc.integrator/mirror/tsu_26my_release/src_current/.repp/reppscript.in.sh - $USER $PWD
@@ -354,12 +354,39 @@ esac;' - $USER $PWD
 TEST
 
 
+function csv_fromlnx_towin(){
+## ---------------------------------------------------------------------------
+## linux CSV file을 windows CSV file로 변경한다.
+## ""로 묶여있는 field(여러줄가능)의 LF는 유지하고, 그외의 LF는 CRLF로 변경한다.
+local tfile=$(mktemp)
+awk 'BEGIN {
+    RS=""
+    FPAT="([^,\"]+)|(\"([^\"]|\"\")*\")|";  # 필드 패턴 정의
+    OFS=",";                                # 출력 필드 구분자
+    ORS="\r\n";                             # 출력 레코드 구분자 (CRLF)
+}{
+    for (i = 1; i <= NF; i++) {         # 필드가 double quote로 묶여있지 않은 경우에만 gsub 수행
+         if ($i !~ /^".*"$/) {
+            gsub(/\r?\n/, "\r\n", $i);  # CRLF 아닌것만 LF를 "\n"으로 변경
+        }
+    }
+    print $0;                           # 수정된 레코드 출력
+}' "$1" > $tfile
+cat $tfile > "$1"
+
+diff -uN $tfile "$1"
+}
+
+
 
 function reppforgen_sh(){
 ## ---------------------------------------------------------------------------
 ## 입력된 command의 특수문자나 잘못된 quote나 error 구문이 있는지 검사하고 수정한다.
+## '~~~', "~~~", ?를 제거하고 명령구문이 올바른지 test해준다.
+## 생성된 명령을 CRLF를 제거하여 $REPPFILE_OUT에 넣어 실행할수 있도록 만들어 놓는다.
 #echo "${cmd}"| awk 'BEGIN {RS=""; FS="\n"} {gsub(/^['\''"]|['\''"]$/, ""); print}'   #"~~~"만 삭제
 #"~~~", '~~~'둘다 삭제
+    ##RS=""//여러줄을 하나의 record로 처리; FS="\n" //한줄을 하나의 field로 처리
     [ -z "$REPPFILE_OUT" ] && { err "generated file name must be ready"; return 1; }
     cmd=$(echo "${@}"| awk 'BEGIN {RS=""; FS="\n"} {gsub(/^["'\''"]|["'\''"]$/, ""); print}')
 
@@ -424,7 +451,7 @@ function reppforall(){
 EOF
             return 0
         ;; testgen) local sfile="$PATH_DIR/reppforall.test.csv"
-                cat "$sfile"| awk 'BEGIN{FS=","; RS="\r\n"; OFS="`"; ORS="\n";}  NR>=1 && NR<=3 {print $0}' > "$REPPFILE_FORALL"
+                cat "$sfile"| awk 'BEGIN{FS=","; RS="\r\n"; OFS="`"; ORS="\n";}  NR>=1 && NR<=3 {printf "%s\r\n", $0}' > "$REPPFILE_FORALL"
                 for i in $(seq 4 1 $(awk 'BEGIN{RS="\r\n"} END{print NR}' "$sfile") ); do
                     awk 'BEGIN{FS="|"; RS="\n"; OFS=","; ORS=",";}       NR=='$i' {gsub(/,/,":",$2);print $1","$2","$3","$6","$7","$8}' ${REPPFILE_CSV}
                     awk 'BEGIN{FS=","; RS="\r\n"; OFS="`"; ORS="\r\n";}  NR=='$i' {if ($7!="") {print $7} else {print ""}}'             "$sfile"
@@ -440,6 +467,7 @@ EOF
 
     ## change reppscript.sh to linux file format, same to sed -i 's/\x0D$//' file
     grep -q $'\r' "$REPPFILE_FORALL" && fileencoding=windows || fileencoding=linux
+    [ "$fileencoding" = "linux" ] && csv_fromlnx_towin "$REPPFILE_FORALL"
 
     ## define custom variable REPP_VAR1, REPP_VAR2, and REPP_SCRIPTPRE, REPP_SCRIPTPOST
     readarray -d\` -t array_var < <(cat "$REPPFILE_FORALL"| awk 'BEGIN{FS=","; RS="\r\n"; OFS="`"; ORS="`";} \
@@ -461,7 +489,8 @@ EOF
     #cat "$REPPFILE_FORALL"| awk 'BEGIN{FS=","; RS="\r\n"; OFS="`"; ORS="\n"; found=0} /^REPO_LREV/ {found=1; next} found && ($1 !~ /^[0-9a-f]{10,}/ || $7 ~ /[[:print:]]+/) \
     #{gsub(/("|=)/,"",$1); gsub(/""/,"\"",$7); gsub(/\r/,"",$7);print $1"`"$2"`"$3"`"$4"`"$5"`"$6"`"$7}'> "$REPPFILE_FORALL".tmp
     #readarray -t arrayline < <(awk 'BEGIN{RS="\r\n"} {print}' "$REPPFILE_FORALL.tmp")
-    readarray -d $'\r\n' -t arrayline < <(cat "$REPPFILE_FORALL"| awk 'BEGIN{FS=","; RS="\r\n"; OFS="`"; ORS="\r\n"; found=0} /^REPO_LREV/ {found=1; next} found && ($1 !~ /^[0-9a-f]{10,}/ || $7 ~ /[[:print:]]+/) \
+    readarray -d $'\r\n' -t arrayline < <(cat "$REPPFILE_FORALL"| awk 'BEGIN{FS=","; RS="\r\n"; OFS="`"; ORS="\r\n"; found=0} \
+    /^REPO_LREV/ {found=1; next} found && ($1 !~ /^[0-9a-f]{10,}/ || $7 ~ /[[:print:]]+/) \
     {gsub(/("|=)/,"",$1); gsub(/""/,"\"",$7); gsub(/\r/,"",$7);print $1"`"$2"`"$3"`"$4"`"$5"`"$6"`"$7}')
 
     ## 결과값을 reppforall_result.csv에 write하려고 했으나, 다중 script를 호출하는 구조로 return값 처리가 어려워서 보류
@@ -484,7 +513,8 @@ EOF
             printf -v cmd "%-.100s" "${cmd//\\n/}"
             bbar cyan "[$((total=total+1))] ${pro}" "${cmd}\n"
         fi
-        (( $total == 0 )) && { err "No target git project is found in $REPPFILE_FORALL" ; return 1; }
+        (( $total == 0 )) && { err "No target git project is found in $REPPFILE_FORALL
+        If create above file by 'repp forall gen', Please add <your command> in REPP_SCRIPT column using excel" ; return 1; }
     done
 
     ## REPP_VAR1, REPP_VAR2의 값을 보여준다.
