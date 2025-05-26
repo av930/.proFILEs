@@ -189,7 +189,6 @@ alias ps${TAG}='_bar "usage: psl"; ps -u vc.integrator -o pid,ppid,user,stime,et
 alias pst='_pst(){ _bar  "usage: pst [$USER]"; pstree -hapgT --ascii -u ${1:-$USER} ;}; _pst'
 alias kil='_kil(){ _bar "kill -SIGTERM -- -[PGID]"; kill -SIGTERM -- -$1 ;}; _kil'
 
-alias ls='ls --color=auto'
 alias lls='_bar size-base; ls -agohrS'
 alias llt='_bar time-base; ls -agohrt'
 alias lld='_lld(){ _bar "time-base dir-only"; ls -arthlp -d $1*/; }; _lld'
