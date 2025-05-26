@@ -257,7 +257,7 @@ function reppforgen_csv(){
     ## (CSV file을 처리하기 위해 최종 처리전까지는 windows format으로 처리)
     ## 추후 REPO_UPSTREAM,REPO_DEST_BRANCH가 필요하면 $4,$5를 넣어야 한다.
     printf "http://collab.lge.com/main/display/~joongkeun.kim/reppforall,Refer please,,REPP_VAR1,NONE,REPP_VAR1,NONE,\r\n\
-,,,REPP_SCRIPTPRE,: NONE,REPP_SCRIPTPOST,: NONE,\r\n\
+,,,REPP_SCRIPTPRE,NONE,REPP_SCRIPTPOST,NONE,\r\n\
 REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPP_SCRIPT,\r\n" > $REPPFILE_FORALL
 
     ## repoforall.csv의 body를 생성
@@ -381,13 +381,15 @@ diff -uN $tfile "$1"
 
 function reppforgen_sh(){
 ## ---------------------------------------------------------------------------
-## 입력된 command의 특수문자나 잘못된 quote나 error 구문이 있는지 검사하고 수정한다.
+## reppforgen_sh 뒤에 오는 모는 parameter로 script를 만들어준다.
+## 이를 위해 먼저, 입력된 command의 특수문자나 잘못된 quote나 error 구문이 있는지 검사하고 수정한다.
 ## '~~~', "~~~", ?를 제거하고 명령구문이 올바른지 test해준다.
 ## 생성된 명령을 CRLF를 제거하여 $REPPFILE_OUT에 넣어 실행할수 있도록 만들어 놓는다.
 #echo "${cmd}"| awk 'BEGIN {RS=""; FS="\n"} {gsub(/^['\''"]|['\''"]$/, ""); print}'   #"~~~"만 삭제
 #"~~~", '~~~'둘다 삭제
     ##RS=""//여러줄을 하나의 record로 처리; FS="\n" //한줄을 하나의 field로 처리
     [ -z "$REPPFILE_OUT" ] && { err "generated file name must be ready"; return 1; }
+    [ "${@}" = "NONE" ] &&  return 0;
     cmd=$(echo "${@}"| awk 'BEGIN {RS=""; FS="\n"} {gsub(/^["'\''"]|["'\''"]$/, ""); print}')
 
     #declare -p cmd
@@ -1986,7 +1988,7 @@ function gittinfo(){
         esac
     ;;''|*)             GIT_SITE=$(printf "%s/${review_gerrit}/%s" "$(echo ${GITT_REVIEW}|sed -E 's#(.*)[/]$#\1#')" ${GITT_PROJECT} )
     ;;esac
-    clog "review repository url :" ${GIT_SITE}                                     #http review url
+    clog "source repository url :" ${GIT_SITE}                                     #http review url
     clog "review commit url     :" $(echo "$GIT_SITE" |sed -E "s#http:(.*)admin/repos/(.*)#https:\1q/project:\2+branch:"${GITT_BRANCH}"#")
     clog "source browser gitiles:" ${GIT_SITE/"${review_gerrit}"/"plugins/gitiles"}/+/refs/heads/${GITT_BRANCH}                #source from gitiles
     clog "source browser gerrit :" ${GIT_SITE/"${review_gerrit}/"/"gitweb?p="}.git\;a=shortlog\;h=refs/heads/${GITT_BRANCH}    #source from gerrit
