@@ -14,7 +14,6 @@
 ### path specific setting
 # add path usign globbing after gitdir:
 # add user .gitconfig in user.gitconfig.extra
-
-[includeIf "gitdir:~/user_path*/"]
-    path = ~/user.gitconfig.extra
+[includeIf "gitdir:~/.proFILE*/"]
+    path = ~/.proFILEs/user.gitconfig.proFILEs
 
