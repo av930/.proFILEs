@@ -1,0 +1,2 @@
+[core]
+     sshcommand = ssh -i ~/.ssh/id_ed25519.vc.jk

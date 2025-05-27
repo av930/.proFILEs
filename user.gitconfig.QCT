@@ -1,0 +1,8 @@
+[credential]
+    helper = store
+[http "https://chipmaster2.qti.qualcomm.com"]
+        followRedirects = true
+[http "https://qpm-git.qualcomm.com"]
+        followRedirects = true
+#[url "ssh://git@git.codelinaro.org"]
+#        insteadOf = https://git.codelinaro.org
