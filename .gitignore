@@ -1,6 +1,5 @@
 # User customed file
 ######################
-user.gitconfig*
 tempdir/*
 .idea/*
 bin/*

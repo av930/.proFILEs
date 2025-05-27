@@ -1,0 +1,28 @@
+[credential]
+    helper = store
+
+[advice]
+    detachedHead = false
+        
+[url "https://private.source.codelinaro.org"]
+    insteadOf = ssh://git.codelinaro.org:9222
+    insteadOf = ssh://git.codelinaro.org
+    insteadOf = ssh://privgit.codelinaro.org:9222
+    insteadOf = ssh://privgit.codelinaro.org
+    insteadOf = ssh://git@git.codelinaro.org:9222
+    insteadOf = ssh://git@git.codelinaro.org
+    insteadOf = ssh://git@privgit.codelinaro.org:9222
+    insteadOf = ssh://git@privgit.codelinaro.org
+
+[http "https://chipmaster2.qti.qualcomm.com"]
+    followRedirects = true
+[http "https://qpm-git.qualcomm.com"]
+    followRedirects = true
+    
+[url "https://source.codelinaro.org"]
+    insteadOf = git://codelinaro.org
+[url "ssh://git@git.codelinaro.org"]
+    insteadOf = https://git.codelinaro.org
+[url "https://gerrit.automotivelinux.org/gerrit/apps"]
+    insteadOf = https://gerrit.automotivelinux.org/gerrit/p/apps
+
