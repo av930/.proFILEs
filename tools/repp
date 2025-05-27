@@ -3522,6 +3522,7 @@ EOL
 function reppinstall(){
 ## ---------------------------------------------------------------------------
 #install basic package for repp
+if ! command -v curl > /dev/null ; then clog "curl need to be installed:" "sudo apt install curl"; fi
 if ! command -v icdiff > /dev/null ; then clog "icdiff need to be installed:" "sudo apt install icdiff"; fi
 if ! command -v jq > /dev/null ; then clog "jq need to be installed:" "sudo apt install icdiff"; fi
 if ! command -v repo > /dev/null ; then clog "repo need to be installed:" "sudo apt-get install repo"; fi
