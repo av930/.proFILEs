@@ -179,8 +179,8 @@ function  getServer() {
     ;;    domain)    echo "${_item#*://}"| awk -F[./:] '{print $2"."$3}'                      # lge.com
     ;; subdomain)    echo "${_item#*://}"| awk -F[./:] '{print $1"."$2"."$3}'                 # vgit.lge.com
     ;;      path)    echo "${_item#*://}"| awk -F[./:] '{print $4}'                           # na
-    ;;       url)    echo "${_item#*://}"| awk -F[./:] '{$4="/"$4;gsub(/\/none_.*/,"",$4);print $1"."$2"."$3$4}'            # vgit.lge.com/na
-    ;;    remote)    echo "${_item#*://}"| awk -F[./:] '{print $1"_"$4}'                      # vgit_na
+    ;;       url)    echo "${_item#*://}"| awk -F[./:] '{$4="/"$4;gsub(/\/none_.*/,"",$4);print $1"."$2"."$3$4}'  # vgit.lge.com/na
+    ;;    remote)    echo "${_item#*://}"| awk -F[./:] '{if ($4=="devops_test") print $4; else print $1"_"$4}'   # vgit_na
     ;;      pass)    revvserver de $key  | awk -F '[[:space:]]*\\|'  '{print $4}'             # N4lIA0SoQAoUfxlmCZudjNA12344
     ;;      user)    revvserver de $key  | awk -F '[[:space:]]*\\|'  '{print $3}'             # vc.integrator
     ;;     debug)    echo "${_item}"                                                          # http://vgit.lge.com/na:29420
@@ -254,7 +254,7 @@ EOF
 			revv server  edit             #encrypted .key_server.en will be decryped to .key_server to edit
 			revv server    de vgit_na     #search vgit_na server and get info of it from .key_server.en
 			revv server  show             #show current server info from .key_server.en
-            revv server check             #check connection of server
+			revv server check             #check connection of server. if success, key is correct!
 			revv server  info             #check connection of server and format of getServer api
 EOF
     ;;show|*)  #현재 .key_server파일을 보여준다.
