@@ -25,9 +25,10 @@ alias  gvi="VIMINIT=':so ~/.vim/.vimrc' MYVIMRC='~/.vim/.vimrc' /cygdrive/c/DevT
 alias gvip="VIMINIT=':so ~/.vim/.vimrc_backup' MYVIMRC='~/.vim/.vimrc_backup' /cygdrive/c/DevTools/gVim/vim74/gvim.exe $* &"
 alias gviu="VIMINIT=':so ~/.viu/.vimrc' MYVIMRC='~/.viu/.vimrc' /cygdrive/c/DevTools/gVim/vim74/gvim.exe $* &"
 
-
+#network
 alias lsync='echo rsync -auvht --port=873 172.21.74.32::$USER/SRC_DIR/*  /cygdrive/d/DEST_DIR'
 alias lsyne='echo rsync -auvht --exclude-from=exclude.txt --port=873 172.21.74.32::$USER/SRC_DIR/* /cygdrive/d/DEST_DIR'
+
 
 #GDB debugging
 function setup-gdb()
