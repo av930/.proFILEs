@@ -24,7 +24,7 @@ red='\e[0;31m';  RED='\e[1;31m';  green='\e[0;32m';  GREEN='\e[1;32m';  yellow='
 blue='\e[0;34m'; BLUE='\e[1;34m'; cyan='\e[0;36m';   CYAN='\e[1;36m';   magenta='\e[0;35m';  NCOL='\e[0m';
 
 
-PATH_FULL=$(realpath "$BASH_SOURCE")
+PATH_FULL=$(realpath "${BASH_SOURCE:-dock}")
 PATH_DIR="${PATH_FULL%/*}"
 
 #user setting

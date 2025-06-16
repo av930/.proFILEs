@@ -748,7 +748,7 @@ function reppinfo(){
     ##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     ##show last synced time
     if [ -f .git/FETCH_HEAD ]; then clog "last manifest-synced date: " $(stat -c %y .git/FETCH_HEAD );
-    else clog "last manifest-synced time(check date of files below): "; ls -lct | tail -10;fi
+    else clog "last manifest-synced time(check date of files below): " $(ls -ld .git) ;fi
     popd
 
     clog "md5sum for all repositories:"
