@@ -1,6 +1,7 @@
 #!/bin/bash -e
 ######## common handler
-# java -jar jenkins-cli.jar -s http://vjenkins.lge.com/jenkins03/ -auth joongkeun.kim:11ab112cf452ffb160 help set-build-description
+## 특정 job에서 사용가능한 api를 모두 호출하는 script
+# java -jar jenkins-cli.jar -s http://vjenkins.lge.com/jenkins03/ -auth joongkeun.kim:123456789abcdef help set-build-description
 #### common env
 
 
@@ -9,7 +10,7 @@ function call_JenkinsAPI(){
 #$1: API_KEY
 ## this variable must be defined before calling, by "export variable"
 JENKINS_URL=${JENKINS_URL:=http://vjenkins.lge.com/jenkins03/}
-ACCOUNTnAPIKEY=${ACCOUNTnAPIKEY:?joongkeun.kim:11ab112cf452ff}
+ACCOUNTnAPIKEY=${ACCOUNTnAPIKEY:?joongkeun.kim:123456789abcdef}
 
 #### common env
 ## predefined var
@@ -26,21 +27,21 @@ CMD=( $@ )
 bar "INPUT: [${CMD[@]}]" ======================================================================
 
 if [ "${CMD[1]}" = "help" ]; then
-    case ${CMD[0]} in 
+    case ${CMD[0]} in
        comment)                     echo "jenkins api call example"
-    ;; list-jobs| who-am-i|help)    SAMPLE="${CMD[0]}" 
+    ;; list-jobs| who-am-i|help)    SAMPLE="${CMD[0]}"
     ;; get-job)                     SAMPLE="${CMD[0]} ${NAME_JOB} > config.xml"
     ;; update-job)                  SAMPLE="${CMD[0]} ${NAME_JOB} < config.xml"
-    ;; build)                       SAMPLE="${CMD[0]} ${NAME_JOB}" 
+    ;; build)                       SAMPLE="${CMD[0]} ${NAME_JOB}"
     ;; set-build-display-name)      SAMPLE="${CMD[0]} ${NAME_JOB} ${BUILD_ID} title"
-    ;; set-build-description)       SAMPLE="${CMD[0]} ${NAME_JOB} ${BUILD_ID} description" 
+    ;; set-build-description)       SAMPLE="${CMD[0]} ${NAME_JOB} ${BUILD_ID} description"
     ;; console)                     SAMPLE="${CMD[0]} ${NAME_JOB} ${BUILD_ID} > result.log"
     ;; delete-builds)               SAMPLE="${CMD[0]} ${NAME_JOB} 391-393"
     ;; get-node)                    SAMPLE="${CMD[0]} ${NAME_NODE} > config.xml"
     ;; create-node)                 SAMPLE="${CMD[0]} ${NAME_NODE} < config.xml"
     ;; connect-node)                SAMPLE="${CMD[0]} ${NAME_NODE}"
     ;; groovy| mail)                SAMPLE="${CMD[0]} sample.groovy"
-    ;; *)                           SAMPLE="not supported, please see help" && exit 1; 
+    ;; *)                           SAMPLE="not supported, please see help" && exit 1;
     ;;
     esac
     java -jar jenkins-cli.jar -s ${JENKINS_URL} -auth ${ACCOUNTnAPIKEY} help ${CMD[0]}
@@ -48,7 +49,7 @@ if [ "${CMD[1]}" = "help" ]; then
     exit 1
 fi
 
-if [ ! -f jenkins-cli.jar ]; then wget -q ${JENKINS_URL}/jnlpJars/jenkins-cli.jar; fi 
+if [ ! -f jenkins-cli.jar ]; then wget -q ${JENKINS_URL}/jnlpJars/jenkins-cli.jar; fi
 eval "set -x; java -jar jenkins-cli.jar -s ${JENKINS_URL} -auth ${ACCOUNTnAPIKEY} ${CMD[@]}"
 
 }
