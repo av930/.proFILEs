@@ -2531,7 +2531,7 @@ function revvcheck_permission(){
     if [ -z "${oriproject}" ];then info "guide) repp connect help" && return 1;fi
 
     ##[ "${oriproject}" = "${REPP_PROJECT}" ] && server=origin #change remote name for manifest git to origin
-    #curl -su vc.integrator:'UUmF3ZYZofW1JqRwEFe4g1tHbs1hLoVuVVKrxpvG0g' http://vgit.lge.com/as/a/projects/honda%2Flinux%2Fbuild_tsu/check.access?account=7986\&ref=refs%2fheads%2fmaster\&perm=read
+    #curl -su vc.integrator:'F3ZYZofW1J~~~' http://vgit.lge.com/as/a/projects/honda%2Flinux%2Fbuild_tsu/check.access?account=7986\&ref=refs%2fheads%2fmaster\&perm=read
     bar inline "step1.3-gerritserver: [remote] check if ${user} can access git project (checked by $ACCOUNT)"
     clog try "check git name path is correct and can access"
     log=$(curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject}/check.access?account=${REVV_USERID})

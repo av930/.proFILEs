@@ -1,6 +1,6 @@
 ################ set for post build script ################ 
 ## get console log from Jenkins
-APIKEY=REMOVE_KEY
+APIKEY=$1
 
 ## get build result
 curl -u $USER:$APIKEY --silent ${JOB_URL}${BUILD_ID}/consoleText -o console.log
