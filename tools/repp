@@ -982,7 +982,8 @@ function reppmanidb(){
         ##get project info, if null assign default value
                lrev=${linein[0]##*=};        [ "$lrev" = "null" ] &&        lrev=${line_default[0]##*=}
               group=${linein[1]##*=};       [ "$group" = "null" ] &&       group=${line_default[1]##*=}
-             remote=${linein[2]##*=};      [ "$remote" = "null" ] &&      remote=${line_default[2]##*=}; [ "$remote" = "null" ] && remote=$REPP_REMOTE
+             remote=${linein[2]##*=};      [ "$remote" = "null" ] &&      remote=${line_default[2]##*=};
+                                           [ "$remote" = "null" ] &&      remote=$(getServer ${REPP_REMOTE##*:} remote)
            upstream=${linein[3]##*=};    [ "$upstream" = "null" ] &&    upstream=${line_default[3]##*=}
         dest_branch=${linein[4]##*=}; [ "$dest_branch" = "null" ] && dest_branch=${line_default[4]##*=}
             project=${linein[5]##*=};     [ "$project" = "null" ] &&     project=${line_default[5]##*=}
