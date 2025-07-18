@@ -946,6 +946,9 @@ function reppmanidb(){
       ;;  *) [ -f "${REPPFILE_CSV}" ] && { $DEBUG "\${REPPFILE_CSV}:${REPPFILE_CSV} reused above file or you can remove and refresh repository info"; return 0; }
     esac
     (( "$(reppversion ver 2>/dev/null)" < 230 )) && { reppversion toggle; warn "automatically update to latest repo version, you can restore 'repp version toggle'"; }
+    if [[ ! $(column -V 2>/dev/null|grep util-linux) =~ "util-linux" ]] ;then
+        clog "column need to reinstalled, please 'repp install'";
+    fi
 
     ## generate json from manifest, #suppress all log for generation json
     [ -d ${REPP_DIR} ] || mkdir ${REPP_DIR}
@@ -979,7 +982,7 @@ function reppmanidb(){
         ##get project info, if null assign default value
                lrev=${linein[0]##*=};        [ "$lrev" = "null" ] &&        lrev=${line_default[0]##*=}
               group=${linein[1]##*=};       [ "$group" = "null" ] &&       group=${line_default[1]##*=}
-             remote=${linein[2]##*=};      [ "$remote" = "null" ] &&      remote=${line_default[2]##*=}
+             remote=${linein[2]##*=};      [ "$remote" = "null" ] &&      remote=${line_default[2]##*=}; [ "$remote" = "null" ] && remote=$REPP_REMOTE
            upstream=${linein[3]##*=};    [ "$upstream" = "null" ] &&    upstream=${line_default[3]##*=}
         dest_branch=${linein[4]##*=}; [ "$dest_branch" = "null" ] && dest_branch=${line_default[4]##*=}
             project=${linein[5]##*=};     [ "$project" = "null" ] &&     project=${line_default[5]##*=}
@@ -1769,14 +1772,17 @@ function repp_initvar(){
     ## set variable REPP if manifest dir exists
     if [ -d "${REPP_PATH}" ];then
         pushd ${REPP_PATH}
-        #REPP_REMOTE=$(getServer $(git remote -v |grep fetch | grep -oP '(?<=:)[0-9]+(?=/)') remote)
-        REPP_REMOTE=$(repo manifest -r --json 2>/dev/null |jq -r '.default.remote')
         #REPP_PROJECT=$(git remote -v |grep fetch | sed -E 's#.*[0-9]+(.*).git.*$#\1#')
         #REPP_PROJECT=$(git config --get-regexp remote.*.url  |head -1|cut -d' ' -f2)
         REPP_PROJECT=$(git config --get-regexp remote.* |grep -Ee "(projectname|url)" |head -1|grep -Po '\w/\K.\w+[^?]+')
         REPP_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null| sed 's:.*/::')  #GITT_BRANCH
         REPP_REVIEW=$(git config --get-regexp remote.*.review|cut -d' ' -f2|head -1)        #GITT_REVIEW
         REPP_URL=$(git config --get-regexp remote.$(git remote|head -1).url|cut -d' ' -f2|head -1) #GITT_URL
+        #REPP_REMOTE=$(getServer $(git remote -v |grep fetch | grep -oP '(?<=:)[0-9]+(?=/)') remote)
+        REPP_REMOTE=$(repo manifest -r --json 2>/dev/null |jq -r '.default.remote')
+        if [[ -z "${REPP_REMOTE}" ]] || [[ "${REPP_REMOTE}" == "null" ]] ; then
+            REPP_REMOTE=$(echo "$REPP_URL" | grep -oE '^ssh://[^/]+:[0-9]+')
+        fi
 
         REPP_ROOT=${REPP_PATH%/.repo*}
         REPP_DIR=${REPP_ROOT}/.repp

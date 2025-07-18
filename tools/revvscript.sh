@@ -104,7 +104,7 @@ CURR_n=${REPO_I}
 CURR_upstream=${REPO_UPSTREAM}
 CURR_destbranch=${REPO_DEST_BRANCH}
 
-t_review=$(repo manifest |grep review| grep ${CURR_remote})
+t_review=$(repo manifest 2>/dev/null |grep review| grep ${CURR_remote})
 a_remote=( $(echo ${t_review} | sed -E 's#.*name="([^"]*[^"]*)".*#\1#') )
 a_review=( $(echo ${t_review} | sed -E 's#.*review="([^"]*[^"]*)".*#\1#') )
 #for (( i=0; i < ${#a_remote[@]}; i++ )); do echo ${a_remote[$i]}~${review[$i]};done

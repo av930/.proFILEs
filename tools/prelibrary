@@ -86,6 +86,14 @@ math() {
 }
 
 
+function getcurrFileName(){
+## ---------------------------------------------------------------------------
+echo "${BASH_SOURCE[0]}"
+basename "$0"
+}
+
+
+
 function printToFILE(){
 ## ---------------------------------------------------------------------------
 ## printToFILE $(mktemp) title contents title-color
@@ -453,3 +461,7 @@ function run_menu() {
         esac
     done
 }
+
+
+## source로 실행되었으면 파일path를 출력하고 아니면 바로 해당함수를 호출해라.
+[ "${BASH_SOURCE[0]}" = "${0}" ] && "$@" || echo "$(realpath $BASH_SOURCE) sourced"
