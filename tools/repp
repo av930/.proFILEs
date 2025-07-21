@@ -851,6 +851,7 @@ EOF
                      run_menu "${INPUT[@]}";  cd "${menu_selected}/.."
                 fi
       ;;repp)   cd ${REPP_DIR}
+      ;;mani)   cd ${REPP_PATH}
       ;;  '')   gitt go root
       ;;   *)   gitt go $cmd
     esac
