@@ -125,7 +125,7 @@ case ${CURR_remote} in
 esac;
 case ${CURR_project} in
      __add_user_case) $DEBUG "case#: user added"            ; exit 1
-#   ;; sample_yocto/meta*) $DEBUG "case2: skip"             ; exit 0
+    ;;   __skip_case) $DEBUG "case2: skip"                  ; exit 0
     ;;             *) $DEBUG "case1: default"
 esac;
 case ${CURR_branch} in
@@ -167,7 +167,12 @@ printf "${linewave}\n${YELLOW}%-10.10b${NCOL} remote:%-12.12b | project:%-84.84b
        "[${REPO_I}/${REPO_COUNT}]" "${REPO_REMOTE}" "${REPO_PROJECT}" #"| branch:${CURR_branch}"
 
 
-## debugging value
+## manifest의 fetch URL이 달라 git project를 제대로 못읽어올경우 error처리
+fetch_project=$(git config --get-regexp remote.*.url|cut -d' ' -f2|head -1| sed -E "s#^.*://.*:[0-9]+/(.*?${REPO_PROJECT})\$#\1#")
+if [ "${REPO_PROJECT}" = "${fetch_project}" ]; then CURR_project=${REPO_PROJECT};
+else CURR_project=${fetch_project}; clog "warn" "project name is not matched, use ${fetch_project}"
+fi
+
 $DEBUG "CURR_remote:${CURR_remote}| CURR_url:${CURR_url}| CURR_project:${CURR_project}| CURR_path:${CURR_path}"
 $DEBUG "CURR_branch:${CURR_branch}| CURR_upstream:${REPO_UPSTREAM}| CURR_destbranch:${REPO_DEST_BRANCH}| CURR_ntot:${CURR_ntot}"
 $DEBUG "input param: cmd: [$cmd]| target: ${target}| source: ${source}"

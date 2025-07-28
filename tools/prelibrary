@@ -56,9 +56,8 @@ under()  {
 }
 laptime() {
     local _now=$(date +%s.%N);
-    [[ $1 == reset ]] && { _lapn=0; _lapc=$_now; }
+    [[ $1 == reset ]] && { _lapn=0; _lapc=$_now; return; }
     echo "<<<< $(( _lapn++ )) [ $(echo "$_now - $_lapc" | bc) ]";
-    _lapc=$_now ;
 }
 
 showline(){
