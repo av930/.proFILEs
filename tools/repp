@@ -1787,6 +1787,26 @@ function repp_initvar(){
 # find input-path up and down,
 
     local ret=1
+    ##전체 filelist
+    REPPFILE_STATUS=${REPP_DIR}/repp.status             #현재 repo의 변경 파일이름과 상태(status)를 저장
+    REPPFILE_COMMIT=${REPP_DIR}/repp.commit             #현재 repo의 변경 파일이름과 내용(commit)을 저장
+    REPPFILE_XML=repp.xml                               #repp mani에서 전체 manifest를 하나의 manifest 파일로 생성시 결과파일
+    REPPFILE_JSON=${REPP_DIR}/repp.json                 #repo manifest로부터 생성된 repo json 파일
+    REPPFILE_JSON_REMOTE=${REPP_DIR}/repp_remote.json   #repp.json에서 remote정보만 추출한 파일, /tmp/에 임시저장됨
+    REPPFILE_TXT=${REPP_DIR}/repp.txt                   #위 json을 parsing한 결과를 formatted txt로 저장한 파일, 구분자(|)
+    REPPFILE_CSV=${REPP_DIR}/repp.csv                   #위 json 파일과 repo forall을 비교하여 최종 생성된 파일 DB, 구분자(|)로 excel로 읽을때는 변환필요.
+                                                        #repp.csv항목은 repo forall list와 동일하며, 세부 git정보만 더 포함되어 있다.
+    #repp.csv.json                                      #manifest json을 parsin하여 생성된 DB
+    #repp.csv.repo                                      #repo forall로부터 생성된 DB, json파일로 생성이 어려울때 최종사용하게 된다.
+    #repp.csv.lfs                                       #repp.csv항목중에 git lfs로 구성된 git list
+    #repp.csv.submodule                                 #repp.csv항목이 소유한 git submodule list
+    REPPFILE_FORALL=${REPP_DIR}/reppforall.csv          #repp forall 작업을 진행하기 위한 script. repp forall gen로 생성됨. 구분자(,)
+    REPPFILE_SCRIPT=${REPP_DIR}/reppscript.xx.sh        #repp forall에서 사용하는 script를 저장하는 파일들이다. in.tm.pre.post등이 존재한다.
+    REPPSCRIPT_IN=${REPPFILE_SCRIPT/.xx/.in}            #repp forall -c 명령으로 만들어진 script를 저장하는 공간
+    REPPSCRIPT_TM=${REPPFILE_SCRIPT/.xx/.tm}            #reppforall.csv에서 편집한 명령이 실제 실행될때 잠시 머무는 공간
+    #reppforall.csv.tmp                                 #reppforall.csv를 실제 실행할때 구분자(`)로 변경하여 처리하기 위한 중간파일
+
+
     ## move to repo root
     reppfind_repodir .repo/manifests 5
     ## set variable REPP if manifest dir exists
@@ -1799,12 +1819,14 @@ function repp_initvar(){
         REPP_REVIEW=$(git config --get-regexp remote.*.review|cut -d' ' -f2|head -1)        #GITT_REVIEW
         REPP_URL=$(git config --get-regexp remote.$(git remote|head -1).url|cut -d' ' -f2|head -1) #GITT_URL
         #REPP_REMOTE=$(getServer $(git remote -v |grep fetch | grep -oP '(?<=:)[0-9]+(?=/)') remote)
-        if [[ ! -v REPP_REMOTE ]]; then
-            REPP_REMOTE=$(repo manifest -r --json 2>/dev/null |jq -r '.default.remote')
+        if [[ -z $REPP_REMOTE ]]; then
+            REPP_REMOTE=$(cat ${REPPFILE_JSON} |jq -r '.default.remote')
             if [[ -z "${REPP_REMOTE}" ]] || [[ "${REPP_REMOTE}" == "null" ]] ; then
                 REPP_REMOTE=$(echo "$REPP_URL" | grep -oE '^ssh://[^/]+:[0-9]+')
             fi
         fi
+        if [[ -z "${REPP_REMOTE}" ]] || [[ "${REPP_REMOTE}" == "null" ]] ; then err "REPP_REMOTE is null"; fi
+
 
         REPP_ROOT=${REPP_PATH%/.repo*}
         REPP_DIR=${REPP_ROOT}/.repp
@@ -1824,25 +1846,6 @@ function repp_initvar(){
         popd
         ret=0
     fi
-
-    ##전체 filelist
-    REPPFILE_STATUS=${REPP_DIR}/repp.status             #현재 repo의 변경 파일이름과 상태(status)를 저장
-    REPPFILE_COMMIT=${REPP_DIR}/repp.commit             #현재 repo의 변경 파일이름과 내용(commit)을 저장
-    REPPFILE_XML=repp.xml                               #repp mani에서 전체 manifest를 하나의 manifest 파일로 생성시 결과파일
-    REPPFILE_JSON=${REPP_DIR}/repp.json                 #repo manifest로부터 생성된 repo json 파일
-    REPPFILE_JSON_REMOTE=/tmp/repp_remote.json          #repp.json에서 remote정보만 추출한 파일, /tmp/에 임시저장됨
-    REPPFILE_TXT=${REPP_DIR}/repp.txt                   #위 json을 parsing한 결과를 formatted txt로 저장한 파일, 구분자(|)
-    REPPFILE_CSV=${REPP_DIR}/repp.csv                   #위 json 파일과 repo forall을 비교하여 최종 생성된 파일 DB, 구분자(|)로 excel로 읽을때는 변환필요.
-                                                        #repp.csv항목은 repo forall list와 동일하며, 세부 git정보만 더 포함되어 있다.
-    #repp.csv.json                                      #manifest json을 parsin하여 생성된 DB
-    #repp.csv.repo                                      #repo forall로부터 생성된 DB, json파일로 생성이 어려울때 최종사용하게 된다.
-    #repp.csv.lfs                                       #repp.csv항목중에 git lfs로 구성된 git list
-    #repp.csv.submodule                                 #repp.csv항목이 소유한 git submodule list
-    REPPFILE_FORALL=${REPP_DIR}/reppforall.csv          #repp forall 작업을 진행하기 위한 script. repp forall gen로 생성됨. 구분자(,)
-    REPPFILE_SCRIPT=${REPP_DIR}/reppscript.xx.sh        #repp forall에서 사용하는 script를 저장하는 파일들이다. in.tm.pre.post등이 존재한다.
-    REPPSCRIPT_IN=${REPPFILE_SCRIPT/.xx/.in}            #repp forall -c 명령으로 만들어진 script를 저장하는 공간
-    REPPSCRIPT_TM=${REPPFILE_SCRIPT/.xx/.tm}            #reppforall.csv에서 편집한 명령이 실제 실행될때 잠시 머무는 공간
-    #reppforall.csv.tmp                                 #reppforall.csv를 실제 실행할때 구분자(`)로 변경하여 처리하기 위한 중간파일
 
     if [[ $ret -eq 1 ]]; then
         $DEBUG ${REPP_PATH_ALL[@]};
@@ -1900,7 +1903,8 @@ function revv_initvar(){
     local key_id
     #default initial gerrit API key is na (vgit_na).
 
-    key_id=$(getServer ${GITT_REMOTE:-${REPP_REMOTE}} remote)
+
+    key_id=$(getServer ${GITT_REMOTE:-${REPP_REMOTE:?"run 'repp_initvar' first"}} remote)
     key=$(getServer ${key_id} pass)
 
     if (( 40 > ${#key} )); then
