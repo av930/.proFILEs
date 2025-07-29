@@ -6,8 +6,8 @@
 ###---------------------------------------------------------- DEBUG OPTION
 #DEBUG=["echo -e"|:], : means no-operation
 #DEBUG=[ : | "printf ${RED}%s${NCOL}\n" ]
-DEBUG=:
-#DEBUG="printf ${RED}%s${NCOL}\n"
+#DEBUG=:
+DEBUG="printf ${RED}%s${NCOL}\n"
 
 PATH_FULL=$(realpath "$BASH_SOURCE")
 PATH_DIR="${PATH_FULL%/*}"
@@ -268,36 +268,40 @@ REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPP_SCRIPT,\r
 
     ## repoforall.csv의 body를 생성
     if [ ! "$cmd" = "gen" ]; then
-        local arg opt cmd pro sep pre
-        for arg in "$@"; do case $arg in
+        local arg opt pro sep cmd=
+        set -x
+        for arg in "$@"; do
+            $DEBUG "[$arg]"
+            case $arg in
                ## -c를 기준으로 cmd와 project를 구분한다.
             -*c*)   [ -z "$pro" ] && { sep="$arg"; pro="$opt"; [ -z "$pro" ] && pro=all; opt= ; } || { opt+="$arg"; continue; }
             ;; ## '~~~'로 감싸진 command를 추출한다.
-            *\ *) cmd=$(printf "'%s' " "$arg"); pre+="$opt"; opt=
+            *\ *) cmd=$(printf "'%s' " "$arg"); cmd+="$opt"; opt=
             ;; ## 들어오는 모든 text는 먼저 opt에 저장된다.
             *)    opt+=$(printf "%s " "$arg");
             esac
         done
 
+        ## '~'로 묶인것이 없다면 모두 cmd로 처리한다.
+        [ -z "$cmd" ] && { cmd="$opt"; opt=""; }
+
         ## 명령어에 존재하는 single quote 처리
-        #pcase1 [ -z "$pre" ] && printf "%s\n" "${cmd:1:-2} $opt" > $REPPSCRIPT_IN || printf "%s\n" "$pre ${cmd} $opt" > $REPPSCRIPT_IN
-        #pcase2
-        printf "%s\n" "$pre ${cmd} $opt" > $REPPSCRIPT_IN
-        #printf "%s" "$pre ${cmd} $opt" > $REPPSCRIPT_IN
+        #cmd의 맨앞에 single quote가 존재할때만, 맨앞/맨뒤에 single quote를 제거한다.
+        cmd=${cmd#\'} && cmd=${cmd%\'*}
+        printf "%s%s%s\n" "${cmd}" > $REPPSCRIPT_IN
+        set +x
         chmod +x "$REPPSCRIPT_IN"
 
         [ "$pro" = ". " ] && pro=${GITT_PROJECT}  #set as current git project
         [ "$pro" = "all" ] && pro='.'             #match all git project
-        [[ $pre = bash*-*c* ]] && pre='bash'      #match all git project
-
 
         ## 현재는 case2로 parsing하고 있음. case1경우에는 복잡도가 높아 case2로 개선함
         ##repp forall tiger/services/ethmgr tiger/metas/meta-tiger  -cj1 bash -c '[ -z "${REPO_RREV}" ] && echo ${REPO_PROJECT}' $USER $PWD
-        ##pcase1)      project                                        sep pre     cmd                                             opt
         ##pcase2)      project                                        sep cmd
 
-        $DEBUG "pro~~~~~~" "$pro"; $DEBUG "sep~~~~~~" "$sep"; $DEBUG "pre~~~~~~" "$pre";
+        $DEBUG "pro~~~~~~" "$pro"; $DEBUG "sep~~~~~~" "$sep";
         $DEBUG "cmd~~~~~~" "$cmd"; $DEBUG "opt~~~~~~" "$opt"; $DEBUG "script~~~~~~" "$REPPSCRIPT_IN"
+        [ -z "$sep" ] && { err "please check your command, you must input 'repp forall [-cj4]'"; return 1; }
 
         ## csv에서 repo forall로 들어온 project만 추출하여 reppforall.csv 생성
         for arg in $pro; do
@@ -333,20 +337,9 @@ REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPP_SCRIPT,\r
 
 ##아래는 repp forall을 test하는 방법을 기술한다.
 << TEST
-1. repp forall -c '아래 명령'으로 reppforall.csv를 생성한다.
-2. REPP_SCRIPT 영역에 test에 필요한 command 넣고 저장한다.
-3. repp forall로 위에서 기록한 모든 command를 제대로 실행하는지 확인한다.
-bash /data001/vc.integrator/mirror/tsu_26my_release/src_current/.repp/reppscript.in.sh - $USER $PWD
-/data001/vc.integrator/mirror/tsu_26my_release/src_current/.repp/reppscript.in.sh
-bash -c 'case ${REPO_RREV} in
-    ext_adp_s|ext_hero_s)
-        git status
-        git log -1
-    ;;*) printf "\n${REPO_PATH}[%s]\n" "$1 $2"
-esac;' - $USER $PWD
-echo "${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}"
-revv accessall ${REPO_REMOTE} ${REPO_PROJECT}
-bash -c 'case ${REPO_RREV} in
+1. repp forall -c '아래 명령'을 넣어서 실행해보거나, reppforall.csv의 REPP_SCRIPT 영역에 command 넣어서 실행해본다.
+> echo "${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}"
+> bash -c 'case ${REPO_RREV} in
     ext_adp_s|ext_hero_s)
         git status
         if [ "${REPO_PROJECT}" = "non_HLOS" ] || \
@@ -357,6 +350,13 @@ bash -c 'case ${REPO_RREV} in
         fi
     ;;*) printf "\n${REPO_PATH}[%s]\n" "$1 $2"
 esac;' - $USER $PWD
+> bash -c 'if [[ "${REPO_RREV}" =~ "ext_adp_s|ext_hero_s" ]]
+    then git status; git log -1
+    else printf "\n${REPO_PATH}\n"
+fi'
+> bash /data001/vc.integrator/mirror/tsu_26my_release/src_current/.repp/reppscript.in.sh - $USER $PWD
+> /data001/vc.integrator/mirror/tsu_26my_release/src_current/.repp/reppscript.in.sh
+> revv accessall ${REPO_REMOTE} ${REPO_PROJECT}
 TEST
 
 
