@@ -6,8 +6,8 @@
 ###---------------------------------------------------------- DEBUG OPTION
 #DEBUG=["echo -e"|:], : means no-operation
 #DEBUG=[ : | "printf ${RED}%s${NCOL}\n" ]
-#DEBUG=:
-DEBUG="printf ${RED}%s${NCOL}\n"
+DEBUG=:
+#DEBUG="printf ${RED}%s${NCOL}\n"
 
 PATH_FULL=$(realpath "$BASH_SOURCE")
 PATH_DIR="${PATH_FULL%/*}"
@@ -269,7 +269,6 @@ REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPP_SCRIPT,\r
     ## repoforall.csv의 body를 생성
     if [ ! "$cmd" = "gen" ]; then
         local arg opt pro sep cmd=
-        set -x
         for arg in "$@"; do
             $DEBUG "[$arg]"
             case $arg in
@@ -289,7 +288,6 @@ REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPP_SCRIPT,\r
         #cmd의 맨앞에 single quote가 존재할때만, 맨앞/맨뒤에 single quote를 제거한다.
         cmd=${cmd#\'} && cmd=${cmd%\'*}
         printf "%s%s%s\n" "${cmd}" > $REPPSCRIPT_IN
-        set +x
         chmod +x "$REPPSCRIPT_IN"
 
         [ "$pro" = ". " ] && pro=${GITT_PROJECT}  #set as current git project
@@ -394,7 +392,7 @@ function reppforgen_sh(){
 #echo "${cmd}"| awk 'BEGIN {RS=""; FS="\n"} {gsub(/^['\''"]|['\''"]$/, ""); print}'   #"~~~"만 삭제
 #"~~~", '~~~'둘다 삭제
     ##RS=""//여러줄을 하나의 record로 처리; FS="\n" //한줄을 하나의 field로 처리
-    [ -z "$REPPFILE_OUT" ] && { err "generated file name must be ready"; return 1; }
+    [[ -z "$REPPFILE_OUT" ]] && { err "generated file name must be ready"; return 1; }
     [ "${@}" = "NONE" ] &&  return 0;
     cmd=$(echo "${@}"| awk 'BEGIN {RS=""; FS="\n"} {gsub(/^["'\''"]|["'\''"]$/, ""); print}')
 
@@ -552,17 +550,22 @@ EOF
         pro=${oneline[4]}; [ -z "$pro" ] && break
 
         ## leading, trailing space 제거
-        cmd=${oneline[6]}
+        cmd=$(echo "${oneline[6]}" | xargs)
 
         ## 만약 6번째 item에 명령이 없으면 skip
         if [[ -z "$cmd" ]];then continue; fi
 
         ## 현재 context에서 실행을 위해 source로 file로 변환하여 호출한다.
         ## pre script + user command script + post script를 합쳐 실행파일을 만들고 이를 source로 실행할수 있도록 cmd에 할당한다.
-        if [ -f "${cmd}" ]; then cmd=". ${cmd}"
-        else REPPFILE_OUT=${REPPSCRIPT_TMP}; reppforgen_sh "${cmd}";
+        if [[ -f "${cmd}" ]]; then
+            echo "repp forall file from csv";
+            ccmd=$(cat "${cmd}")
+            cmd="source ${cmd}"
+        else echo "repp forall cmd from csv"
+            REPPFILE_OUT=${REPPSCRIPT_TMP}; reppforgen_sh "${cmd}";
             cat $REPPSCRIPT_PRE $REPPSCRIPT_TMP $REPPSCRIPT_POST > $REPPSCRIPT_TM
-            cmd=". $REPPSCRIPT_TM";
+            ccmd=$(cat $REPPSCRIPT_TMP)
+            cmd="source $REPPSCRIPT_TM";
         fi
 
         ## if opt=go   , ask=any  : excute all at once
@@ -571,7 +574,6 @@ EOF
         ## if opt=enter, ask=go   : execute leftover without asking
         ## if     break, stop all : ctrl + c
         under "[$((total=total+1))] ${oneline[4]}\n"
-        ccmd=$(cat $REPPSCRIPT_TMP)
         bbar cyan "${oneline[5]}" "\n${ccmd}\n"
         ## 각 repository마다 다시 한번씩 물어보게 된다. go를 입력하면 나머지는 물어보지 않고 바로 실행한다.
         [ "$opt" = "" ] && read -p "$(echo -e "\n\n${yellow}[enter:run next| go:run all| show:show script cmd& ask again| other:skip next| ctrl+c:break all]:${NCOL}")" ask
