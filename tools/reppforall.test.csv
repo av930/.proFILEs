@@ -13,21 +13,17 @@ b1609982542301a728d3bc20995af4eff57d05f6,hlos,vgit_as,tsu_26my_release,honda/lin
         git log -1
     ;;*) printf ""\n${REPO_PATH}[%s]\n"" ""$1 $2""
 esac;' - $USER $PWD"
-6e3fc291552a5c5fb0a08693c0b9eb54f8cd673d,hlos,vgit_na,tiger_desktop_release,tiger/build,nad/LGE/tiger-desktop/desktop-build,"echo ""${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}"""
-b23dd55f1a5d4fcc4ada2ffe8b3466bc7876c1b8,hlos,vgit_na,tiger_tsu_23my_release,tiger/daemons,nad/LGE/tiger-src/daemons,"echo ""${REPP_VAR1}:${REPP_VAR2}:${USER}:${PWD}:${REPO_PATH}"""
-5306dc7c8a87d08d5d28b99aa1ebbd027a128f51,5g,vgit_na,tiger_release,tiger/doc,nad/LGE/tiger-src/doc,revv accessall ${REPO_REMOTE} ${REPO_PROJECT}
-e961bd8b0b405d4be810c390f157963292e5f94d,sa515m,vgit_na,tiger_tsu_23my_release,tiger/hal/vif,nad/LGE/tiger-src/hal/vif,"bash -c 'case ${REPO_RREV} in
-    ext_adp_s|ext_hero_s)
-        git status
-        if [ ""${REPO_PROJECT}"" = ""non_HLOS"" ] || \
-           [ ""${REPO_PROJECT}"" = ""platform/Settings"" ]; then
-            echo ${HOME}
-        else
-            git log -1
+6e3fc291552a5c5fb0a08693c0b9eb54f8cd673d,hlos,vgit_na,tiger_desktop_release,tiger/build,nad/LGE/tiger-desktop/desktop-build,"bash -c 'echo ""${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}""'"
+b23dd55f1a5d4fcc4ada2ffe8b3466bc7876c1b8,hlos,vgit_na,tiger_tsu_23my_release,tiger/daemons,nad/LGE/tiger-src/daemons,"bash -c '[ ""${REPO_REMOTE}"" != ""vgit_na"" ] && echo ""project:${REPO_PROJECT}"" || echo ""path:${REPO_PATH}"" '  $USER $PWD"
+5306dc7c8a87d08d5d28b99aa1ebbd027a128f51,5g,vgit_na,tiger_release,tiger/doc,nad/LGE/tiger-src/doc,"repp forall -c bash -c 'case ${REPO_PROJECT} in
+    */*/*|*/*/*/*)
+          if [[ ""${REPO_PATH}"" =~ (.*build?)    ]]; then echo ""path:[${BASH_REMATCH[1]}]""
+        elif [[ ""${REPO_PROJECT}"" =~ (.*build?) ]]; then echo ""project:[${BASH_REMATCH[1]}]""
         fi
-    ;;*) printf ""\n${REPO_PATH}[%s]\n"" ""$1 $2""
-esac;' - $USER $PWD"
-f1acab7d725ac955c26ce31f49e80d44e99f0eca,hlos,vgit_na,tiger_tsu_26my_release,tiger/metas/meta-tiger,nad/LGE/metalayer/meta-tiger,
+    ;;          *)  printf ""~~~~~~~~~~~~~~~${REPO_PROJECT}[%s]\n"" ""$1 $2""
+esac' - $USER $PWD"
+e961bd8b0b405d4be810c390f157963292e5f94d,sa515m,vgit_na,tiger_tsu_23my_release,tiger/hal/vif,nad/LGE/tiger-src/hal/vif,bash ~/.proFILEs/repo_var.sh - $USER $PWD
+f1acab7d725ac955c26ce31f49e80d44e99f0eca,hlos,vgit_na,tiger_tsu_26my_release,tiger/metas/meta-tiger,nad/LGE/metalayer/meta-tiger,bash -c 'revv accessall ${REPO_REMOTE} ${REPO_PROJECT}'
 60088c50402fd979eb6ecfc9cc9da06b1f0e2092,hlos,vgit_na,tiger_desktop_poky3_release,tiger/poky,nad/LGE/tiger-desktop/poky,
 5afce389363bda23c8667c637bd26119d2998aa2,hlos,vgit_na,tiger_tsu_23my_release,tiger/tools,nad/LGE/tiger-src/tools,
 01d98a7fa77dfc51f1d1144f06478c772fd41449,sa515m:5g,vgit_na,sa515m_le2.3_release,vendor/qct/sa515m/clo/la/kernel/build,nad/sa515m/SA515M_apps/apps_proc/src/device/qcom/kernelscripts,
