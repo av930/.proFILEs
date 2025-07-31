@@ -335,26 +335,20 @@ REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPP_SCRIPT,\r
 
 ##아래는 repp forall을 test하는 방법을 기술한다.
 << TEST
-1. repp forall -c '아래 명령'을 넣어서 실행해보거나, reppforall.csv의 REPP_SCRIPT 영역에 command 넣어서 실행해본다.
-> echo "${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}"
-> bash -c 'case ${REPO_RREV} in
-    ext_adp_s|ext_hero_s)
-        git status
-        if [ "${REPO_PROJECT}" = "non_HLOS" ] || \
-           [ "${REPO_PROJECT}" = "platform/Settings" ]; then
-            echo ${HOME}
-        else
-            git log -1
+아래와 같이 repp forall -c '명령'을 넣어서 실행해보거나, reppforall.csv의 REPP_SCRIPT 영역에 repp forall -c를 제외하고 명령을 넣어서 실행해본다.
+>repp forall -c bash -c 'echo "${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}"'
+>repp forall honda/con/autosar tiger/metas/meta-tiger -cj1 \
+    bash -c '[ "${REPO_REMOTE}" != "vgit_na" ] && echo "project:${REPO_PROJECT}" || echo "path:${REPO_PATH}" ' \
+    $USER $PWD
+>repp forall -c bash -c 'case ${REPO_PROJECT} in
+    */*/*|*/*/*/*)
+          if [[ "${REPO_PATH}" =~ (.*build?)    ]]; then echo "path:[${BASH_REMATCH[1]}]"
+        elif [[ "${REPO_PROJECT}" =~ (.*build?) ]]; then echo "project:[${BASH_REMATCH[1]}]"
         fi
-    ;;*) printf "\n${REPO_PATH}[%s]\n" "$1 $2"
-esac;' - $USER $PWD
-> bash -c 'if [[ "${REPO_RREV}" =~ "ext_adp_s|ext_hero_s" ]]
-    then git status; git log -1
-    else printf "\n${REPO_PATH}\n"
-fi'
-> bash /data001/vc.integrator/mirror/tsu_26my_release/src_current/.repp/reppscript.in.sh - $USER $PWD
-> /data001/vc.integrator/mirror/tsu_26my_release/src_current/.repp/reppscript.in.sh
-> revv accessall ${REPO_REMOTE} ${REPO_PROJECT}
+    ;;          *)  printf "~~~~~~~~~~~~~~~${REPO_PROJECT}[%s]\n" "$1 $2"
+esac' - $USER $PWD
+>repp forall . -c bash ~/.proFILEs/repo_var.sh - $USER $PWD
+>repp forall . -c bash -c 'revv accessall ${REPO_REMOTE} ${REPO_PROJECT}'
 TEST
 
 
@@ -392,9 +386,10 @@ function reppforgen_sh(){
 #echo "${cmd}"| awk 'BEGIN {RS=""; FS="\n"} {gsub(/^['\''"]|['\''"]$/, ""); print}'   #"~~~"만 삭제
 #"~~~", '~~~'둘다 삭제
     ##RS=""//여러줄을 하나의 record로 처리; FS="\n" //한줄을 하나의 field로 처리
+    wave
     [[ -z "$REPPFILE_OUT" ]] && { err "generated file name must be ready"; return 1; }
     [ "${@}" = "NONE" ] &&  return 0;
-    cmd=$(echo "${@}"| awk 'BEGIN {RS=""; FS="\n"} {gsub(/^["'\''"]|["'\''"]$/, ""); print}')
+    #cmd=$(echo "${@}"| awk 'BEGIN {RS=""; FS="\n"} {gsub(/^["'\''"]|["'\''"]$/, ""); print}')
 
     #declare -p cmd
     if [ -z "${cmd%%\'*}" ]; then
@@ -447,7 +442,7 @@ function reppforall(){
 			usage) repp forall -c '<cmd>'                                        #generate reppforall.csv and repp_inscript.sh including <cmd>
 			usage) repp forall testgen                                           #copy reppforall.test.csv to reppforall.csv to test repp forall functionality
 			usage) repp forall                                                   #run repo forall by using reppforall.csv
-			usage) repp forall go                                                #run repo forall without asking
+			usage) repp forall g|go|goo                                          #run repo forall without asking, with No-info, Project, Project&Command
 
 			guide) example cmds REPO_SCRIPT column in reppforall.csv
 			        echo REPO_PROJECT|xargs -n1 -I% sh -c 'echo $%'              #xargs
@@ -463,7 +458,7 @@ EOF
                     awk 'BEGIN{FS=","; RS="\r\n"; OFS="`"; ORS="\r\n";}  NR=='$i' {if ($7!="") {print $7} else {print ""}}'             "$sfile"
                 done >> "$REPPFILE_FORALL"
                 info "Now, you can test repp forall functionality by 'repp forall' command"; return 0
-        ;; go) opt='go'
+        ;;  g|go|goo) opt=$cmd
         ;; '') :
         ;;  *) reppforgen_csv "$@";  return 0
     esac
@@ -537,9 +532,13 @@ EOF
     bbar purple "REPP_SCRIPTPOST" "\n$(cat ${REPPSCRIPT_POST})\n"
 
     ## repp forall 입력시 전체를 어떻게 실행할지 1회 물어본후, 각 명령어 실행시미다 다시 물어본다.
-    local ask outfile ccmd cmd= pro=
-    [ "$opt" != "go" ] && read -p "$(echo -e "\n\n${cyan}[enter:execute by asking |go:run all | ctrl+c:break]:${NCOL}")" opt
-    if [ "$opt" != "" ] && [ "$opt" != "go" ]; then err "you have to input either 'enter' or 'go' "; return 1 ; fi
+    local ask outfile ccmd cmd= pro= lrev
+    case "$opt" in    g|go|goo) :
+        ;; *) read -p "$(echo -e "\n\n${cyan}[enter:execute by asking |g:run all |go: go all with msg |goo: go all with full-msg |ctrl+c:break]:${NCOL}")" opt
+    esac
+    case "$opt" in ''|g|go|goo) :
+        ;; *) err "you have to input either 'enter', 'g', 'go', or 'goo'";  return 1
+    esac
 
 
     touch $REPPSCRIPT_TM && chmod +x $REPPSCRIPT_TM
@@ -551,7 +550,10 @@ EOF
 
         ## leading, trailing space 제거
         cmd=$(echo "${oneline[6]}" | xargs)
+        lrev=$(echo "${oneline[0]}" | xargs)
 
+
+        #declare -p oneline
         ## 만약 6번째 item에 명령이 없으면 skip
         if [[ -z "$cmd" ]];then continue; fi
 
@@ -569,14 +571,14 @@ EOF
             cmd="source $REPPSCRIPT_TM";
         fi
 
-        #go, goo(with msg), gooo(with fullmsg), enter, other를 물어본다.
-        if [ "$opt" = "goo" ]; then ccmd=''; fi
-        if [ "$opt" != "go" ]; then under "[$((total=total+1))] ${oneline[4]}\n"; bbar cyan "${oneline[5]}" "\n${ccmd}\n"; fi
-        ## 각 repository마다 다시 한번씩 물어보게 된다. go|gogo|gogogo를 입력하면 나머지는 물어보지 않고 바로 실행한다.
-        [ "$opt" = "" ] && read -p "$(echo -e "${yellow}[enter: run next |go: run all |goo: go all with msg |gooo: go all with full-msg |other: skip next |ctrl+c: break all] :${NCOL}")" ask
+        #g, go(with msg), goo(with fullmsg), enter, other를 물어본다.
+        if [ "$opt" = "go" ]; then ccmd=''; fi
+        if [ "$opt" != "g" ]; then under "[$((total=total+1))] ${oneline[4]}\n"; bbar cyan "${oneline[5]}" "\n${ccmd}\n"; fi
+        ## 각 repository마다 다시 한번씩 물어보게 된다. g|go|goo를 입력하면 나머지는 물어보지 않고 바로 실행한다.
+        [ "$opt" = "" ] && read -p "$(echo -e "${yellow}[enter: run next |g: run all |go: go all with msg |goo: go all with full-msg |other: skip next |ctrl+c: break all] :${NCOL}")" opt
 
         if [ -z "$ask" ]; then pushd "$REPP_ROOT/${oneline[5]}";
-            REPO_ROOT="$REPP_ROOT" REPO_LREV="$(echo ${oneline[0]}|xargs)" REPO_GROUP="${oneline[1]}" REPO_REMOTE="${oneline[2]}" REPO_RREV="${oneline[3]}" \
+            REPO_ROOT="$REPP_ROOT" REPO_LREV="${lrev}" REPO_GROUP="${oneline[1]}" REPO_REMOTE="${oneline[2]}" REPO_RREV="${oneline[3]}" \
             REPO_PROJECT="${oneline[4]}" REPO_PATH="${oneline[5]}" REPP_VAR1="${REPP_VAR1}" REPP_VAR2="${REPP_VAR2}" ${cmd}
 
             # ## REPP_RESULT값이 설정되지 않았을때에 대한 default값 설정
@@ -587,7 +589,7 @@ EOF
             # else awk -v count="$((count+3))" -v ret="$__ret" 'BEGIN{RS=ORS="\n"} NR==count {print $0,ret}' "$REPPFILE_FORALL"   >> ${REPPFILE_FORALL%\.*}_result.csv
             # fi
             popd
-        elif [ "$ask" = "go" ] || [ "$ask" = "goo" ] || [ "$ask" = "gooo" ]; then opt=$ask; ask=''
+        elif [ "$ask" = "g" ] || [ "$ask" = "go" ] || [ "$ask" = "goo" ]; then opt=$ask; ask=''
         else echo skipped && continue
         fi
     done
@@ -960,7 +962,7 @@ function repp_initdb(){
         clog "column need to reinstalled, please 'repp install'";
     fi
 
-    laptime reset; warn "REPP DB regenerated"; wave
+    laptime reset; warn "REPP DB will be regenerated"; wave
     ## generate json from manifest, #suppress all log for generation json
     [ -d ${REPP_DIR} ] || mkdir ${REPP_DIR}
     repo manifest -r --json -o ${REPPFILE_JSON} &>/dev/null
@@ -1027,7 +1029,7 @@ function repp_initdb(){
         mani_out+=("$lineout")
     done
 
-
+    laptime
     ## make result output
     #declare -p mani_out
     printf "%s\n" "${mani_out[@]}" >  ${REPPFILE_CSV}.json
@@ -1831,7 +1833,7 @@ function repp_initvar(){
         if [[ -z "${REPP_REMOTE}" ]] || [[ "${REPP_REMOTE}" == "null" ]] ; then
             reppget_repcmd
             local tmp=$(git config --get-regexp ^remote.*.url | sed 's/.*:\([0-9]*\).*/\1/')
-            REPP_REMOTE=$(grep -oP "remote.fetch.*${tmp}}\" name=\"\K[^\"]*" default.xml ${REPPFILE_MANI})
+            REPP_REMOTE=$(grep '<remote ' ${REPPFILE_MANI} | sed -n 's/.*name="\([^"]*\)".*/\1/p')
         fi
     fi
     if [[ -z "${REPP_REMOTE}" ]] || [[ "${REPP_REMOTE}" == "null" ]] ; then warn "REPP_REMOTE is null, must check"; fi
