@@ -247,9 +247,77 @@ EOF
 
 
 
+##아래는 repp forall 구현내용을 기록합니다.
+:<< COMMENT
+10. repp forall gen이나 repp forall -c <cmd>명령으로 reppforall.csv를 생성하게 된다.
+ 11. 2경우 모두 reppforgen_csv 에서 처리하며, gen이면 전체repo/빈cmd, -c <cmd>이면 해당repo/cmd 형태를 가진 csv를 생성한다.
+ 12. 여기서 repp forall testgen 명령으로 테스트를 위해 기존에 잘 동작하는 csv를 copy해온후 바로 repp forall로 구동해볼수 있다.
+ 14. 생성된 reppforall.csv를 xls로 열어 원하는 명령이 되도록 편집을 완료한다.
+20. repp forall 명령으로 reppforall.csv에 기록된 repo를 돌아다니며, 각 cmd를 실행할수 있다.
+ 21. 먼저 csv_fromlnx_towin 함수를 통해 reppforall.csv가 linux format이면 windows로 바꾼다. (PC 편집저장시 window format으로 저장되므로)
+30. csv heading를 읽어와 REPPSCRIPT_V1, REPPSCRIPT_V2등 먼저 변수들을 선언한다.
+ 31. 파일 REPPSCRIPT_PRE, REPPSCRIPT_POST에 csv에 정의된 pre/post script를 읽어 저장해놓는다.
+ 32. 이때 script들에 포함된 특수문자를 제거하기 위해 reppforgen_sh 함수를 호출하여 정제한다.
+40. 이제 reppforall.csv들의 본문(REPO_LREV 다음줄 기준)을 모두 읽어 arrayline 배열에 넣는다. (이를 위해 구분자를 `하고, REPPSCRIPT가 존재하는 column만 저장)
+ 41. 작업개요를 보여주기 위해 arrayline에 들어간 작업할 repo 정보와 cmd(REPPSCRIPT)를 모두 출력해준다.
+ 42. REPPSCRIPT_V1/2변수와 REPPSCRIPT_PRE/POST script의 내용도 보여준다.
+50. repp forall명령을 각 repo마다 물어보면서 실행할지 한꺼번에 실행할지, 정보는 얼마나 출력할지 물어본다.
+ 51. arrayline에서 한줄식 읽어와서 REPO_ROOT/LREV/GROUP/REMOTE/RREV/PROJECT/PATH/REPPSCRIPT_V1/REPPSCRIPT_V2/cmd 값을 저장한다. >>> 읽어온값에 특수문자가 있으므로 linux format으로 변환을 고려한다.
+ 52. 읽어온 REPPSCRIPT(cmd)가 file이면 놔두고, cmd이면 file에 넣는다. 이후 source로 해당 file을 읽어오기 위함이다. >>> cmd일 경우도 pre,post 처리가 필요다.
+ 53. 어째튼 REPPSCRIPT_PRE + REPPSCRIPT(cmd) + REPPSCRIPT_POST가 되도록 최종 실행 script 파일을 만든다.
+60. 이제 사용자에게 실행방법을 압력받아, 위의 REPP_XXX변수들과 함께 source 구문으로 script를 현재 shell에 넣어 실행한다.
+ 61. 실행이 완료되면 arrayline에서 다음줄을 읽어와 위 51번부터 배열끝까지 반복한다. >>> 실행결과 처리가 필요할것으로 보인다.
+COMMENT
+
+
+##아래는 repp forall을 test하는 방법을 기술한다.
+:<< COMMENT
+아래와 같이 repp forall -c '명령'을 넣어서 실행해보거나, reppforall.csv의 REPP_SCRIPT 영역에 repp forall -c를 제외하고 명령을 넣어서 실행해본다.
+>repp forall -c bash -c 'echo "${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}"'
+>repp forall honda/con/autosar tiger/metas/meta-tiger -cj1 \
+    bash -c '[ "${REPO_REMOTE}" != "vgit_na" ] && echo "project:${REPO_PROJECT}" || echo "path:${REPO_PATH}" ' \
+    $USER $PWD
+>repp forall -c bash -c 'case ${REPO_PROJECT} in
+    */*/*|*/*/*/*)
+          if [[ "${REPO_PATH}" =~ (.*build?)    ]]; then echo "path:[${BASH_REMATCH[1]}]"
+        elif [[ "${REPO_PROJECT}" =~ (.*build?) ]]; then echo "project:[${BASH_REMATCH[1]}]"
+        fi
+    ;;          *)  printf "~~~~~~~~~~~~~~~${REPO_PROJECT}[%s]\n" "$1 $2"
+esac' - $USER $PWD
+>repp forall . -c bash ~/.proFILEs/repo_var.sh - $USER $PWD
+>repp forall . -c bash -c 'revv accessall ${REPO_REMOTE} ${REPO_PROJECT}'
+COMMENT
+
+
+function csv_fromlnx_towin(){
+## ---------------------------------------------------------------------------
+## linux CSV file을 windows CSV file로 변경한다.
+## ""로 묶여있는 field(여러줄가능)의 LF는 유지하고, 그외의 LF는 CRLF로 변경한다.
+local tfile=$(mktemp)
+awk 'BEGIN {
+    RS=""
+    FPAT="([^,\"]+)|(\"([^\"]|\"\")*\")|";  # 필드 패턴 정의
+    OFS=",";                                # 출력 필드 구분자
+    ORS="\r\n";                             # 출력 레코드 구분자 (CRLF)
+}{
+    for (i = 1; i <= NF; i++) {         # 필드가 double quote로 묶여있지 않은 경우에만 gsub 수행
+         if ($i !~ /^".*"$/) {
+            gsub(/\r?\n/, "\r\n", $i);  # CRLF 아닌것만 LF를 "\n"으로 변경
+        }
+    }
+    print $0;                           # 수정된 레코드 출력
+}' "$1" > $tfile
+cat $tfile > "$1"
+
+diff -uN $tfile "$1"
+}
+
+
+
 function reppforgen_csv(){
 ## ---------------------------------------------------------------------------
-# 입력된 repp forall < projec -c 'cmd' option> 분석하여, reppforall.csv, repp_inscript.sh 파일을 생성한다.
+# repp forall gen으로 기본 csv를 생성하거나
+# 입력된 repp forall <project -c 'cmd' option> 분석하여, reppforall.csv, repp_inscript.sh 파일을 생성한다.
 
     under "Welcome to reppforall generator\n"
     clog "${REPPFILE_FORALL},\n${REPPSCRIPT_IN}" "will be generated, please wait a few seconds"
@@ -262,8 +330,8 @@ function reppforgen_csv(){
     ## reppforall.csv heading 생성
     ## (CSV file을 처리하기 위해 최종 처리전까지는 windows format으로 처리)
     ## 추후 REPO_UPSTREAM,REPO_DEST_BRANCH가 필요하면 $4,$5를 넣어야 한다.
-    printf "http://collab.lge.com/main/display/~joongkeun.kim/reppforall,Refer please,,REPP_VAR1,NONE,REPP_VAR1,NONE,\r\n\
-,,,REPP_SCRIPTPRE,NONE,REPP_SCRIPTPOST,NONE,\r\n\
+    printf "http://collab.lge.com/main/display/~joongkeun.kim/reppforall,Refer please,,REPPSCRIPT_V1,NONE,REPPSCRIPT_V2,NONE,\r\n\
+,,,REPPSCRIPT_PRE,NONE,REPPSCRIPT_POST,NONE,\r\n\
 REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPP_SCRIPT,\r\n" > $REPPFILE_FORALL
 
     ## repoforall.csv의 body를 생성
@@ -333,50 +401,6 @@ REPO_LREV,REPO_GROUP,REPO_REMOTE,REPO_RREV,REPO_PROJECT,REPO_PATH,REPP_SCRIPT,\r
 
 
 
-##아래는 repp forall을 test하는 방법을 기술한다.
-<< TEST
-아래와 같이 repp forall -c '명령'을 넣어서 실행해보거나, reppforall.csv의 REPP_SCRIPT 영역에 repp forall -c를 제외하고 명령을 넣어서 실행해본다.
->repp forall -c bash -c 'echo "${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}"'
->repp forall honda/con/autosar tiger/metas/meta-tiger -cj1 \
-    bash -c '[ "${REPO_REMOTE}" != "vgit_na" ] && echo "project:${REPO_PROJECT}" || echo "path:${REPO_PATH}" ' \
-    $USER $PWD
->repp forall -c bash -c 'case ${REPO_PROJECT} in
-    */*/*|*/*/*/*)
-          if [[ "${REPO_PATH}" =~ (.*build?)    ]]; then echo "path:[${BASH_REMATCH[1]}]"
-        elif [[ "${REPO_PROJECT}" =~ (.*build?) ]]; then echo "project:[${BASH_REMATCH[1]}]"
-        fi
-    ;;          *)  printf "~~~~~~~~~~~~~~~${REPO_PROJECT}[%s]\n" "$1 $2"
-esac' - $USER $PWD
->repp forall . -c bash ~/.proFILEs/repo_var.sh - $USER $PWD
->repp forall . -c bash -c 'revv accessall ${REPO_REMOTE} ${REPO_PROJECT}'
-TEST
-
-
-function csv_fromlnx_towin(){
-## ---------------------------------------------------------------------------
-## linux CSV file을 windows CSV file로 변경한다.
-## ""로 묶여있는 field(여러줄가능)의 LF는 유지하고, 그외의 LF는 CRLF로 변경한다.
-local tfile=$(mktemp)
-awk 'BEGIN {
-    RS=""
-    FPAT="([^,\"]+)|(\"([^\"]|\"\")*\")|";  # 필드 패턴 정의
-    OFS=",";                                # 출력 필드 구분자
-    ORS="\r\n";                             # 출력 레코드 구분자 (CRLF)
-}{
-    for (i = 1; i <= NF; i++) {         # 필드가 double quote로 묶여있지 않은 경우에만 gsub 수행
-         if ($i !~ /^".*"$/) {
-            gsub(/\r?\n/, "\r\n", $i);  # CRLF 아닌것만 LF를 "\n"으로 변경
-        }
-    }
-    print $0;                           # 수정된 레코드 출력
-}' "$1" > $tfile
-cat $tfile > "$1"
-
-diff -uN $tfile "$1"
-}
-
-
-
 function reppforgen_sh(){
 ## ---------------------------------------------------------------------------
 ## reppforgen_sh 뒤에 오는 모는 parameter로 script를 만들어준다.
@@ -389,7 +413,7 @@ function reppforgen_sh(){
     wave
     [[ -z "$REPPFILE_OUT" ]] && { err "generated file name must be ready"; return 1; }
     [ "${@}" = "NONE" ] &&  return 0;
-    #cmd=$(echo "${@}"| awk 'BEGIN {RS=""; FS="\n"} {gsub(/^["'\''"]|["'\''"]$/, ""); print}')
+    cmd=$(echo "${@}"| awk 'BEGIN {RS=""; FS="\n"} {gsub(/^["'\''"]|["'\''"]$/, ""); print}')
 
     #declare -p cmd
     if [ -z "${cmd%%\'*}" ]; then
@@ -470,7 +494,7 @@ EOF
     grep -q $'\r' "$REPPFILE_FORALL" && fileencoding=windows || fileencoding=linux
     [ "$fileencoding" = "linux" ] && csv_fromlnx_towin "$REPPFILE_FORALL"
 
-    ## define custom variable REPP_VAR1, REPP_VAR2, and REPP_SCRIPTPRE, REPP_SCRIPTPOST
+    ## define custom variable REPPSCRIPT_V1, REPPSCRIPT_V2, and REPPSCRIPT_PRE, REPPSCRIPT_POST
     readarray -d\` -t array_var < <(cat "$REPPFILE_FORALL"| awk 'BEGIN{FS=","; RS="\r\n"; OFS="`"; ORS="`";} \
     NR>=1 && NR<=2 {gsub(/""/,"\"",$0); gsub(/\r/,"",$7);print $4"`"$5"`"$6"`"$7}')
     eval "${array_var[0]}=${array_var[1]}"
@@ -518,18 +542,18 @@ EOF
         If create above file by 'repp forall gen', Please add <your command> in REPP_SCRIPT column using excel" ; return 1; }
     done
 
-    ## REPP_VAR1, REPP_VAR2의 값을 보여준다.
+    ## REPPSCRIPT_V1, REPPSCRIPT_V2의 값을 보여준다.
     echo
     bbar yellow "check user input variables" "▼▼▼ show full\n"
-    bbar yellow "REPP_VAR1" "$REPP_VAR1\n"
-    bbar yellow "REPP_VAR2" "$REPP_VAR2\n"
+    bbar yellow "REPPSCRIPT_V1" "$REPPSCRIPT_V1\n"
+    bbar yellow "REPPSCRIPT_V2" "$REPPSCRIPT_V2\n"
 
-    ##REPP_SCRIPTPRE, REPP_POSTSCRIPT를 먼저 보여준다.
+    ##REPPSCRIPT_PRE, REPP_POSTSCRIPT를 먼저 보여준다.
     ## leading, trailing space 제거
     echo
     bbar purple "check user common pre/post script" "▼▼▼ show full\n"
-    bbar purple "REPP_SCRIPTPRE"  "\n$(cat ${REPPSCRIPT_PRE})\n"
-    bbar purple "REPP_SCRIPTPOST" "\n$(cat ${REPPSCRIPT_POST})\n"
+    bbar purple "REPPSCRIPT_PRE"  "\n$(cat ${REPPSCRIPT_PRE})\n"
+    bbar purple "REPPSCRIPT_POST" "\n$(cat ${REPPSCRIPT_POST})\n"
 
     ## repp forall 입력시 전체를 어떻게 실행할지 1회 물어본후, 각 명령어 실행시미다 다시 물어본다.
     local ask outfile ccmd cmd= pro= lrev
@@ -547,13 +571,13 @@ EOF
 
         ## project가 비워있으면 skip
         pro=${oneline[4]}; [ -z "$pro" ] && break
-
+        declare -p oneline
+set -x
         ## leading, trailing space 제거
         cmd=$(echo "${oneline[6]}" | xargs)
         lrev=$(echo "${oneline[0]}" | xargs)
+set +x
 
-
-        #declare -p oneline
         ## 만약 6번째 item에 명령이 없으면 skip
         if [[ -z "$cmd" ]];then continue; fi
 
@@ -566,7 +590,7 @@ EOF
         else
             $DEBUG "repp forall cmd from csv"
             REPPFILE_OUT=${REPPSCRIPT_TMP}; reppforgen_sh "${cmd}";
-            cat $REPPSCRIPT_PRE $REPPSCRIPT_TMP $REPPSCRIPT_POST > $REPPSCRIPT_TM
+            cat $REPPSCRIPT_PRE $REPPFILE_TMP $REPPSCRIPT_POST > $REPPSCRIPT_TM
             ccmd=$(cat $REPPSCRIPT_TMP)
             cmd="source $REPPSCRIPT_TM";
         fi
@@ -579,7 +603,7 @@ EOF
 
         if [ -z "$ask" ]; then pushd "$REPP_ROOT/${oneline[5]}";
             REPO_ROOT="$REPP_ROOT" REPO_LREV="${lrev}" REPO_GROUP="${oneline[1]}" REPO_REMOTE="${oneline[2]}" REPO_RREV="${oneline[3]}" \
-            REPO_PROJECT="${oneline[4]}" REPO_PATH="${oneline[5]}" REPP_VAR1="${REPP_VAR1}" REPP_VAR2="${REPP_VAR2}" ${cmd}
+            REPO_PROJECT="${oneline[4]}" REPO_PATH="${oneline[5]}" REPPSCRIPT_V1="${REPPSCRIPT_V1}" REPPSCRIPT_V2="${REPPSCRIPT_V2}" ${cmd}
 
             # ## REPP_RESULT값이 설정되지 않았을때에 대한 default값 설정
             # if [ "$__ret" = "NONE" ]; then [ $? -eq 0 ] && __ret='OKAY' || __ret='FAIL'; fi
