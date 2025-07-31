@@ -1,0 +1,1 @@
+echo "${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV} $1 [$2]"
