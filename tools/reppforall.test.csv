@@ -19,6 +19,7 @@ b23dd55f1a5d4fcc4ada2ffe8b3466bc7876c1b8,hlos,vgit_na,tiger_tsu_23my_release,tig
     */*/*|*/*/*/*)
           if [[ ""${REPO_PATH}"" =~ (.*build?)    ]]; then echo ""path:[${BASH_REMATCH[1]}]""
         elif [[ ""${REPO_PROJECT}"" =~ (.*build?) ]]; then echo ""project:[${BASH_REMATCH[1]}]""
+        else echo ""remote:[${REPO_REMOTE}]""
         fi
     ;;          *)  printf ""~~~~~~~~~~~~~~~${REPO_PROJECT}[%s]\n"" ""$1 $2""
 esac' - $USER $PWD",

@@ -247,49 +247,6 @@ EOF
 
 
 
-##아래는 repp forall 구현내용을 기록합니다.
-:<< COMMENT
-10. repp forall gen이나 repp forall -c <cmd>명령으로 reppforall.csv를 생성하게 된다.
- 11. 2경우 모두 reppforgen_csv 에서 처리하며, gen이면 전체repo/빈cmd, -c <cmd>이면 해당repo/cmd 형태를 가진 csv를 생성한다.
- 12. 여기서 repp forall testcase 명령으로 테스트를 위해 기존에 잘 동작하는 csv를 copy해온후 바로 repp forall로 구동해볼수 있다.
- 14. 생성된 reppforall.csv를 xls로 열어 원하는 명령이 되도록 편집을 완료한다.
-20. repp forall 명령으로 reppforall.csv에 기록된 repo를 돌아다니며, 각 cmd를 실행할수 있다.
- 21. 먼저 csv_fromlnx_towin 함수를 통해 reppforall.csv가 linux format이면 windows로 바꾼다. (PC 편집저장시 window format으로 저장되므로)
-30. csv heading를 읽어와 REPPSCRIPT_V1, REPPSCRIPT_V2등 먼저 변수들을 선언한다.
- 31. 파일 REPPSCRIPT_PRE, REPPSCRIPT_POST에 csv에 정의된 pre/post script를 읽어 저장해놓는다.
- 32. 이때 script들에 포함된 특수문자를 제거하기 위해 reppforgen_sh 함수를 호출하여 정제한다.
-40. 이제 reppforall.csv들의 본문(REPO_LREV 다음줄 기준)을 모두 읽어 arrayline 배열에 넣는다. (이를 위해 구분자를 backqoute로 하고, REPPSCRIPT가 존재하는 column만 저장)
- 41. 작업개요를 보여주기 위해 arrayline에 들어간 작업할 repo 정보와 cmd(REPPSCRIPT)를 모두 출력해준다.
- 42. REPPSCRIPT_V1/2변수와 REPPSCRIPT_PRE/POST script의 내용도 보여준다.
-50. repp forall명령을 각 repo마다 물어보면서 실행할지 한꺼번에 실행할지, 정보는 얼마나 출력할지 물어본다.
- 51. arrayline에서 한줄식 읽어와서 REPO_ROOT/LREV/GROUP/REMOTE/RREV/PROJECT/PATH/REPPSCRIPT_V1/REPPSCRIPT_V2/cmd 값을 저장한다. >>> 읽어온값에 특수문자가 있으므로 linux format으로 변환을 고려한다.
- 52. 읽어온 REPPSCRIPT(cmd)가 file이면 놔두고, cmd이면 file에 넣는다. 이후 source로 해당 file을 읽어오기 위함이다. >>> cmd일 경우도 pre,post 처리가 필요다.
- 53. 어째튼 REPPSCRIPT_PRE + REPPSCRIPT(cmd) + REPPSCRIPT_POST가 되도록 최종 실행 script 파일을 만든다.
-60. 이제 사용자에게 실행방법을 압력받아, 위의 REPP_XXX변수들과 함께 source 구문으로 script를 현재 shell에 넣어 실행한다.
- 61. 실행이 완료되면 arrayline에서 다음줄을 읽어와 위 51번부터 배열끝까지 반복한다. >>> 실행결과 처리가 필요할것으로 보인다.
-COMMENT
-
-
-##아래는 repp forall을 test하는 방법을 기술한다.
-:<< COMMENT
-아래와 같이 repp forall -c '명령'을 넣어서 실행해보거나, reppforall.csv의 REPP_SCRIPT 영역에 repp forall -c를 제외하고 명령을 넣어서 실행해본다.
->repp forall -c bash -c 'echo "${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}"'
->repp forall honda/con/autosar tiger/metas/meta-tiger -cj1 \
-    bash -c '[ "${REPO_REMOTE}" != "vgit_na" ] && echo "project:${REPO_PROJECT}" || echo "path:${REPO_PATH}" ' \
-    $USER $PWD
->repp forall -c bash -c 'case ${REPO_PROJECT} in
-    */*/*|*/*/*/*)
-          if [[ "${REPO_PATH}" =~ (.*build?)    ]]; then echo "path:[${BASH_REMATCH[1]}]"
-        elif [[ "${REPO_PROJECT}" =~ (.*build?) ]]; then echo "project:[${BASH_REMATCH[1]}]"
-        fi
-    ;;          *)  printf "~~~~~~~~~~~~~~~${REPO_PROJECT}[%s]\n" "$1 $2"
-esac' - $USER $PWD
->repp forall . -c bash ~/.proFILEs/repo_var.sh - $USER $PWD
->repp forall . -c bash -c 'revv accessall ${REPO_REMOTE} ${REPO_PROJECT}'
-COMMENT
-
-
-
 function csv_fromlnx_towin(){
 ## ---------------------------------------------------------------------------
 ## linux CSV file을 windows CSV file로 변경한다.
@@ -441,8 +398,6 @@ function reppforall(){
 # repp forall 일때는 reppforall.csv 를 읽어 실행한다.
 
     REPPFILE_OUT=
-    local REPPSCRIPT_PRE=$(mktemp)
-    local REPPSCRIPT_POST=$(mktemp)
     local fileincmd=$(mktemp)
     local opt
 
@@ -541,7 +496,6 @@ EOF
         fi
 
         if [[ "$cmd" =~ "repp forall" ]]; then err "csv must not include 'repp forall' cmd. it's recursive" ; return 1; fi
-        if [[ "$cmd" =~ "reppscript"  ]]; then err "csv must not include 'REPPSCRIPT_xx.sh' cmd. it's recursive" ; return 1; fi
 
         (( $total == 0 )) && { err "No target git project is found in $REPPFILE_FORALL
         If create above file by 'repp forall gen', Please add <your command> in REPP_SCRIPT column using excel" ; return 1; }
@@ -557,11 +511,12 @@ EOF
     ## leading, trailing space 제거
     echo
     bbar purple "check user common pre/post script" "▼▼▼ show full\n"
-    bbar purple "REPPSCRIPT_PRE"  "\n$(cat ${REPPSCRIPT_PRE})\n"
-    bbar purple "REPPSCRIPT_POST" "\n$(cat ${REPPSCRIPT_POST})\n"
+
+    bbar purple "REPPSCRIPT_PRE"  "$( [ -s "${REPPSCRIPT_PRE}"  ] && { echo; cat "${REPPSCRIPT_PRE}" ;} || printf "not-defind" )\n"
+    bbar purple "REPPSCRIPT_POST" "$( [ -s "${REPPSCRIPT_POST}" ] && { echo; cat "${REPPSCRIPT_POST}";} || printf "not-defind" )\n"
 
     ## repp forall 입력시 전체를 어떻게 실행할지 1회 물어본후, 각 명령어 실행시미다 다시 물어본다.
-    local i ccmd cmd= pro= lrev
+    local i ccmd cmd= pro= lrev from
     case "$opt" in    g|go|goo) :
         ;; '') read -p "$(echo -e "\n\n${cyan}[enter:execute by asking |g |go |goo: run all with log level |ctrl+c:break]:${NCOL}")" opt
         ;;  *) err "wrong option" ; return 1
@@ -571,7 +526,7 @@ EOF
     esac
 
 
-    touch $REPPSCRIPT_TM && chmod +x $REPPSCRIPT_TM
+    touch $REPPSCRIPT_OUT && chmod +x $REPPSCRIPT_OUT
     for ((count=0,total=0; count<${#arrayline[@]}; count++ )); do
         readarray -t -d\` oneline <<< "${arrayline[$count]}"
 
@@ -591,35 +546,35 @@ EOF
 
         ## 현재 context에서 실행을 위해 source로 file로 변환하여 호출한다.
         ## pre script + user command script + post script를 합쳐 실행파일을 만들고 이를 source로 실행할수 있도록 cmd에 할당한다.
-        cat $REPPSCRIPT_PRE > $REPPSCRIPT_TM
-        # if [[ -f "${cmd}" ]]; then
-        #     #cmd를 파일과 변수 양쪽으로 저장
-        #     ccmd=$(tee -a $REPPSCRIPT_TM < "${cmd}")
-        #     echo "file from csv";
-        # else #무조건 cmd로 인식시킨다.
-            #REPPFILE_OUT=${REPPSCRIPT_TMP}; reppforgen_sh "${cmd}";
-            printf "%s\n" "${cmd}" >> $REPPSCRIPT_TM
+        ## csv에 읽어온 script가 file이면 cat으로 out으로 넣고, cmd이면 printf로 out으로 넣는다.
+        cat $REPPSCRIPT_PRE > $REPPSCRIPT_OUT
+        if [[ -f "${cmd}" ]]; then from=file
+            #cmd를 파일과 변수 양쪽으로 저장
+            ccmd=$(tee -a $REPPSCRIPT_OUT < "${cmd}")
+        else from=' cmd'
+            #REPPFILE_OUT=${REPPSCRIPT_OUTP}; reppforgen_sh "${cmd}";
+            printf "%s\n" "${cmd}" >> $REPPSCRIPT_OUT
+            #cmd안에 존재하는 file이 있는경우, 모두 모아 그 내용을 보여주기 준다.
             for i in ${cmd}; do eval "[[ -f "$i" ]] && cat "$i" >> $fileincmd" 2> /dev/null; done
             ccmd=$(cat $fileincmd)
             : > $fileincmd  ##파일 내용 지우기
-            #echo "cmd from csv"
-        # fi
-        cat $REPPSCRIPT_POST >> $REPPSCRIPT_TM
+        fi
+        cat $REPPSCRIPT_POST >> $REPPSCRIPT_OUT
 
-        #if ! shellcheck -s bash -S error $REPPSCRIPT_TM ; then err "input command is not correct!"; return 1; fi
+        #if ! shellcheck -s bash -S error $REPPSCRIPT_OUT ; then err "input command is not correct!"; return 1; fi
 
         #g, go(with msg), goo(with fullmsg), enter, other를 물어본다.
-        if [ "$opt" = "go" ]; then ccmd=''; fi
-        if [ "$opt" != "g" ]; then under "[$((total=total+1))] ${oneline[4]}\n"; bbar cyan "${oneline[5]}" "\n[script] ${cmd}\n[detail] ${ccmd:=same}\n"; fi
-        if [ -z "$opt" ] || [ "$opt" = "debug" ]; then pushd "$REPP_ROOT/${oneline[5]}";
-            #debug cat ${REPPSCRIPT_TM}
-            #cmd="source $REPPSCRIPT_TM";
+        if [ "$opt" = "" ] || [ "$opt" = "go" ] || [ "$opt" = "goo" ]; then under "[$((total=total+1))] ${oneline[4]}\n"; fi
+        if [ "$opt" = "" ] || [ "$opt" = "goo" ]; then bbar cyan "${oneline[5]}" "\n[ csv] ${cmd}\n[$from] ${ccmd:=same}\n"; fi
+        if [ -z "$opt" ] || [ "$opt" = "debug" ] || [[ $opt =~ ^g[o]*$ ]]; then pushd "$REPP_ROOT/${oneline[5]}";
+            #debug cat ${REPPSCRIPT_OUT}
+            #cmd="source $REPPSCRIPT_OUT";
             #run command
             ## 각 repository마다 다시 한번씩 물어보게 된다. g|go|goo를 입력하면 나머지는 물어보지 않고 바로 실행한다.
-            read -p "$(echo -e "${yellow}[enter: run next |g |go |goo: run all with log level |other: skip next |ctrl+c: break all] :${NCOL}")" opt
-            [ "$opt" = "debug" ] && { [[ $- == *x* ]] && set +x || set -x; } #toglle set -x
+            [[ $opt =~ ^g[o]*$ ]] || read -p "$(echo -e "${yellow}[enter: run next |g |go |goo: run all with log level |other: skip next |ctrl+c: break all] :${NCOL}")" opt
+            if [ "$opt" = "debug" ]; then [[ $- == *x* ]] && set +x || set -x; fi #toglle set -x
             REPO_ROOT="$REPP_ROOT" REPO_LREV="${lrev}" REPO_GROUP="${oneline[1]}" REPO_REMOTE="${oneline[2]}" REPO_RREV="${oneline[3]}" \
-            REPO_PROJECT="${oneline[4]}" REPO_PATH="${oneline[5]}" REPPSCRIPT_V1="${REPPSCRIPT_V1}" REPPSCRIPT_V2="${REPPSCRIPT_V2}" source $REPPSCRIPT_TM
+            REPO_PROJECT="${oneline[4]}" REPO_PATH="${oneline[5]}" REPPSCRIPT_V1="${REPPSCRIPT_V1}" REPPSCRIPT_V2="${REPPSCRIPT_V2}" source $REPPSCRIPT_OUT
 
             # ## REPP_RESULT값이 설정되지 않았을때에 대한 default값 설정
             # if [ "$__ret" = "NONE" ]; then [ $? -eq 0 ] && __ret='OKAY' || __ret='FAIL'; fi
@@ -633,6 +588,55 @@ EOF
         fi
     done
 }
+
+##아래는 repp forall 구현내용을 기록합니다.
+:<< COMMENT
+10. repp forall gen이나 repp forall -c <cmd>명령으로 reppforall.csv를 생성하게 된다.
+ 11. 2경우 모두 reppforgen_csv 에서 처리하며, gen이면 전체repo/빈cmd, -c <cmd>이면 해당repo/cmd 형태를 가진 csv를 생성한다.
+ 12. 여기서 repp forall testcase 명령으로 테스트를 위해 기존에 잘 동작하는 csv를 copy해온후 바로 repp forall로 구동해볼수 있다.
+ 14. 생성된 reppforall.csv를 xls로 열어 원하는 명령이 되도록 편집을 완료한다.
+20. repp forall 명령으로 reppforall.csv에 기록된 repo를 돌아다니며, 각 cmd를 실행할수 있다.
+ 21. 먼저 csv_fromlnx_towin 함수를 통해 reppforall.csv가 linux format이면 windows로 바꾼다. (PC 편집저장시 window format으로 저장되므로)
+30. csv heading를 읽어와 REPPSCRIPT_V1, REPPSCRIPT_V2등 먼저 변수들을 선언한다.
+ 31. 파일 REPPSCRIPT_PRE, REPPSCRIPT_POST에 csv에 정의된 pre/post script를 읽어 저장해놓는다.
+ 32. 이때 script들에 포함된 특수문자를 제거하기 위해 reppforgen_sh 함수를 호출하여 정제한다.
+40. 이제 reppforall.csv들의 본문(REPO_LREV 다음줄 기준)을 모두 읽어 arrayline 배열에 넣는다. (이를 위해 구분자를 backqoute로 하고, REPPSCRIPT가 존재하는 column만 저장)
+ 41. 작업개요를 보여주기 위해 arrayline에 들어간 작업할 repo 정보와 cmd(REPPSCRIPT)를 모두 출력해준다.
+ 42. REPPSCRIPT_V1/2변수와 REPPSCRIPT_PRE/POST script의 내용도 보여준다.
+50. repp forall명령을 각 repo마다 물어보면서 실행할지 한꺼번에 실행할지, 정보는 얼마나 출력할지 물어본다.
+ 51. arrayline에서 한줄식 읽어와서 REPO_ROOT/LREV/GROUP/REMOTE/RREV/PROJECT/PATH/REPPSCRIPT_V1/REPPSCRIPT_V2/cmd 값을 저장한다.
+ 52. 읽어온 REPPSCRIPT(cmd)가 file이면 놔두고, cmd이면 file에 넣는다. 이후 source로 해당 file을 읽어오기 위함이다.
+ 53. 어째튼 REPPSCRIPT_PRE + REPPSCRIPT(cmd) + REPPSCRIPT_POST가 되도록 최종 실행 script 파일을 만든다.
+60. 이제 사용자에게 실행방법을 압력받아, 위의 REPP_XXX변수들과 함께 source 구문으로 script를 현재 shell에 넣어 실행한다.
+ 61. 실행이 완료되면 arrayline에서 다음줄을 읽어와 위 51번부터 배열끝까지 반복한다. >>> 실행결과 처리가 필요할것으로 보인다.
+COMMENT
+
+
+##아래는 repp forall을 test하는 방법을 기술한다.
+:<< COMMENT
+1. 아래와 같이 repp forall -c '명령'을 넣어서 실행해보거나, reppforall.csv의 REPP_SCRIPT 영역에 repp forall -c를 제외하고 명령을 넣어서 실행해본다.
+2. 먼저 아래 명령을 하나씩 입력한후 repp forall로 정상적으로 실행되는지 확인한다.
+    >repp forall -c bash -c 'echo "${REPO_REMOTE}:${REPO_PROJECT}:${REPO_PATH}:${REPO_LREV}:${REPO_RREV}"'
+    >repp forall honda/con/autosar tiger/metas/meta-tiger -cj1 \
+        bash -c '[ "${REPO_REMOTE}" != "vgit_na" ] && echo "project:${REPO_PROJECT}" || echo "path:${REPO_PATH}" ' \
+        $USER $PWD
+    >repp forall -c bash -c 'case ${REPO_PROJECT} in
+        */*/*|*/*/*/*)
+            if [[ "${REPO_PATH}" =~ (.*build?)    ]]; then echo "path:[${BASH_REMATCH[1]}]"
+            elif [[ "${REPO_PROJECT}" =~ (.*build?) ]]; then echo "project:[${BASH_REMATCH[1]}]"
+            else echo "remote:[${REPO_REMOTE}]"
+            fi
+        ;;          *)  printf "~~~~~~~~~~~~~~~${REPO_PROJECT}[%s]\n" "$1 $2"
+    esac' - $USER $PWD
+    >repp forall . -c bash ~/.proFILEs/repo_var.sh - $USER $PWD
+    >repp forall . -c 'revv accessall ${REPO_REMOTE} ${REPO_PROJECT}'
+##<주의> repp forall -c <cmd>안에서
+    #repp 지원명령은 bash없이 실행시켜야 한다. revv access는 bash -c 없이 실행시켜야 현재 context에서 실행됨
+    #repp forall -c 'repp forall testcase' #즉, script에서 repp forall 명령은 재귀호출됨으로 실행이 불가
+    #repp forall -c 'bash reppscript.in.sh' #reppscript로 시작하는 script역시 사용할수 없다. 재귀호출됨으로 안됨
+
+3. repp forall testcase 명령으로 기존에 준비된 csv를 reppforall.csv를 copy한후, repp forall로 검증한다.
+COMMENT
 
 
 
@@ -1854,8 +1858,11 @@ function repp_initvar(){
     #repp.csv.submodule                                 #repp.csv항목이 소유한 git submodule list
     REPPFILE_FORALL=${REPP_DIR}/reppforall.csv          #repp forall 작업을 진행하기 위한 script. repp forall gen로 생성됨. 구분자(,)
     REPPFILE_SCRIPT=${REPP_DIR}/reppscript              #repp forall에서 사용하는 script를 저장하는 파일들이다. in.tm.pre.post등이 존재한다.
-    REPPSCRIPT_IN=${REPPFILE_SCRIPT}.in.sh              #repp forall -c 명령으로 만들어진 script를 저장하는 공간
-    REPPSCRIPT_TM=${REPPFILE_SCRIPT}.tm.sh              #reppforall.csv에서 편집한 명령이 실제 실행될때 잠시 머무는 공간
+    REPPSCRIPT_PRE=${REPPFILE_SCRIPT}.pre.sh            #csv에서 REPPSCRIPT_PRE 왼쪽에 정의된 전처리 script
+    REPPSCRIPT_POST=${REPPFILE_SCRIPT}.post.sh          #csv에서 REPPSCRIPT_POST 왼쪽에 정의된 후처리 script
+    REPPSCRIPT_IN=${REPPFILE_SCRIPT}.in.sh              #repp forall -c <cmd> 부분으로 만들어진 임시 script
+    REPPSCRIPT_OUT=${REPPFILE_SCRIPT}.out.sh            #pre + in + post = out으로 최종 실행되는 script
+
     #reppforall.csv.tmp                                 #reppforall.csv를 실제 실행할때 구분자(`)로 변경하여 처리하기 위한 중간파일
 
 
