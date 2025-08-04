@@ -371,7 +371,7 @@ function reppforgen_sh(){
     wave
     [[ -z "$REPPFILE_OUT" ]] && { err "generated file name must be ready"; return 1; }
     [ "${@}" = "NONE" ] &&  return 0;
-    cmd=$(echo "${@}"| awk 'BEGIN {RS=""; FS="\n"} {gsub(/^["'\''"]|["'\''"]$/, ""); print}')
+    local cmd=$(echo "${@}"| awk 'BEGIN {RS=""; FS="\n"} {gsub(/^["'\''"]|["'\''"]$/, ""); print}')
 
     #declare -p cmd
     if [ -z "${cmd%%\'*}" ]; then
@@ -450,13 +450,22 @@ EOF
     grep -q $'\r' "$REPPFILE_FORALL" && fileencoding=windows || fileencoding=linux
     [ "$fileencoding" = "linux" ] && csv_fromlnx_towin "$REPPFILE_FORALL"
 
-    ## define custom variable REPPSCRIPT_V1, REPPSCRIPT_V2, and REPPSCRIPT_PRE, REPPSCRIPT_POST
+
+    ## 공통 custom 변수및 공통 pre/post script 확장
+    ## define custom variable REPPSCRIPT_V1, REPPSCRIPT_V2
     readarray -d\` -t array_var < <(cat "$REPPFILE_FORALL"| awk 'BEGIN{FS=","; RS="\r\n"; OFS="`"; ORS="`";} \
     NR>=1 && NR<=2 {gsub(/""/,"\"",$0); gsub(/\r/,"",$7);print $4"`"$5"`"$6"`"$7}')
     eval "${array_var[0]}=${array_var[1]}"
     eval "${array_var[2]}=${array_var[3]}"
-    REPPFILE_OUT=${REPPSCRIPT_PRE} ; reppforgen_sh "${array_var[5]}"
-    REPPFILE_OUT=${REPPSCRIPT_POST}; reppforgen_sh "${array_var[7]}"
+    #REPPFILE_OUT=${REPPSCRIPT_PRE} ; reppforgen_sh "${array_var[5]}"
+    #REPPFILE_OUT=${REPPSCRIPT_POST}; reppforgen_sh "${array_var[7]}"
+
+    local reppscript_pre="${array_var[5]%$'\n'}"; #맨뒤에 \n은 삭제
+    reppscript_pre="${reppscript_pre#\$'}" ; reppscript_pre="${reppscript_pre%'}"    # '~~~'' 삭제
+    reppscript_pre="${reppscript_pre#*\"}" ; reppscript_pre="${reppscript_pre%\"*}"  # "~~~" 삭제
+    local reppscript_post="${array_var[7]%$'\n'}" #맨뒤에 \n은 삭제
+    reppscript_post="${reppscript_post#\$'}" ; reppscript_post="${reppscript_post%'}"    # '~~~'' 삭제
+    reppscript_post="${reppscript_post#*\"}" ; reppscript_post="${reppscript_post%\"*}"  # "~~~" 삭제
 
 
     ##전체 csv를 읽어 array로 바꾸는 작업으로 이를 위해 먼저 reppforall.csv의 구분자를 comma(,)에서 backquote(``)로 바꾼다.
@@ -511,9 +520,8 @@ EOF
     ## leading, trailing space 제거
     echo
     bbar purple "check user common pre/post script" "▼▼▼ show full\n"
-
-    bbar purple "REPPSCRIPT_PRE"  "$( [ -s "${REPPSCRIPT_PRE}"  ] && { echo; cat "${REPPSCRIPT_PRE}" ;} || printf "not-defind" )\n"
-    bbar purple "REPPSCRIPT_POST" "$( [ -s "${REPPSCRIPT_POST}" ] && { echo; cat "${REPPSCRIPT_POST}";} || printf "not-defind" )\n"
+    bbar purple "REPPSCRIPT_PRE"  "$( printf "\n%s" "${reppscript_pre:-not-defind}"  )\n"
+    bbar purple "REPPSCRIPT_POST" "$( printf "\n%s" "${reppscript_post:-not-defind}" )\n"
 
     ## repp forall 입력시 전체를 어떻게 실행할지 1회 물어본후, 각 명령어 실행시미다 다시 물어본다.
     local i ccmd cmd= pro= lrev from
@@ -547,7 +555,7 @@ EOF
         ## 현재 context에서 실행을 위해 source로 file로 변환하여 호출한다.
         ## pre script + user command script + post script를 합쳐 실행파일을 만들고 이를 source로 실행할수 있도록 cmd에 할당한다.
         ## csv에 읽어온 script가 file이면 cat으로 out으로 넣고, cmd이면 printf로 out으로 넣는다.
-        cat $REPPSCRIPT_PRE > $REPPSCRIPT_OUT
+        printf "%s\n" "${reppscript_pre}" > $REPPSCRIPT_OUT
         if [[ -f "${cmd}" ]]; then from=file
             #cmd를 파일과 변수 양쪽으로 저장
             ccmd=$(tee -a $REPPSCRIPT_OUT < "${cmd}")
@@ -559,20 +567,25 @@ EOF
             ccmd=$(cat $fileincmd)
             : > $fileincmd  ##파일 내용 지우기
         fi
-        cat $REPPSCRIPT_POST >> $REPPSCRIPT_OUT
+        printf "%s\n" "${reppscript_post}" >> $REPPSCRIPT_OUT
 
         #if ! shellcheck -s bash -S error $REPPSCRIPT_OUT ; then err "input command is not correct!"; return 1; fi
 
         #g, go(with msg), goo(with fullmsg), enter, other를 물어본다.
-        if [ "$opt" = "" ] || [ "$opt" = "go" ] || [ "$opt" = "goo" ]; then under "[$((total=total+1))] ${oneline[4]}\n"; fi
-        if [ "$opt" = "" ] || [ "$opt" = "goo" ]; then bbar cyan "${oneline[5]}" "\n[ csv] ${cmd}\n[$from] ${ccmd:=same}\n"; fi
+        if [ "$opt" != "g" ]; then under "[$((total=total+1))] ${oneline[4]}\n"; fi
+        if [ "$opt" != "g" ] || [ "$opt" != "go" ]; then bbar cyan "${oneline[5]}" "\n[ csv] ${cmd}\n[$from] ${ccmd:=same}\n"; fi
         if [ -z "$opt" ] || [ "$opt" = "debug" ] || [[ $opt =~ ^g[o]*$ ]]; then pushd "$REPP_ROOT/${oneline[5]}";
-            #debug cat ${REPPSCRIPT_OUT}
+            #debug echo ${REPPSCRIPT_OUT}
             #cmd="source $REPPSCRIPT_OUT";
             #run command
             ## 각 repository마다 다시 한번씩 물어보게 된다. g|go|goo를 입력하면 나머지는 물어보지 않고 바로 실행한다.
             [[ $opt =~ ^g[o]*$ ]] || read -p "$(echo -e "${yellow}[enter: run next |g |go |goo: run all with log level |other: skip next |ctrl+c: break all] :${NCOL}")" opt
-            if [ "$opt" = "debug" ]; then [[ $- == *x* ]] && set +x || set -x; fi #toglle set -x
+            case "$opt" in
+                g|go|goo|'') :
+                ;; debug) [[ $- == *x* ]] && set +x || set -x #toggle debug
+                ;; *) opt= ; echo skipped && continue
+            esac
+
             REPO_ROOT="$REPP_ROOT" REPO_LREV="${lrev}" REPO_GROUP="${oneline[1]}" REPO_REMOTE="${oneline[2]}" REPO_RREV="${oneline[3]}" \
             REPO_PROJECT="${oneline[4]}" REPO_PATH="${oneline[5]}" REPPSCRIPT_V1="${REPPSCRIPT_V1}" REPPSCRIPT_V2="${REPPSCRIPT_V2}" source $REPPSCRIPT_OUT
 
@@ -584,7 +597,6 @@ EOF
             # else awk -v count="$((count+3))" -v ret="$__ret" 'BEGIN{RS=ORS="\n"} NR==count {print $0,ret}' "$REPPFILE_FORALL"   >> ${REPPFILE_FORALL%\.*}_result.csv
             # fi
             popd
-        else echo skipped && continue
         fi
     done
 }
@@ -598,8 +610,8 @@ EOF
 20. repp forall 명령으로 reppforall.csv에 기록된 repo를 돌아다니며, 각 cmd를 실행할수 있다.
  21. 먼저 csv_fromlnx_towin 함수를 통해 reppforall.csv가 linux format이면 windows로 바꾼다. (PC 편집저장시 window format으로 저장되므로)
 30. csv heading를 읽어와 REPPSCRIPT_V1, REPPSCRIPT_V2등 먼저 변수들을 선언한다.
- 31. 파일 REPPSCRIPT_PRE, REPPSCRIPT_POST에 csv에 정의된 pre/post script를 읽어 저장해놓는다.
- 32. 이때 script들에 포함된 특수문자를 제거하기 위해 reppforgen_sh 함수를 호출하여 정제한다.
+ 31. 변수 reppscript_pre, reppscript_post에 csv에 정의된 pre/post script를 읽어 저장해놓는다.
+ 32. 이때 script들에 포함된 특수문자를 제거하기 위해 reppforgen_sh 함수(대체함)를 호출하여 정제한다.
 40. 이제 reppforall.csv들의 본문(REPO_LREV 다음줄 기준)을 모두 읽어 arrayline 배열에 넣는다. (이를 위해 구분자를 backqoute로 하고, REPPSCRIPT가 존재하는 column만 저장)
  41. 작업개요를 보여주기 위해 arrayline에 들어간 작업할 repo 정보와 cmd(REPPSCRIPT)를 모두 출력해준다.
  42. REPPSCRIPT_V1/2변수와 REPPSCRIPT_PRE/POST script의 내용도 보여준다.
@@ -1858,8 +1870,6 @@ function repp_initvar(){
     #repp.csv.submodule                                 #repp.csv항목이 소유한 git submodule list
     REPPFILE_FORALL=${REPP_DIR}/reppforall.csv          #repp forall 작업을 진행하기 위한 script. repp forall gen로 생성됨. 구분자(,)
     REPPFILE_SCRIPT=${REPP_DIR}/reppscript              #repp forall에서 사용하는 script를 저장하는 파일들이다. in.tm.pre.post등이 존재한다.
-    REPPSCRIPT_PRE=${REPPFILE_SCRIPT}.pre.sh            #csv에서 REPPSCRIPT_PRE 왼쪽에 정의된 전처리 script
-    REPPSCRIPT_POST=${REPPFILE_SCRIPT}.post.sh          #csv에서 REPPSCRIPT_POST 왼쪽에 정의된 후처리 script
     REPPSCRIPT_IN=${REPPFILE_SCRIPT}.in.sh              #repp forall -c <cmd> 부분으로 만들어진 임시 script
     REPPSCRIPT_OUT=${REPPFILE_SCRIPT}.out.sh            #pre + in + post = out으로 최종 실행되는 script
 
