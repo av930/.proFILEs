@@ -106,7 +106,7 @@ function reppshow_manifesttree(){
         if grep -ne "$string" ${manifest}; then wave; fi
     else
     ##print name of branches not revision
-    cat ${manifest}| sed -n 's/.*revision="\([^ |\t]*\)".*/\1/p'| grep -v '^[a-f0-9]*$'| uniq| xargs -I {} printf "%60s {}\n"
+    cat ${manifest}| sed -n 's/.*revision="\([^ |\t]*\)".*/\1/p'| grep -v '^[a-f0-9]*$'| sort| uniq| xargs -I {} printf "%60s {}\n"
     ##print only 10 revision for notice
     cat ${manifest}| sed -n 's/.*revision="\([^ |\t]*\)".*/\1/p'| grep -e '^[a-f0-9]*$'| head -10| xargs -I {} printf "%60s {}\n"
     fi
@@ -661,7 +661,7 @@ function reppdiff(){
     local src=$2
     local target=$3
 
-    [[ ! "${PWD}" =~ "${REPP_PATH}" ]] && pushd ${REPP_PATH}
+    [[ ! "${PWD}" = "${REPP_PATH}" ]] && pushd ${REPP_PATH}
 
     reppget_repcmd
     case ${cmd} in
@@ -686,7 +686,9 @@ function reppdiff(){
                 if [ -z "$target" ]; then [[ "$opt" =~ " " ]] && [ -z "${opt#* }" ] && target="${opt#* }" || target=${REPPFILE_MANI}; fi
 
                 ##check if both manifest files exists?
-                if [ ! -f "${src}" ] || [ ! -f "${target}" ]; then err "file is not existed"; return 1; fi
+                if [ ! -f "${src}"    ]; then err "${src} file is not existed"; return 1; fi
+                if [ ! -f "${target}" ]; then err "${target} file is not existed"; return 1; fi
+
                 repo --no-pager diffmanifests --no-color --raw ${src:=${opt% *}} ${target} --pretty-format='> %s| %h| %an| %ci'|sed -e 's/\[m//g' >${REPP_DIR}/repp.diff.tmp
                 #repo --no-pager diffmanifests --no-color --raw  Daily/POIP_240627.xml default.xml --pretty-format='>%s|%h|%an|%ci'|sed -e 's/\[m//g' >${REPP_DIR}/repp.diff.tmp
                 cat ${REPP_DIR}/repp.diff.tmp| sed -e '/Merge commit/d;/Merge "/d'| while read -r line; do [ "${line:2:1}" = '>' ] && echo "${line/ /|}" || echo -e "|||\n|||\n${line// /|}" ; done > ${REPP_DIR}/repp.diff2
@@ -704,6 +706,7 @@ function reppdiff(){
 EOL
                 info "diff list is saved to ${REPP_DIR}/repp.diff"
                 info "changenote is saved to ${REPP_DIR}/repp.changes"
+
     ;;  diffcheck)
                 local cpath cbrold cbrnew cremote cproject ccommitid deployed
                 IFS=' '; cat ${REPP_DIR}/repp.diff | sed -e 's/\x1b\[[0-9;]*m//g'| while read -r -a line; do
@@ -724,8 +727,6 @@ EOL
                     esac
                 done
     esac
-
-
     popd
 }
 
@@ -942,7 +943,7 @@ EOF
                 return 0
       ;;root)   cd "${REPP_ROOT:-${GITT_PATH}}"; if [ "${current_dir}" = "${PWD}" ]; then warn "path is not changed" && return 1; else return 0; fi
       ;;mani)   cd "${REPP_PATH}"; if [ "${current_dir}" = "${PWD}" ]; then warn "path is not changed" && return 1; else return 0; fi
-    ;;git|'')   cd "${GITT_PATH}"; if [ "${current_dir}" = "${PWD}" ]; then warn "path is not changed" && return 1; else return 0; fi
+    ;;git|'')   cd "${GITT_PATH:?'can not find .git path'}"; if [ "${current_dir}" = "${PWD}" ]; then warn "path is not changed" && return 1; else return 0; fi
     esac
 
     if ! repp_initvar; then warn "your are not in repo"; return 1; fi
@@ -1017,7 +1018,8 @@ function repp_initdb(){
         clog "column need to reinstalled, please 'repp install'";
     fi
 
-    laptime reset; warn "REPP DB will be regenerated"; wave
+    #laptime reset;
+    warn "REPP DB will be regenerated"; wave
     ## generate json from manifest, #suppress all log for generation json
     [ -d ${REPP_DIR} ] || mkdir ${REPP_DIR}
     repo manifest -r --json -o ${REPPFILE_JSON} &>/dev/null
@@ -1084,7 +1086,7 @@ function repp_initdb(){
         mani_out+=("$lineout")
     done
 
-    laptime
+    #laptime
     ## make result output
     #declare -p mani_out
     printf "%s\n" "${mani_out[@]}" >  ${REPPFILE_CSV}.json
@@ -1155,7 +1157,7 @@ function repp_initdb(){
     repo forall -cj16 'printf "%s""$( cat .gitmodules|grep -oP "(?<=path \= ).*" |xargs -I{} echo $REPO_PATH {})"' > ${REPPFILE_CSV}.submodule
     repo forall -cj16 '[ -e .gitattributes ] && [ -n  "$(git check-attr -a *|grep lfs)" ] && echo $REPO_PATH' > ${REPPFILE_CSV}.lfs
 
-    laptime; wave; REPP_INIT=2 #repp DB까지 초기화 완료
+    laptime; wave; REPP_INIT=3 #repp DB까지 초기화 완료
     return 0
     #cat ${REPPFILE_JSON}|jq -cC '.project[]|{groups,remote,upstream,"dest-branch",revision,name,path}'
     #cat ${REPPFILE_JSON}|jq -jr '.project[]|.groups,"|",.remote,"|",.upstream,"|",."dest-branch","|",.revision,"|",.name,"|",.path,"\n"'
@@ -1845,12 +1847,17 @@ function repp_initvar(){
     reppfind_repodir .repo/manifests 5
     ## set variable REPP if manifest dir exists
     if [ ! -d "${REPP_PATH}" ];then $DEBUG ${REPP_PATH_ALL[@]}; $DEBUG "you are not in repo project, please check !"; return 1;fi
+    REPP_ROOT=${REPP_PATH%/.repo*}
     ## 이미 초기화된 dir인지 판단.
-    (( "${REPP_INIT}" > 0 ))  && [ -d "${REPP_PATH}" ] && [[ "${REPP_PATH}" =~ "${REPP_ROOT}" ]] && return 0
+    if [ ! -f "${REPP_ROOT}/.repo/project.list" ] || [ ! -d "${REPP_ROOT}/.repo/projects" ] || [ ! -d "${REPP_ROOT}/.repo/project-objects" ];
+    then  err "repo sync is need, please check" ; return 1
+    else  REPP_INIT=1 #repo sync까지 완료
+    fi
+
+    (( "${REPP_INIT}" > 1 ))  && [ -d "${REPP_PATH}" ] && [[ "${REPP_PATH}" =~ "${REPP_ROOT}" ]] && return 0
 
 
     pushd ${REPP_PATH}
-    REPP_ROOT=${REPP_PATH%/.repo*}
     REPP_DIR=${REPP_ROOT}/.repp
     [ -f ${REPP_ROOT} ] || mkdir -p ${REPP_DIR}
 
@@ -1885,7 +1892,7 @@ function repp_initvar(){
 
     #REPP_REMOTE=$(getServer $(git remote -v |grep fetch | grep -oP '(?<=:)[0-9]+(?=/)') remote)
     if [[ -z $REPP_REMOTE ]]; then
-        REPP_REMOTE=$(cat ${REPPFILE_JSON} |jq -r '.default.remote')
+        REPP_REMOTE=$(cat ${REPPFILE_JSON} 2>/dev/null |jq -r '.default.remote')
         if [[ -z "${REPP_REMOTE}" ]] || [[ "${REPP_REMOTE}" == "null" ]] ; then
             reppget_repcmd
             local tmp=$(git config --get-regexp ^remote.*.url | sed 's/.*:\([0-9]*\).*/\1/')
@@ -1905,7 +1912,7 @@ function repp_initvar(){
 
     REPP_REMOTELIST=( $(repo manifest 2>/dev/null |grep review | sed -E 's#.*name="([^"]*[^"]*)".*#\1#') )
     REPP_REVIEWLIST=( $(repo manifest 2>/dev/null |grep review | sed -E 's#.*review="([^"]*[^"]*)".*#\1#') )
-    REPP_INIT=1 #기본초기화 완료
+    REPP_INIT=2 #repp script 적용완료
     popd
 
     return 0
@@ -1987,7 +1994,7 @@ function reppcheck_initvar(){
     ## --------------------------------------------------------
     if [[ "${cmd}" =~ "repp" ]]; then
         if ! repp_initvar ;then #repo project가 아닐때
-            if ! "$besttry" ; then warn "you are not in repo project" && return 1;fi
+            if ! "$besttry" ; then warn "repo is not initialized well, please check" && return 1;fi
         else
             [[ "${cmd}" =~ "mani" ]] || repp_initdb
         fi
@@ -2337,8 +2344,8 @@ function gittbranch(){
 				usage) gitt branch create|new <name>            # create new branch with exact-name, with confirm
 				usage) gitt branch delete|remove <name>         # delete branch with exact-name, with confirm 'y'
 				   ex) gitt branch create my_temp_branch        # create my_temp_branch, with confirm 'y'
-
-				 info) gitt diff                                # see gitt diff to compare branch
+				usage) gitt branch diff <branchA> <branchB>     # compare commit history between 2 branches
+				 info) gitt diff                                # see gitt diff to compare branch by snapshot not history
 EOF
     ;; create|new)  if [ -z "${name}" ]; then err "branch name must be input" && return 1;fi
                 if [[ "${target}" =~ 'empty' ]]; then
@@ -2360,6 +2367,19 @@ EOF
                 set -o noglob
                 gittbranch_list "${name:-*}"
                 set +o noglob
+    ;; diff)    local tempvar=$(git branch -rvv --sort=committerdate --list *${name}* |sed 's/^[[:space:]]*//'| cut -d' ' -f1)
+                [ "$name" = "$tempvar" ] || { warn "branch name is wrong";  bar inline "must be input as the following"; git branch -rvv --sort=committerdate --list *${name}* *${target}*; return 0; }
+                bar inline "show tree between [${name}] [${target}]"
+                git log --color=always --graph --decorate=short --oneline --boundary $(git merge-base "${name}" "${target}" ).. "${name}" "${target}" \
+                    --pretty=format:'%C(yellow)%h -%C(reset)%s %Cgreen(%ci) %C(red)%d%Creset' |sed -E 's/tag:[^,]*,? ?//g'
+
+                under  "\n\n> [${target} only commits]\n"
+                showRUN git log --shortstat --decorate=no --pretty=format:'%C(yellow)%h -%C(reset)%s %C(blue)<%an>%Creset' ${name}..${target}
+
+                under  "< [${name} only commits]\n"
+                showRUN git log --shortstat --decorate=no --pretty=format:'%C(yellow)%h -%C(reset)%s %C(blue)<%an>%Creset' ${target}..${name}
+
+
     ;; *) gittbranch help
     ;; esac
 }
@@ -3519,8 +3539,8 @@ case "$1" in
     ;; branch)      reppcheck_initvar repp              &&  reppbranch "${@:2}"
     ;; mani)        reppcheck_initvar reppmani          &&  reppmani "${@:2}";
     ;; forall)      reppcheck_initvar repp              &&  reppforall "${@:2}";
-    ;; init)        reppcheck_initvar repp              &&  reppinit "${@:2}"
-    ;; sync)        reppcheck_initvar repp              &&  reppsync "${@:2}"
+    ;; init)                                                reppinit "${@:2}"
+    ;; sync)                                                reppsync "${@:2}"
     ;; reset)       reppcheck_initvar repp              &&  reppreset "${@:2}"
     ;; version)     reppcheck_initvar repp              &&  reppversion "${@:2}"
     ;; connect)                                             reppconnect "${@:2}"
@@ -3583,7 +3603,7 @@ function reppdebug(){
         bar inline "GITT_VARIABLE && REPP_VARIABLE for all repository"
         for var in \
         '${GITT_REMOTE}' '${GITT_PROJECT}' '${GITT_BRANCH}' '${GITT_PATH}' '${GITT_REVIEW}' '${GITT_URL}' \
-        '${REPP_PATH}' '${REPP_ROOT}' '${REPP_REMOTE}' '${REPP_PROJECT}' '${REPP_BRANCH}' '${REPP_URL}' '${REPP_REPOURL}' '${REPP_REF}' '${REPP_GROUPS}' '${REPP_COUNT}' \
+        '${REPP_PATH}' '${REPP_ROOT}' '${REPP_INIT}' '${REPP_REMOTE}' '${REPP_PROJECT}' '${REPP_BRANCH}' '${REPP_URL}' '${REPP_REPOURL}' '${REPP_REF}' '${REPP_GROUPS}' '${REPP_COUNT}' \
         '${REPPFILE_STATUS}' '${REPPFILE_COMMIT}' '${REPPFILE_CSV}' '${REPPFILE_XML}' '${REPPFILE_MANI}'
         do
            dnlog "$var\t" $(eval echo $var)
@@ -3705,5 +3725,5 @@ else err "you must run repp using 'source repp'"; fi
 # 2. 이후 repp 함수에서 repp info와 같이 직접명령을 실행하거나, 아니면 menu를 통해서 실행
 # 3. reppcheck_initvar에서 입력된 명령에 따라 repp,gitt,revv 대한 설정
 # 4. repp_initvarr를 통한 repp환경 설정, REPP_INIT 변수를 설정함으로 초기화가 잘되었음을 표시한다.
-# *  REPP_INIT=0 source됨, REPP_INIT=1 repp_initvar로 초기화완료, REPP_INIT=2 repp_initdb로 db까지 초기화 완료
+# *  REPP_INIT=0 source됨, REPP_INIT=1 repo init상태, REPP_INIT=2이면 repp script 초기화완료, REPP_INIT=3 repp_initdb로 db까지 초기화 완료
 # 5. repp find 명령을 넣으면 repp함수에서 find 명령인 확인하여 reppfind를 호출하는 방식으로 구동된다.
