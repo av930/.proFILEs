@@ -60,6 +60,21 @@ laptime() {
     echo "<<<< $(( _lapn++ )) [ $(echo "$_now - $_lapc" | bc) ]";
 }
 
+showcolor(){
+    printf "${red}%8s\t%-24s${NCOL}\n"   "red"     "abcdefg 0123456789 ---- ===="
+    printf "${RED}%8s\t%-24s${NCOL}\n"   "RED"     "abcdefg 0123456789 ---- ===="
+    printf "${green}%8s\t%-24s${NCOL}\n" "green"   "abcdefg 0123456789 ---- ===="
+    printf "${GREEN}%8s\t%-24s${NCOL}\n" "GREEN"   "abcdefg 0123456789 ---- ===="
+    printf "${yellow}%8s\t%-24s${NCOL}\n" "yellow" "abcdefg 0123456789 ---- ===="
+    printf "${YELLOW}%8s\t%-24s${NCOL}\n" "YELLOW" "abcdefg 0123456789 ---- ===="
+    printf "${blue}%8s\t%-24s${NCOL}\n"  "blue"    "abcdefg 0123456789 ---- ===="
+    printf "${BLUE}%8s\t%-24s${NCOL}\n"  "BLUE"    "abcdefg 0123456789 ---- ===="
+    printf "${cyan}%8s\t%-24s${NCOL}\n"  "cyan"    "abcdefg 0123456789 ---- ===="
+    printf "${CYAN}%8s\t%-24s${NCOL}\n"  "CYAN"    "abcdefg 0123456789 ---- ===="
+    printf "${magenta}%8s\t%-24s${NCOL}\n" "magenta" "abcdefg 0123456789 ---- ===="
+    printf "${purple}%8s\t%-24s${NCOL}\n" "purple"  "abcdefg 0123456789 ---- ===="
+}
+
 showline(){
 printf 'usage:        log "|HEAD $PPID" "BODY Hello World \\t\\tcharEND\\n":';         log "|HEAD $PPID" "BODY Hello World \t\tcharEND\n"
 printf 'usage:       dlog "|HEAD $PPID" "BODY Hello World \\t\\tcharEND\\n":';        dlog "|HEAD $PPID" "BODY Hello World \t\tcharEND\n"
