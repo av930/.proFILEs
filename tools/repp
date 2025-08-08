@@ -2052,7 +2052,7 @@ EOF
 
 shortname_of_branch() {
     local input="$1"
-    # _가 2번 나오기 전까지 추출
+    # branch name에서 뒤에서부터 _가 2번 나올때까지 삭제하고 prefix만 취해서 검색
     local out="${input%_*_*}";
     if [ ${#out} -gt 12 ] || [ ${#out} -le 6 ]; then echo "${input:0:10}" ; else echo "$out"; fi
 }
@@ -2133,14 +2133,14 @@ function gittinfo(){
     else clog "last manifest-synced date(check date of files below):" "\n$(ls -lct ${GITT_PATH}/.git| tail -1)";fi
     IFS=${oldIFS}
 
-    bar inline "show branchout list from current branch within 3months (botton is newest)"
-    remote_commits=$(git ls-remote -h ${GITT_REMOTE} refs/heads/$(shortname_of_branch ${GITT_BRANCH})* |colrm 10 40)
+    bar inline "show branchout list from current branch within 4 months (botton is newest)"
+    remote_commits=$(git ls-remote -h ${GITT_REMOTE} refs/heads/$(shortname_of_branch ${GITT_BRANCH})*)
 
-    # 최근 3개월간 commit중에서 branch-out된 브랜치를 모두 listup하기위해, 해당 commit에 맞는 branch를 출력한다.
+    # 최근 4개월간 commit중에서 branch-out된 브랜치를 모두 listup하기위해, 해당 commit에 맞는 branch를 출력한다.
     local tmp
-    git log --since="3 months ago" --pretty=format:'%h %ci <%an> %s' --reverse | while read -r sha; do
-        tmp=${sha:36}
-        printf "$remote_commits" | grep --color=never "${sha%% *}" && printf "%2s ${green}%s ${purple}%s> ${blue}%s${NCOL}\n" "" "${sha:11:25}" "${tmp%%>*}" "${tmp#*>}"
+    git log --since="4 months ago" --pretty=format:'%H %ci <%an> %s' --reverse | while read -r sha; do
+        tmp=${sha:67} #author 시작되는 column
+        printf "$remote_commits" | grep --color=never "${sha%% *}" && printf "%2s ${green}%s ${purple}%s> ${blue}%s${NCOL}\n" "" "${sha:41:25}" "${tmp%%>*}" "${tmp#*>}"
     done
 }
 
@@ -2298,9 +2298,12 @@ function gittbranch_info(){
     if [ $? -eq 0 ]; then warn "local branch is same to remote branch";
     else warn "there is no remote branches same to current HEAD pointing, please below log"; fi
 
-    bar inline "git log all branches without tag info"
-    git loga|sed -E 's/tag:[^,]*,? ?//g'
-    info "if you want to see TAG infomation use 'git loga'"
+    local tmp=$(shortname_of_branch ${GITT_BRANCH})
+    bar inline "git log the related branches(${tmp}), tag info omitted (last 4 months)"
+    git log --color=always --graph --decorate --pretty=format:'%Cred%h%Creset %s %Cgreen(%cr)%Creset %C(red)%d%Creset' --since="4 months ago" \
+        $(git for-each-ref --format='%(refname:short)' refs/heads/ | grep ${tmp}) |sed -E 's/tag:[^,]*,? ?/|/g'
+    echo
+    info "if you want to see omitted TAG infomation (${red}|${NCOL}) use 'git loga'"
 }
 
 
