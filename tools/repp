@@ -2049,6 +2049,15 @@ EOF
 
 
 
+
+shortname_of_branch() {
+    local input="$1"
+    # _가 2번 나오기 전까지 추출
+    local out="${input%_*_*}";
+    if [ ${#out} -gt 12 ] || [ ${#out} -le 6 ]; then echo "${input:0:10}" ; else echo "$out"; fi
+}
+
+
 function gittinfo(){
 ## ---------------------------------------------------------------------------
 # main handler for this scriptre
@@ -2123,6 +2132,16 @@ function gittinfo(){
     if [ -f ${GITT_PATH}/.git/FETCH_HEAD ]; then clog "last manifest-synced date: " $(stat -c %y ${GITT_PATH}/.git/FETCH_HEAD );
     else clog "last manifest-synced date(check date of files below):" "\n$(ls -lct ${GITT_PATH}/.git| tail -1)";fi
     IFS=${oldIFS}
+
+    bar inline "show branchout list from current branch within 3months (botton is newest)"
+    remote_commits=$(git ls-remote -h ${GITT_REMOTE} refs/heads/$(shortname_of_branch ${GITT_BRANCH})* |colrm 10 40)
+
+    # 최근 3개월간 commit중에서 branch-out된 브랜치를 모두 listup하기위해, 해당 commit에 맞는 branch를 출력한다.
+    local tmp
+    git log --since="3 months ago" --pretty=format:'%h %ci <%an> %s' --reverse | while read -r sha; do
+        tmp=${sha:36}
+        printf "$remote_commits" | grep --color=never "${sha%% *}" && printf "%2s ${green}%s ${purple}%s> ${blue}%s${NCOL}\n" "" "${sha:11:25}" "${tmp%%>*}" "${tmp#*>}"
+    done
 }
 
 
@@ -2279,8 +2298,9 @@ function gittbranch_info(){
     if [ $? -eq 0 ]; then warn "local branch is same to remote branch";
     else warn "there is no remote branches same to current HEAD pointing, please below log"; fi
 
-    bar inline "git log all branches cmd:'git loga' "
-    git loga
+    bar inline "git log all branches without tag info"
+    git loga|sed -E 's/tag:[^,]*,? ?//g'
+    info "if you want to see TAG infomation use 'git loga'"
 }
 
 
@@ -2293,7 +2313,7 @@ function gittbranch_list(){
     local filter
 
     read -p "'git fetch' is needed to get recent branch details [enter:continue| ctrl+c:break] :"
-    git fetch
+    git fetch --all
     bar inline "remote tag] recent 20 by date (bottom is newest create tag)"
     echo "get all branches and sort by date recent its tag"
     showRUNQ "git for-each-ref --color=always --sort=creatordate refs/tags \
@@ -2367,10 +2387,13 @@ EOF
                 set -o noglob
                 gittbranch_list "${name:-*}"
                 set +o noglob
-    ;; diff)    local tempvar=$(git branch -rvv --sort=committerdate --list *${name}* |sed 's/^[[:space:]]*//'| cut -d' ' -f1)
+    ;; diff)    if [ -z "${name}" ]; then err "branch name must be input, if you don't know use 'gitt branch list'" && return 1;fi
+                local tempvar=$(git branch -rvv --sort=committerdate --list ${name} |sed 's/^[[:space:]]*//'| cut -d' ' -f1)
                 [ "$name" = "$tempvar" ] || { warn "branch name is wrong";  bar inline "must be input as the following"; git branch -rvv --sort=committerdate --list *${name}* *${target}*; return 0; }
                 bar inline "show tree between [${name}] [${target}]"
-                git log --color=always --graph --decorate=short --oneline --boundary $(git merge-base "${name}" "${target}" ).. "${name}" "${target}" \
+                git fetch --all
+                local base=$(git merge-base "${name}" "${target}") || { git fetch --all; }
+                git log --color=always --graph --decorate=short --oneline --boundary ${base}.. "${name}" "${target}" \
                     --pretty=format:'%C(yellow)%h -%C(reset)%s %Cgreen(%ci) %C(red)%d%Creset' |sed -E 's/tag:[^,]*,? ?//g'
 
                 under  "\n\n> [${target} only commits]\n"
