@@ -491,13 +491,16 @@ EOF
     bbar cyan "check user input commands" "▼▼▼ show only 100 char \n"
     local count total cmd pro
     local oneline=()
+    #laptime reset
     for ((count=0,total=0; count<${#arrayline[@]}; count++ )); do
         ##read oneline to array
         readarray -t -d\` oneline <<< "${arrayline[$count]}"
+        #IFS='`' read -d'\n' -r -a oneline <<< "${arrayline[$count]}"
         #declare -p oneline | sed 's/\[/\n[/g'
 
         pro=${oneline[4]}; [ -z "$pro" ] && break
         cmd=$(echo ${oneline[6]} | xargs -0)
+        #debug (( "$count" == 4 )) && break
         ## 만약 6번째 item이 print가능한 명령이 존재하면 명령을 보여줘라.
         if [[ -n "${cmd}" ]]; then
             printf -v cmd "%-.100s" "${cmd//\\n/}"
@@ -509,7 +512,7 @@ EOF
         (( $total == 0 )) && { err "No target git project is found in $REPPFILE_FORALL
         If create above file by 'repp forall gen', Please add <your command> in REPP_SCRIPT column using excel" ; return 1; }
     done
-
+    #laptime
     ## REPPSCRIPT_V1, REPPSCRIPT_V2의 값을 보여준다.
     echo
     bbar yellow "check user input variables" "▼▼▼ show full\n"
@@ -555,7 +558,8 @@ EOF
         ## 현재 context에서 실행을 위해 source로 file로 변환하여 호출한다.
         ## pre script + user command script + post script를 합쳐 실행파일을 만들고 이를 source로 실행할수 있도록 cmd에 할당한다.
         ## csv에 읽어온 script가 file이면 cat으로 out으로 넣고, cmd이면 printf로 out으로 넣는다.
-        printf "%s\n" "${reppscript_pre}" > $REPPSCRIPT_OUT
+        : > $REPPSCRIPT_OUT ##파일 내용 지우기
+        [ "${reppscript_pre}" != "NONE" ] && printf "%s\n" "${reppscript_pre}" >> $REPPSCRIPT_OUT
         if [[ -f "${cmd}" ]]; then from=file
             #cmd를 파일과 변수 양쪽으로 저장
             ccmd=$(tee -a $REPPSCRIPT_OUT < "${cmd}")
@@ -565,9 +569,9 @@ EOF
             #cmd안에 존재하는 file이 있는경우, 모두 모아 그 내용을 보여주기 준다.
             for i in ${cmd}; do eval "[[ -f "$i" ]] && cat "$i" >> $fileincmd" 2> /dev/null; done
             ccmd=$(cat $fileincmd)
-            : > $fileincmd  ##파일 내용 지우기
+            : > $fileincmd
         fi
-        printf "%s\n" "${reppscript_post}" >> $REPPSCRIPT_OUT
+        [ "${reppscript_pre}" != "NONE" ] && printf "%s\n" "${reppscript_post}" >> $REPPSCRIPT_OUT
 
         #if ! shellcheck -s bash -S error $REPPSCRIPT_OUT ; then err "input command is not correct!"; return 1; fi
 
@@ -3462,6 +3466,8 @@ local MENU=(
 " groupdel: delete member from group"
 " groupmem: find member from group"
 "  project: find project and show project url"
+"   access: show permission in specific git including child & parents
+"   commit: find commit in review system
 "   branch: find branches by name"
 "branchadd: create branch with base revision"
 "branchdel: delete branch by name"

@@ -54,6 +54,9 @@ under()  {
     if [ "${1:(-2)}" = "\n" ]; then temp=${temp::-2}; ret="\n"; fi
     printf "\n${green}〓〓〓   ${CYAN}%b${green}\n%b${NCOL}" "${temp}" "${linedb}${ret}";
 }
+#usage
+# start: laptime reset;
+#   lap: laptime
 laptime() {
     local _now=$(date +%s.%N);
     [[ $1 == reset ]] && { _lapn=0; _lapc=$_now; return; }
