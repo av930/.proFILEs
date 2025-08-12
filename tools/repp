@@ -401,6 +401,8 @@ function reppforall(){
     local fileincmd=$(mktemp)
     local opt
 
+    #terminal에서 직접함수 호출하는것을 방지
+    if [[ "${FUNCNAME[1]}" == "" || "${FUNCNAME[1]}" == "main" ]]; then warn "You can use 'repp forall'"; return 1; fi
     if [[ "$@" =~ '`' ]]; then
         clog "backquote(\`)" "is not supported 'repp forall' command"
         err "you can't use backquote, use \$(cmd)" instead of \`cmd\`;
@@ -489,17 +491,31 @@ EOF
     ##REPO_XXX로 시작하는 heading 을 제외하고 그 다음줄 부터 처리, count=1
     ##먼저 실행할 내용을 보여준다. 이때 실행불가능한 cmd가 있으면 멈춘다.
     bbar cyan "check user input commands" "▼▼▼ show only 100 char \n"
-    local count total cmd pro
+    local count total pcmd cmd pro tmp=
     local oneline=()
     #laptime reset
+
     for ((count=0,total=0; count<${#arrayline[@]}; count++ )); do
         ##read oneline to array
         readarray -t -d\` oneline <<< "${arrayline[$count]}"
         #IFS='`' read -d'\n' -r -a oneline <<< "${arrayline[$count]}"
         #declare -p oneline | sed 's/\[/\n[/g'
 
-        pro=${oneline[4]}; [ -z "$pro" ] && break
         cmd=$(echo ${oneline[6]} | xargs -0)
+        pro=${oneline[4]};
+
+        if [[ "$pcmd" == "$cmd" ]]; then
+            printf -v tmp "%s%s " "$tmp" "$pro"
+            progress "magenta" "cmd is same to above [$count]"
+            continue
+        else
+            # 이전에 누적된 tmp를 한 번에 출력
+            printf "${cyan}%s${NCOL}\n" "$tmp"
+            tmp=""
+        fi
+        pcmd=$cmd
+        [ -z "$pro" ] && break
+
         #debug (( "$count" == 4 )) && break
         ## 만약 6번째 item이 print가능한 명령이 존재하면 명령을 보여줘라.
         if [[ -n "${cmd}" ]]; then
@@ -522,9 +538,9 @@ EOF
     ##REPPSCRIPT_PRE, REPP_POSTSCRIPT를 먼저 보여준다.
     ## leading, trailing space 제거
     echo
-    bbar purple "check user common pre/post script" "▼▼▼ show full\n"
-    bbar purple "REPPSCRIPT_PRE"  "$( printf "\n%s" "${reppscript_pre:-not-defind}"  )\n"
-    bbar purple "REPPSCRIPT_POST" "$( printf "\n%s" "${reppscript_post:-not-defind}" )\n"
+    bbar magenta "check user common pre/post script" "▼▼▼ show full\n"
+    bbar magenta "REPPSCRIPT_PRE"  "$( printf "\n%s" "${reppscript_pre:-not-defind}"  )\n"
+    bbar magenta "REPPSCRIPT_POST" "$( printf "\n%s" "${reppscript_post:-not-defind}" )\n"
 
     ## repp forall 입력시 전체를 어떻게 실행할지 1회 물어본후, 각 명령어 실행시미다 다시 물어본다.
     local i ccmd cmd= pro= lrev from
@@ -578,12 +594,13 @@ EOF
         #g, go(with msg), goo(with fullmsg), enter, other를 물어본다.
         if [ "$opt" != "g" ]; then under "[$((total=total+1))] ${oneline[4]}\n"; fi
         if [ "$opt" != "g" ] || [ "$opt" != "go" ]; then bbar cyan "${oneline[5]}" "\n[ csv] ${cmd}\n[$from] ${ccmd:=same}\n"; fi
-        if [ -z "$opt" ] || [ "$opt" = "debug" ] || [[ $opt =~ ^g[o]*$ ]]; then pushd "$REPP_ROOT/${oneline[5]}";
+        if [ -z "$opt" ] || [ "$opt" = "debug" ] || [[ $opt =~ ^g[o]*$ ]]; then
             #debug echo ${REPPSCRIPT_OUT}
             #cmd="source $REPPSCRIPT_OUT";
             #run command
             ## 각 repository마다 다시 한번씩 물어보게 된다. g|go|goo를 입력하면 나머지는 물어보지 않고 바로 실행한다.
-            [[ $opt =~ ^g[o]*$ ]] || read -p "$(echo -e "${yellow}[enter: run next |g |go |goo: run all with log level |other: skip next |ctrl+c: break all] :${NCOL}")" opt
+            [[ $opt =~ ^g[o]*$ ]] || read -p "$(echo -e "${yellow}[enter: run next |g |go |goo: run all with log level |debug:show log| other: skip next |ctrl+c: break all] :${NCOL}")" opt
+            pushd "$REPP_ROOT/${oneline[5]}";
             case "$opt" in
                 g|go|goo|'') :
                 ;; debug) [[ $- == *x* ]] && set +x || set -x #toggle debug
@@ -726,7 +743,7 @@ EOL
                         ;;R)
                             ccommitid="${line[1]/|/}"
                             ##get change_id and find commmit in new branch, it is deployed.
-                            deployed=$( revv commit $(getServer ${cremote} path) ${ccommitid} | sed '1d'|  jq -cC '.[].branch' | grep "${cbrnew}" )
+                            deployed=$( revv commit find $(revvserver_item ${cremote} path) ${ccommitid} | sed '1d'|  jq -cC '.[].branch' | grep "${cbrnew}" )
                             [ -z "${deployed}" ] && info "[missing commits] ${cremote}> ${cproject}> ${cbrnew}> ${ccommitid}"
                     esac
                 done
@@ -1060,7 +1077,7 @@ function repp_initdb(){
                lrev=${linein[0]##*=};        [[ $lrev = null ]] &&        lrev=${line_default[0]##*=}
               group=${linein[1]##*=};       [[ $group = null ]] &&       group=${line_default[1]##*=}
              remote=${linein[2]##*=};      [[ $remote = null ]] &&      remote=${line_default[2]##*=};
-                                           [[ $remote = null ]] &&      remote=$(getServer "${REPP_REMOTE##*:}" remote)
+                                           [[ $remote = null ]] &&      remote=$(revvserver_item "${REPP_REMOTE##*:}" key)
            upstream=${linein[3]##*=};    [[ $upstream = null ]] &&    upstream=${line_default[3]##*=}
         dest_branch=${linein[4]##*=}; [[ $dest_branch = null ]] && dest_branch=${line_default[4]##*=}
             project=${linein[5]##*=};     [[ $project = null ]] &&     project=${line_default[5]##*=}
@@ -1753,7 +1770,7 @@ SSH_COMMAND
     done
     ' vgit.lge.com  2> /dev/null
 SSH_COMMAND
-#$(getServer ${oriserver} subdomain) #vgit.lge.com
+#$(revvserver_item ${oriserver} subdomain) #vgit.lge.com
 #repo forall -c 'echo \${REPO_REMOTE}:\${REPO_PROJECT}:\${REPO_PATH}:\${REPO_LREV}:\${REPO_RREV}' > ~/repo.test/repo.result
         #[ ${_item%:*} = "${REPO_REMOTE}" ] && printf "[%-60.50s] " "${REPO_I}/${REPO_COUNT}/${REPO_PROJECT}" && ssh $REPO__${USER}@$0 -p ${_item#*:} gerrit ls-projects --prefix ${REPO_PROJECT} -b ${REPO_RREV} --limit 1
 }
@@ -1791,7 +1808,7 @@ EOF
     [ -z "$3" ] && info "use default git project: ${GITT_PROJECT:-${REPP_PROJECT}}" ;gitproject=${3:-${GITT_PROJECT:-${REPP_PROJECT}}} ;
     [ -z "$2" ] && info "use default account: $USER"                                ;user=${2:-$USER} ;
     [ -z "$1" ] && info "use default server: ${GITT_REMOTE:-${REPP_REMOTE}}"        ;oriserver=${1:-${GITT_REMOTE:-${REPP_REMOTE}}} ;
-    server=$( getServer ${oriserver} subdomain ); port=$(getServer ${oriserver} port)
+    server=$( revvserver_item ${oriserver} subdomain ); port=$(revvserver_item ${oriserver} port)
 
     clog "should be this format:ex)" "[testaccount][$oriserver][$server][$gitproject][$branch]"
     dnlog [$user] [$server] [$oriserver] [$gitproject] [$branch]
@@ -1894,7 +1911,7 @@ function repp_initvar(){
     REPP_REVIEW=$(git config --get-regexp remote.*.review|cut -d' ' -f2|head -1)        #GITT_REVIEW
     REPP_URL=$(git config --get-regexp remote.$(git remote|head -1).url|cut -d' ' -f2|head -1) #GITT_URL
 
-    #REPP_REMOTE=$(getServer $(git remote -v |grep fetch | grep -oP '(?<=:)[0-9]+(?=/)') remote)
+    #REPP_REMOTE=$(revvserver_item $(git remote -v |grep fetch | grep -oP '(?<=:)[0-9]+(?=/)') remote)
     if [[ -z $REPP_REMOTE ]]; then
         REPP_REMOTE=$(cat ${REPPFILE_JSON} 2>/dev/null |jq -r '.default.remote')
         if [[ -z "${REPP_REMOTE}" ]] || [[ "${REPP_REMOTE}" == "null" ]] ; then
@@ -1965,14 +1982,13 @@ function gitt_initvar(){
 function revv_initvar(){
 ## ---------------------------------------------------------------------------
 # find repo, gitt, review variable
-    local server=$1
     local ret=0
-    local key_id
+    local key_id key
     #default initial gerrit API key is na (vgit_na).
 
 
-    key_id=$(getServer ${GITT_REMOTE:-${REPP_REMOTE:?"run 'repp_initvar' first"}} remote)
-    key=$(getServer ${key_id} pass)
+    #key_id=$(revvserver_item ${GITT_REMOTE:-${REPP_REMOTE:?"run 'repp_initvar' first"}} key)
+    key=$(revvserver_item ${GITT_REMOTE} pass)
 
     if (( 40 > ${#key} )); then
         warn "if problem continue, check gerrit http key value in [~/.key_server] \n
@@ -1980,10 +1996,11 @@ function revv_initvar(){
         ret=1
     fi
 
-    if ! revvcheck_server ${server:-na}; then
-        err "please check correct account&key is saved in ~/.key_${key_id} in $HOME dir"
-        ret=1
-    fi
+    # if ! revvcheck_server ; then
+    #     err "please check correct account&key is saved using revv server "
+    #     ret=1
+    # fi
+
     return $ret
 }
 
@@ -2144,7 +2161,7 @@ function gittinfo(){
     local tmp
     git log --since="4 months ago" --pretty=format:'%H %ci <%an> %s' --reverse | while read -r sha; do
         tmp=${sha:67} #author 시작되는 column
-        printf "$remote_commits" | grep --color=never "${sha%% *}" && printf "%2s ${green}%s ${purple}%s> ${blue}%s${NCOL}\n" "" "${sha:41:25}" "${tmp%%>*}" "${tmp#*>}"
+        printf "$remote_commits" | grep --color=never "${sha%% *}" && printf "%2s ${green}%s ${magenta}%s> ${blue}%s${NCOL}\n" "" "${sha:41:25}" "${tmp%%>*}" "${tmp#*>}"
     done
 }
 
@@ -2571,12 +2588,14 @@ function revvcheck_server(){
 
     local server=$1
     local flag=$2
-    local key=$(getServer $(getServer ${server} sub) pass)
-    local user=$(getServer $(getServer ${server} sub) user)
+
+    [ "$REVV_TAG" = "$server" ] && return 0
+    local key=$(revvserver_item ${server}  pass)
+    local user=$(revvserver_item ${server} user)
 
     if [ -z "${server}" ];
-    then port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)'); server=$(getServer ${port} http)
-    else port=$(getServer ${server} port); server=$(getServer ${server} http);
+    then port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)'); server=$(revvserver_item ${port} http)
+    else port=$(revvserver_item ${server} port); server=$(revvserver_item ${server} http);
     fi
     #$DEBUG ["$server"]["$port"]
 
@@ -2607,14 +2626,14 @@ function revvcheck_account(){
     local server=$1
     local user=$2
     local flag=$3
-    local key_id=$(getServer ${server} sub)
-    local key=$(getServer ${key_id} pass)
+    local key_id=$(revvserver_item ${server} sub)
+    local key=$(revvserver_item ${key_id} pass)
     local ret=()
 
     #local port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)')
     if [ -z "${server}" ];
-    then port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)'); server=$(getServer ${port} http)
-    else port=$(getServer ${server} port); server=$(getServer ${server} http);
+    then port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)'); server=$(revvserver_item ${port} http)
+    else port=$(revvserver_item ${server} port); server=$(revvserver_item ${server} http);
     fi
 
     readarray -d',' -t ret < <(curl -su ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${user}|sed '1d'| jq -c '.[]|{_account_id,username,name,email}'|sed  's/[{}"]//g')
@@ -2655,16 +2674,16 @@ function revvcheck_permission(){
     local branch=$4
     local perm=$5
     local flag=$6
-    local key_id=$(getServer ${server} sub)
-    local key=$(getServer ${key_id} pass)
+    local key_id=$(revvserver_item ${server} sub)
+    local key=$(revvserver_item ${key_id} pass)
     local log ret
 
     revvcheck_account ${server} ${user}
 
     #local port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)')
     if [ -z "${server}" ];
-    then port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)'); server=$(getServer ${port} http)
-    else port=$(getServer ${server} port); server=$(getServer ${server} http);
+    then port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)'); server=$(revvserver_item ${port} http)
+    else port=$(revvserver_item ${server} port); server=$(revvserver_item ${server} http);
     fi
     if [ -z "${oriproject}" ];then info "guide) repp connect help" && return 1;fi
 
@@ -2695,7 +2714,7 @@ function revvcheck_permission(){
 }
 
 
-function test_getServer() {
+function test_revvserver_item() {
 ## ---------------------------------------------------------------------------
 ## check all format is well printed
 ## print remote (gerrit server) info for all supported format
@@ -2707,7 +2726,7 @@ function test_getServer() {
 
         if [ "$cmd" = info ]; then
         for _test in http port sub domain subdomain path url remote debug;do
-            bbar cyan "${_item##*/}:$_test"  "$(getServer "${_item##*/}" "$_test")\n"
+            bbar cyan "${_item##*/}:$_test"  "$(revvserver_item "${_item##*/}" "$_test")\n"
         done
         fi
     done
@@ -2747,10 +2766,10 @@ function revvaccount(){
 # $4 branch
     local cmd=$1
     local subcmd=$2
-    local server=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
-    local sub=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub)
-    local key=$(getServer $sub pass)
-    local user=$(getServer $sub user)
+    local server=$(revvserver_item ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
+    local sub=$(revvserver_item ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub)
+    local key=$(revvserver_item $sub pass)
+    local user=$(revvserver_item $sub user)
     local source=${3:-$USER}
     local target=$4
     local extra=$5
@@ -2852,10 +2871,10 @@ function revvproject(){
 # $4 branch
     local cmd=$1
     local subcmd=$2
-    local server=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
-    local sub=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub)
-    local key=$(getServer $sub pass)
-    local user=$(getServer $sub user)
+    local server=$(revvserver_item ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
+    local sub=$(revvserver_item ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub)
+    local key=$(revvserver_item $sub pass)
+    local user=$(revvserver_item $sub user)
     local project=$3
     local url_gerrit="${server}/a/projects/${project//'/'/'%2F'}"
     local parent=$4
@@ -2938,7 +2957,7 @@ EOF
 
             [ "$(cat /tmp/pCount)" -ne 1 ] && return 0
             #cat $file| jq --arg jq_var "${server}/admin/repos/" -c '$jq_var + .[].id' | nl
-            local temps=http://$(getServer $server subdomain)
+            local temps=http://$(revvserver_item $server subdomain)
             echo $temps$(curl -su ${user}:${key} ${server}/a/projects/?m=${project} |sed '1d' | jq -rM '..|select(contains("gitweb?")?)')
             echo $temps$(curl -su ${user}:${key} ${server}/a/projects/?m=${project} |sed '1d' | jq -rM '..|select(contains("plugins")?)')
 
@@ -3015,10 +3034,10 @@ function revvaccess(){
     local group=${4:-$USER} #gerrit group name
     local branch=$5 #^refs/heads/26my_migg_.*
 
-    local server=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
-    local sub=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub)
-    local key=$(getServer $sub pass)
-    local user=$(getServer $sub user)
+    local server=$(revvserver_item ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
+    local sub=$(revvserver_item ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub)
+    local key=$(revvserver_item $sub pass)
+    local user=$(revvserver_item $sub user)
     local group_id=$(revvaccount group "$server" "$group" none none)
 
     [ -z "$user" ] && user=$ACCOUNT
@@ -3105,10 +3124,10 @@ function revvbranch(){
 # $4 branch
     local cmd=$1
     local subcmd=$2
-    local server=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
-    local sub=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub)
-    local key=$(getServer $sub pass)
-    local user=$(getServer $sub user)
+    local server=$(revvserver_item ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
+    local sub=$(revvserver_item ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub)
+    local key=$(revvserver_item $sub pass)
+    local user=$(revvserver_item $sub user)
     local source=${3:-$USER}
     local target=$4
     local extra=$5
@@ -3158,10 +3177,10 @@ function revvcommit(){
 # $4 branch
     local cmd=$1
     local subcmd=$2
-    local server=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
-    local sub=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub)
-    local key=$(getServer $sub pass)
-    local user=$(getServer $sub user)
+    local server=$(revvserver_item ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
+    local sub=$(revvserver_item ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub)
+    local key=$(revvserver_item $sub pass)
+    local user=$(revvserver_item $sub user)
 
     local source=${3:-$USER}
     local target=$4
@@ -3319,10 +3338,10 @@ function revvshowcmd(){
 # $3 gitproject
 # $4 branch
     local cmd=$1
-    local server=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
-    local sub=$(getServer ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub)
-    local key=$(getServer $sub pass)
-    local user=$(getServer $sub user)
+    local server=$(revvserver_item ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
+    local sub=$(revvserver_item ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub)
+    local key=$(revvserver_item $sub pass)
+    local user=$(revvserver_item $sub user)
 
     local usercmd=${2-${USER}}
     local oriproject=${3:-${GITT_PROJECT:-${REPP_PROJECT}}}
@@ -3416,8 +3435,8 @@ function revvdebug(){
 # $2 server
 # $3 gitproject
 # $4 branch
-    local server=$(getServer ${1:-na} http)
-    local key=$(getServer $2 pass)
+    local server=$(revvserver_item ${1:-na} http)
+    local key=$(revvserver_item $2 pass)
     local cmd=${2-${ACCOUNT}}
     local gitproject=${3//'/'/'%2F'}
     #local branch=$4
@@ -3634,6 +3653,7 @@ function reppdebug(){
     source <(cat <<'EOL'
         bar inline "GITT_VARIABLE && REPP_VARIABLE for all repository"
         for var in \
+        '${REVV_VER}' '${REVV_TAG}' '${REVV_SERVER}' \
         '${GITT_REMOTE}' '${GITT_PROJECT}' '${GITT_BRANCH}' '${GITT_PATH}' '${GITT_REVIEW}' '${GITT_URL}' \
         '${REPP_PATH}' '${REPP_ROOT}' '${REPP_INIT}' '${REPP_REMOTE}' '${REPP_PROJECT}' '${REPP_BRANCH}' '${REPP_URL}' '${REPP_REPOURL}' '${REPP_REF}' '${REPP_GROUPS}' '${REPP_COUNT}' \
         '${REPPFILE_STATUS}' '${REPPFILE_COMMIT}' '${REPPFILE_CSV}' '${REPPFILE_XML}' '${REPPFILE_MANI}'
