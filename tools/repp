@@ -1988,7 +1988,7 @@ function revv_initvar(){
 
 
     #key_id=$(revvserver_item ${GITT_REMOTE:-${REPP_REMOTE:?"run 'repp_initvar' first"}} key)
-    key=$(revvserver_item ${GITT_REMOTE} pass)
+    key=$(revvserver_item ${GITT_REMOTE:?'ERROR: check server info!!'} pass)
 
     if (( 40 > ${#key} )); then
         warn "if problem continue, check gerrit http key value in [~/.key_server] \n
@@ -2766,10 +2766,12 @@ function revvaccount(){
 # $4 branch
     local cmd=$1
     local subcmd=$2
-    local server=$(revvserver_item ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
-    local sub=$(revvserver_item ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub)
-    local key=$(revvserver_item $sub pass)
-    local user=$(revvserver_item $sub user)
+    if [ "$subcmd" != help ] ; then
+        local server=$(revvserver_item ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
+        local sub=$(revvserver_item ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub)
+        local key=$(revvserver_item $sub pass)
+        local user=$(revvserver_item $sub user)
+    fi
     local source=${3:-$USER}
     local target=$4
     local extra=$5
@@ -3034,15 +3036,18 @@ function revvaccess(){
     local group=${4:-$USER} #gerrit group name
     local branch=$5 #^refs/heads/26my_migg_.*
 
+    if [ "$subcmd" != "help" ]; then
     local server=$(revvserver_item ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
     local sub=$(revvserver_item ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} sub)
     local key=$(revvserver_item $sub pass)
     local user=$(revvserver_item $sub user)
     local group_id=$(revvaccount group "$server" "$group" none none)
+    fi
 
     [ -z "$user" ] && user=$ACCOUNT
-    case ${cmd} in
-           help)  cat <<-EOF
+    local sep='~'
+    case ${cmd}$sep${subcmd} in
+          *~help)  cat <<-EOF
 				usage) revv access[all|add|group|groupall|permission|permissionall|parents|parentsall]   na <project>
 				   ex) revv access              na vendor/qct/sa515m/sa515m_modem/modem_proc  #get permission info for current git
 				   ex) revv accessall           na vendor/qct/sa515m/sa515m_modem/modem_proc  #get all permission info including parents
@@ -3057,7 +3062,7 @@ function revvaccess(){
 
 				 info) repp connect help : you can check your basic access permission for a git.
 EOF
-    ;; accessadd)
+    ;;accessadd~)
                 clog "add migration permission $group_id $branch"
                 [ -z "$group_id" ] && { err "group is not existed, check $group"; return 1; }
                 cat|json_pp >temp.json << TEMP_JSON
@@ -3076,12 +3081,12 @@ EOF
 TEMP_JSON
         showRUNQ y curl -su ${user}:${key} ${server}/a/projects/${project//'/'/'%2F'}/access -H "Content-Type:application/json" -d @temp.json -X POST
 
-    ;; access*)
+    ;;access*~)
                 #cat $file|jq --arg jq_var "${server}" -crM '.groups[]| {url:(.url| if .==null then "null" else gsub("#"; $jq_var) end), name}| tostring | gsub("{|\"|}";"")| gsub("url.*uuid-|name:";"")'|\
                 #    sed 's:/: :g' |awk -F, '{print "s/"$1"/"$2"/g;"}' |sed -f - <(cat $file|jq '.local') > b.txt
                 # cat $file|jq -cC '.local|to_entries | map({(.key): .})[][][]'
                 case ${cmd} in accessgroup*|accesspermission*|accessparents*|accessall|access) :
-                               ;;*) revvaccess help; return 1
+                                                                                          ;;*) revvaccess help; return 1
                 esac
 
                 while [ "$project" != "null" ] ; do
@@ -3475,39 +3480,34 @@ local MENU=(
 "     info: shows repository info such as manifest path, repo cmd, tree of manifests, etc"
 "      cmd: list useful command from gerrit"
 "  connect: check if input account can access branch in gitproject on server"
-"   server: check predefined git web server list or status"
+"   server: check/add/listup predefined git server list or status"
 "    debug: show variable REPO, REPP, REPPFILE, GITT variable used in script"
 "   forall: repoforal for revv branch commands"
 "     user: check if account is existed & get account info "
 "   sshkey: get registered SSH-key for an account in server "
-"    group: find group by name"
-" groupadd: add member to group"
-" groupdel: delete member from group"
-" groupmem: find member from group"
-"  project: find project and show project url"
-"   access: show permission in specific git including child & parents
-"   commit: find commit in review system
-"   branch: find branches by name"
-"branchadd: create branch with base revision"
-"branchdel: delete branch by name"
+"    group: find/findmember/add/delete group by name"
+"  project: find/add/delete project or change parents of project"
+"   access: show access permission/group in specific git including child & parents"
+"   commit: find commit in review system"
+"   branch: find/add/remove branches by name"
 )
 
 local ret=0
 case "$1" in
-     ##$1:cmd        ${@:2}:parameters
-          help)                                            reppmenu help "${MENU[@]}"
-    ;;      '')                                            reppmenu revv "${MENU[@]}"
-    ;;  server)  [ "$2" = "status" ] && revvserverstatus "${@:3}" || revvserver "${@:2}"
-    ;;     cmd)      reppcheck_initvar reppgittrevv    &&  revvshowcmd "${@:2}"
-    ;; connect)      reppcheck_initvar gittrevv        &&  revvcheck_server "${@:2}"
-    ;;    info)      reppcheck_initvar gittrevv        &&  revvinfo  "${@:2}"
-    ;;   debug)      reppcheck_initvar gittrevv        &&  revvdebug "${@:2}"
-    ;;  forall)      reppcheck_initvar repprevv        &&  revvforall "${@:2}"
-    ;;  commit)      reppcheck_initvar repprevv        &&  revvcommit "${@:2}"
-    ;; access*)      reppcheck_initvar repgittprevv    &&  revvaccess "${@:1}"
-    ;; branch*)      reppcheck_initvar repprevv        &&  revvbranch "${@:1}"
-    ;;project*)      reppcheck_initvar repprevv        &&  revvproject "${@:1}"
-    ;;       *)      reppcheck_initvar repprevv        &&  revvaccount "${@:1}"
+                     ##$1:cmd      ${@:2}:parameters
+                        help)                                            reppmenu help "${MENU[@]}"
+    ;;                    '')                                            reppmenu revv "${MENU[@]}"
+    ;;                server)  [ "$2" = "status" ] && revvserverstatus "${@:3}" || revvserver "${@:2}"
+    ;;                   cmd)      reppcheck_initvar reppgittrevv    &&  revvshowcmd "${@:2}"
+    ;;               connect)      reppcheck_initvar gittrevv        &&  revvcheck_server "${@:2}"
+    ;;                  info)      reppcheck_initvar gittrevv        &&  revvinfo  "${@:2}"
+    ;;                 debug)      reppcheck_initvar gittrevv        &&  revvdebug "${@:2}"
+    ;;                forall)      reppcheck_initvar repprevv        &&  revvforall "${@:2}"
+    ;;                commit)      reppcheck_initvar repprevv        &&  revvcommit "${@:2}"
+    ;;               access*)      reppcheck_initvar repgittprevv    &&  revvaccess "${@:1}"
+    ;;               branch*)      reppcheck_initvar reppgittrevv    &&  revvbranch "${@:1}"
+    ;;              project*)      reppcheck_initvar repprevv        &&  revvproject "${@:1}"
+    ;;    user|sshkey|group*)      reppcheck_initvar repprevv        &&  revvaccount "${@:1}"
 esac
 return $ret
 }
