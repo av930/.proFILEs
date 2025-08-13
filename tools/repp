@@ -2733,6 +2733,49 @@ function test_revvserver_item() {
 }
 
 
+
+function revvconnect(){
+## ---------------------------------------------------------------------------
+# check connection and report error
+# $1 server
+# $2 port
+# $3 password
+    local cmd="$1"
+    case ${cmd} in
+       help)    cat <<-EOF
+			  usage) revv connect [server]  [user]          [gitproject]   [branch]
+			 -----------------------------------------------------------------
+			default) revv connect ${REPP_REMOTE} $ACCOUNT   ${REPP_PROJECT}    ${REPP_BRANCH}
+			     ex) revv connect na        testaccount     tiger/tools  tiger_release
+			     ex) revv connect na        joongkeun.kim   tiger/tools  tiger_release
+			     ex) revv connect na        testaccount     tiger/tools
+			     ex) revv connect na        testaccount
+			     ex) revv connect na        testaccount
+			     ex) revv connect
+EOF
+                return 1;
+    ;;     *) :
+    esac
+
+    local user oriserver gitproject branch port
+    local temp_p=$(expr "${REPP_URL}" : ".*[0-9]/\(.*\)\..*")
+    [ -z "$4" ] && info "use default branch: ${GITT_BRANCH}"        ;branch=${4:-${GITT_BRANCH}} ;
+    [ -z "$3" ] && info "use default git project: ${GITT_PROJECT}"  ;gitproject=${3:-${GITT_PROJECT}} ;
+    [ -z "$2" ] && info "use default account: $USER"                ;user=${2:-$USER} ;
+    [ -z "$1" ] && info "use default server: ${GITT_REMOTE}"        ;oriserver=${1:-${GITT_REMOTE}} ;
+    port=$(revvserver_item ${oriserver} port)
+
+    #clog "should be this format:ex)" "[testaccount][$oriserver][$gitproject][$branch]"
+    bbar PURPLE "[$user] in" "\nchecked under [$oriserver] [$gitproject] [$branch]\n\n"
+
+    under "step1: check gerrit permission for ${user} from WEB(HTTP) by account admin[${ACCOUNT}]\n"
+    showRUN revvcheck_server ${oriserver} log                                              ;wave
+    showRUN revvcheck_account ${oriserver} ${user} log                                     ;wave
+    showRUN revvcheck_permission ${oriserver} ${user} ${gitproject} ${branch} read         ;wave
+}
+
+
+
 function revvinfo(){
 ## ---------------------------------------------------------------------------
 # read information from gerrit
@@ -3207,23 +3250,25 @@ function revvcommit(){
 
             local pro branch changenumber path
             under "commit & user info from gerrit server\n"
-            changenumber=$(cat ${file} |jq -r .[]._number)
-            [ -z "$changenumber" ] && return 1
-            pro=$(cat ${file} |jq -r .[].project)
-            branch=$(cat ${file} |jq -r .[].branch)
-            submitter=$(cat ${file} |jq -r .[].submitter._account_id)
+            jq -c '.[]' "${file}" | while read -r change; do
+                changenumber=$(echo "$change" | jq -r '._number')
+                pro=$(echo "$change" | jq -r '.project')
+                branch=$(echo "$change" | jq -r '.branch')
+                submitter=$(echo "$change" | jq -r '.submitter._account_id')
 
-            clog "gerrit url:" $server/c/$pro/+/$changenumber
-            ##gerrit url:  http://vgit.lge.com/na/c/vendor/ss/v920/vm2_qnx_dts-poip-qla/+/1487342
-            revvaccount user na $submitter none none
+                clog "gerrit url:" "$server/c/$pro/+/$changenumber"
+                revvaccount user na "$submitter" none none
 
-            cat ${file}| jq '.[]|{project,branch,change_id,_number,subject,status,submitted}'
-            echo
+                echo "$change" | jq '{project,branch,change_id,_number,subject,status,submitted}'
+                echo
 
-            under "commit info from current source\n"
-            path=$REPP_ROOT/$(repo list -p $pro 2> /dev/null)
-            clog "local git path:" "$path"
-            git -C "$path" show --quiet ${source}
+                under "commit info from current source\n"
+                path="$REPP_ROOT/$(repo list -p "$pro" 2> /dev/null)"
+                clog "local git path:" "$path"
+                git -C "$path" show --quiet "$source"
+
+                wave
+            done
 
     ;;*|help)
             cat <<-EOF
@@ -3499,11 +3544,11 @@ case "$1" in
     ;;                    '')                                            reppmenu revv "${MENU[@]}"
     ;;                server)  [ "$2" = "status" ] && revvserverstatus "${@:3}" || revvserver "${@:2}"
     ;;                   cmd)      reppcheck_initvar reppgittrevv    &&  revvshowcmd "${@:2}"
-    ;;               connect)      reppcheck_initvar gittrevv        &&  revvcheck_server "${@:2}"
+    ;;               connect)      reppcheck_initvar gittrevv        &&  revvconnect "${@:2}"
     ;;                  info)      reppcheck_initvar gittrevv        &&  revvinfo  "${@:2}"
     ;;                 debug)      reppcheck_initvar gittrevv        &&  revvdebug "${@:2}"
     ;;                forall)      reppcheck_initvar repprevv        &&  revvforall "${@:2}"
-    ;;                commit)      reppcheck_initvar repprevv        &&  revvcommit "${@:2}"
+    ;;                commit)      reppcheck_initvar reppgittrevv    &&  revvcommit "${@:2}"
     ;;               access*)      reppcheck_initvar repgittprevv    &&  revvaccess "${@:1}"
     ;;               branch*)      reppcheck_initvar reppgittrevv    &&  revvbranch "${@:1}"
     ;;              project*)      reppcheck_initvar repprevv        &&  revvproject "${@:1}"
