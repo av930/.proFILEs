@@ -2157,7 +2157,7 @@ function gittinfo(){
     bar inline "show branchout list from current branch within 4 months (botton is newest)"
     remote_commits=$(git ls-remote -h ${GITT_REMOTE} refs/heads/$(shortname_of_branch ${GITT_BRANCH})*)
 
-    # 최근 4개월간 commit중에서 branch-out된 브랜치를 모두 listup하기위해, 해당 commit에 맞는 branch를 출력한다.
+    # 최근 4개월간 commit중에서 branch-out된 브랜치를 모두 listup하기위해, branch out commit과 branch명을 출력한다.
     local tmp
     git log --since="4 months ago" --pretty=format:'%H %ci <%an> %s' --reverse | while read -r sha; do
         tmp=${sha:67} #author 시작되는 column
@@ -2745,7 +2745,7 @@ function revvconnect(){
        help)    cat <<-EOF
 			  usage) revv connect [server]  [user]          [gitproject]   [branch]
 			 -----------------------------------------------------------------
-			default) revv connect ${REPP_REMOTE} $ACCOUNT   ${REPP_PROJECT}    ${REPP_BRANCH}
+			default) revv connect ${GITT_REMOTE:-remote} $ACCOUNT   ${REPP_PROJECT}    ${REPP_BRANCH}
 			     ex) revv connect na        testaccount     tiger/tools  tiger_release
 			     ex) revv connect na        joongkeun.kim   tiger/tools  tiger_release
 			     ex) revv connect na        testaccount     tiger/tools
@@ -2766,7 +2766,7 @@ EOF
     port=$(revvserver_item ${oriserver} port)
 
     #clog "should be this format:ex)" "[testaccount][$oriserver][$gitproject][$branch]"
-    bbar PURPLE "[$user] in" "\nchecked under [$oriserver] [$gitproject] [$branch]\n\n"
+    bbar PURPLE "[$user] in" "\nchecked as 'revv connect $oriserver $user $gitproject $branch'\n\n"
 
     under "step1: check gerrit permission for ${user} from WEB(HTTP) by account admin[${ACCOUNT}]\n"
     showRUN revvcheck_server ${oriserver} log                                              ;wave
@@ -2926,6 +2926,12 @@ function revvproject(){
     local extra=$5
     local file=$(mktemp)
 
+    [ -z "$server" ] && { err "server name is provided" ; return 1; }
+    if [ -z "$project" ]; then
+        warn "all project will be searched, it takes time";
+        read -p '[y:yes continue | other:break] :'
+        [ "$REPLY" = 'y' ] || return 0
+    fi
 
     #local branch=$4
     [ -z "$user" ] && user=$ACCOUNT
@@ -3187,9 +3193,10 @@ function revvbranch(){
     case ${cmd}${SEP}${subcmd} in
            *~help|*~)
             echo "check your cmd [${cmd}]"; cat <<-EOF
-			   ex) revv branch    na mustang/tm/src tsu_25.5my_release         # find branch with branch-name
-			   ex) revv branchadd na mustang/tm/src tsu_25.5my_release_new     # create branch (will ask base branch)
-			   ex) revv branchdel na mustang/tm/src tsu_25.5my_release_old     # remove branch
+			   ex) revv branch       na mustang/tm/src tsu_25.5my_release         # find branch with branch-name
+			   ex) revv branchurl    na mustang/tm/src tsu_25.5my_release         # find branch by date in branch-name
+			   ex) revv branchadd    na mustang/tm/src tsu_25.5my_release_new     # create branch (will ask base branch)
+			   ex) revv branchdel    na mustang/tm/src tsu_25.5my_release_old     # remove branch
 			 info) 'empty branch' can be created by 'revv projectadd' not 'revv branchadd'
 			       therefore if you want 'empty branch', refer 'gitt branch create empty'
 EOF
@@ -3209,6 +3216,11 @@ EOF
             bar inline "find branches by name"
             curl -su ${user}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/?m=${target} | sed '1d'| jq  -cC '.[]|{ref,revision}' | more -60
 
+    ;;branchurl*)
+            bar inline "find branches by date in name"
+            curl -su ${user}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/?m=${target} | sed '1d'| jq  -r '.[].web_links' | jq -r '.[]
+            | select(.name == "browse" and (.url | test("[0-9]{6}"))) #name이 browse이고 url에 숫자 6자리 가들어있는 항목을 선택한후
+            | [ (.url | capture("(?<date>[0-9]{6})").date), "http://vgit.lge.com", .url] | @tsv'| sort -k1 | awk -v date=${extra} '$1 >= date' | cut -f2,3| tr -d ' \t' #url에서 날짜부분만 선택한후 날짜, url형식으로 TapSeperateValue으로 구분하여 출력한후, 첫번째 key로 정렬후 2번째문 출력해라.
     ;;*)    err "please check command ex)revv branch help"
     esac
 }
@@ -3263,7 +3275,10 @@ function revvcommit(){
                 echo
 
                 under "commit info from current source\n"
-                path="$REPP_ROOT/$(repo list -p "$pro" 2> /dev/null)"
+                if (( $REPP_INIT > 0 ));
+                then path="$REPP_ROOT/$(repo list -p "$pro" 2> /dev/null)"
+                else path=.
+                fi
                 clog "local git path:" "$path"
                 git -C "$path" show --quiet "$source"
 
@@ -3522,19 +3537,19 @@ function revv(){
 
 #set +o noglob
 local MENU=(
-"     info: shows repository info such as manifest path, repo cmd, tree of manifests, etc"
-"      cmd: list useful command from gerrit"
 "  connect: check if input account can access branch in gitproject on server"
 "   server: check/add/listup predefined git server list or status"
-"    debug: show variable REPO, REPP, REPPFILE, GITT variable used in script"
+"     info: shows repository info such as manifest path, repo cmd, tree of manifests, etc"
+"  project: find/add/delete project or change parents of project"
+"   branch: find/add/remove branches by name"
+"   commit: find commit in review system"
 "   forall: repoforal for revv branch commands"
+"   access: show access permission/group in specific git including child & parents"
 "     user: check if account is existed & get account info "
 "   sshkey: get registered SSH-key for an account in server "
 "    group: find/findmember/add/delete group by name"
-"  project: find/add/delete project or change parents of project"
-"   access: show access permission/group in specific git including child & parents"
-"   commit: find commit in review system"
-"   branch: find/add/remove branches by name"
+"      cmd: list useful command from gerrit"
+"    debug: show variable REPO, REPP, REPPFILE, GITT variable used in script"
 )
 
 local ret=0
@@ -3542,17 +3557,21 @@ case "$1" in
                      ##$1:cmd      ${@:2}:parameters
                         help)                                            reppmenu help "${MENU[@]}"
     ;;                    '')                                            reppmenu revv "${MENU[@]}"
-    ;;                server)  [ "$2" = "status" ] && revvserverstatus "${@:3}" || revvserver "${@:2}"
-    ;;                   cmd)      reppcheck_initvar reppgittrevv    &&  revvshowcmd "${@:2}"
     ;;               connect)      reppcheck_initvar gittrevv        &&  revvconnect "${@:2}"
+    ;;                server)  [ "$2" = "status" ] && revvserverstatus "${@:3}" || revvserver "${@:2}"
     ;;                  info)      reppcheck_initvar gittrevv        &&  revvinfo  "${@:2}"
-    ;;                 debug)      reppcheck_initvar gittrevv        &&  revvdebug "${@:2}"
+    ;;              project*)      reppcheck_initvar repprevv         ;  revvproject "${@:1}"
+    ;;               branch*)      reppcheck_initvar reppgittrevv     ;  revvbranch "${@:1}"
+    ;;                commit)      reppcheck_initvar reppgittrevv     ;  revvcommit "${@:2}"  # repp변수확인시 실패해도 계속진행
     ;;                forall)      reppcheck_initvar repprevv        &&  revvforall "${@:2}"
-    ;;                commit)      reppcheck_initvar reppgittrevv    &&  revvcommit "${@:2}"
     ;;               access*)      reppcheck_initvar repgittprevv    &&  revvaccess "${@:1}"
-    ;;               branch*)      reppcheck_initvar reppgittrevv    &&  revvbranch "${@:1}"
-    ;;              project*)      reppcheck_initvar repprevv        &&  revvproject "${@:1}"
     ;;    user|sshkey|group*)      reppcheck_initvar repprevv        &&  revvaccount "${@:1}"
+    ;;                   cmd)      reppcheck_initvar reppgittrevv    &&  revvshowcmd "${@:2}"
+    ;;                 debug)      reppcheck_initvar gittrevv        &&  revvdebug "${@:2}"
+
+
+
+
 esac
 return $ret
 }
