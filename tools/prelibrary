@@ -203,13 +203,18 @@ function  revvserver_item() {
 ## exception: vgitxxx lampxxx will return only postfix after delimter _
 ##            aaa-bbb같이 -를 포함하는 sub은 -앞의 string(aaa)만 사용한다.
 
-    local ret=0 remote=$1 prn _line remote_key
+    local ret=0 remote=$1 prn _line remote_key tmp
     _line=$(revvserver de $remote)
-    if [ -f ${REPPFILE_JSON_REMOTE} ] && [ "$?" -ne 0 ] || [ -z "$_line" ] ;
-    then _line=$(revvserver de $(cat ${REPPFILE_JSON_REMOTE}|jq -rM --arg jq_remote "$remote" '.[]|select(.name == $jq_remote) | .review'))
-        if [ -z "$_line" ]; then
-            remote_key=$(cat ${REPPFILE_JSON_REMOTE}|jq -rM --arg jq_remote "$remote" '.[]|select(.name == $jq_remote) | .fetch'| cut -d'|' -f1)
-            _line=$(revvserver de $remote_key )
+    if [ "$?" -ne 0 ] || [ -z "$_line" ]; then
+        if [ -f "${REPPFILE_JSON_REMOTE}" ]; then
+            _line=$(revvserver de $(cat ${REPPFILE_JSON_REMOTE}|jq -rM --arg jq_remote "$remote" '.[]|select(.name == $jq_remote) | .review'))
+            if [ -z "$_line" ]; then
+                remote_key=$(cat ${REPPFILE_JSON_REMOTE}|jq -rM --arg jq_remote "$remote" '.[]|select(.name == $jq_remote) | .fetch'| cut -d'|' -f1)
+                _line=$(revvserver de $remote_key )
+            fi
+        else
+            tmp=$(git config --get-regexp remote.$(git remote|head -1).url|cut -d' ' -f2|head -1)
+            _line=$(revvserver de $(echo "${tmp#*://}"| awk -F[./:] '{print $1"_"$4}') )
         fi
     fi
     [ -z "$_line" ] && { err "server infomation is null"; return 1; }
