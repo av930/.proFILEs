@@ -28,7 +28,7 @@ linedn="________________________________________________________________________
 linemi="~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 linedb="〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓〓"
 linewave="~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-
+linedebug="DEBUG ############################################################################################################"
 ## ---------------------------------------------------------------------------
 ## one-line function : 간단한 공용함수
 ## fuction has the captital : 외부에서 호출하지 않아야 하는 함수
@@ -204,9 +204,12 @@ function  revvserver_item() {
 ##            aaa-bbb같이 -를 포함하는 sub은 -앞의 string(aaa)만 사용한다.
 
     local ret=0 remote=$1 prn _line remote_key tmp
+    local return_type=$2
+    ## server list로 부터 remote정보가 있는지 찾아 가져온다.
     _line=$(revvserver de $remote)
     if [ "$?" -ne 0 ] || [ -z "$_line" ]; then
-        if [ -f "${REPPFILE_JSON_REMOTE}" ]; then
+        if [ -f "${REPPFILE_JSON_REMOTE}" ] && [ "$remote" != "origin" ]; then
+            ## 없다면 repo manifest에서 server 실제이름을 번역한 이름으로 다시 찾는다.
             _line=$(revvserver de $(cat ${REPPFILE_JSON_REMOTE}|jq -rM --arg jq_remote "$remote" '.[]|select(.name == $jq_remote) | .review'))
             if [ -z "$_line" ]; then
                 remote_key=$(cat ${REPPFILE_JSON_REMOTE}|jq -rM --arg jq_remote "$remote" '.[]|select(.name == $jq_remote) | .fetch'| cut -d'|' -f1)
@@ -220,7 +223,7 @@ function  revvserver_item() {
     [ -z "$_line" ] && { err "server infomation is null"; return 1; }
 
     local _item=$(echo "$_line"  | cut -d'|' -f2)
-    local return_type=$2
+
 
     case ${return_type} in                                                                      # return value
             http)    prn=$(echo "${_item%:*}")                                                  # http://vgit.lge.com/na
@@ -248,8 +251,11 @@ function revvserver(){
 # encoding as variable: code env <keyname> <key>
 # encoding as file: code en <keyfile> <key>
 # decode de <keyfile>
+# $1 : cmd
+# $2 : query server (vgit_na, na, as, lamp, ...)
 local temp_var setflag ret=0
-local cmd=$1 tag=$2
+local cmd=$1 server=$2
+
     case $cmd in
        gen) #default server 접속정보 파일인 ~/.key_server를 생성한다.
             clog ".key_server" "is generated, \nplease add your server info with http key from: https://gerrit.url.com/settings/#HTTPCredentials\n"
@@ -285,15 +291,15 @@ EOF
             #이름이 정확히 key에 match하며 key를 해당 line을 리턴, 그렇지 않으면 alias에서 확인, 그렇지 않으면 전체 line에서 확인하여 해당 line을 리턴
             if [ -f $HOME/.key_server.en ]; then
                 #cache match이면 그냥 바로 return
-                [ "$REVV_TAG" = "$tag" ] && { echo $REVV_SERVER; return 0; }
+                [ "$REVV_TAG" = "$server" ] && { echo $REVV_SERVER; return 0; }
                 #REMOTEKEY이후부터 출력
                 [[ $- == *x* ]] && { set +x ; setflag=true; }
                 temp_var=$(cat "$HOME/.key_server.en" | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey | awk -F'|' 'p{print} $1 ~ /^REMOTEKEY */ {p=1}')
-                REVV_SERVER=$(echo "$temp_var" | awk -v tag="$tag" -F '[[:space:]]*\\|' '
+                REVV_SERVER=$(echo "$temp_var" | awk -v tag="$server" -F '[[:space:]]*\\|' '
                     $1 == tag   {print; exit}   #먼저 match하면 출력후 종료
                     $5 ~ tag    {print; exit}
                     $2 ~ tag    {print; exit} ')
-                if [ -n "$REVV_SERVER" ]; then  REVV_TAG=$tag; echo "$REVV_SERVER";
+                if [ -n "$REVV_SERVER" ]; then  REVV_TAG=$server; echo "$REVV_SERVER";
                 else ret=1
                     warn "matched http key is not existed or incorrect!" >2
                     clog "guide" "run 'revv server edit' and edit proper server info in .key_server"  >2
