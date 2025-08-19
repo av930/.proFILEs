@@ -2586,25 +2586,34 @@ function  revvserver_item() {
 
     local ret=0 remote=$1 prn _line remote_key tmp
     local return_type=$2
-    ## server list로 부터 remote정보가 있는지 찾아 가져온다.
-    _line=$(revvserver de $remote)
-    if [ "$?" -ne 0 ] || [ -z "$_line" ]; then
-        if [ -f "${REPPFILE_JSON_REMOTE}" ] && [ "$remote" != "origin" ]; then
-            ## 없다면 repo manifest에서 server 실제이름을 번역한 이름으로 다시 찾는다.
-            _line=$(revvserver de $(cat ${REPPFILE_JSON_REMOTE}|jq -rM --arg jq_remote "$remote" '.[]|select(.name == $jq_remote) | .review'))
-            if [ -z "$_line" ]; then
-                remote_key=$(cat ${REPPFILE_JSON_REMOTE}|jq -rM --arg jq_remote "$remote" '.[]|select(.name == $jq_remote) | .fetch'| cut -d'|' -f1)
-                _line=$(revvserver de $remote_key )
+
+    local CACHEPATH=/tmp/revvcache
+    # server정보를 /tmp/revvcache.$server에 저장해놓고 동일한 서버정보가 요청되면 cache에서 전달해준다.
+    if [ -f "$CACHEPATH.$remote" ]; then _line=$(base64 -d "$CACHEPATH.$remote" )
+    else
+        ## server list로 부터 remote정보가 있는지 찾아 가져온다.
+        _line=$(revvserver de $remote)
+        if [ "$?" -ne 0 ] || [ -z "$_line" ]; then
+            if [ -f "${REPPFILE_JSON_REMOTE}" ] && [ "$remote" != "origin" ]; then
+                ## 없다면 repo manifest에서 server 실제이름을 번역한 이름으로 다시 찾는다.
+                _line=$(revvserver de $(cat ${REPPFILE_JSON_REMOTE}|jq -rM --arg jq_remote "$remote" '.[]|select(.name == $jq_remote) | .review'))
+                if [ -z "$_line" ]; then
+                    remote_key=$(cat ${REPPFILE_JSON_REMOTE}|jq -rM --arg jq_remote "$remote" '.[]|select(.name == $jq_remote) | .fetch'| cut -d'|' -f1)
+                    _line=$(revvserver de $remote_key )
+                fi
+            else #repo project가 아닌 개별 git일때
+                tmp=$(git config --get-regexp remote.$(git remote|head -1).url|cut -d' ' -f2|head -1)
+                _line=$(revvserver de $(echo "${tmp#*://}"| awk -F[./:] '{print $1"_"$4}') )
             fi
-        else
-            tmp=$(git config --get-regexp remote.$(git remote|head -1).url|cut -d' ' -f2|head -1)
-            _line=$(revvserver de $(echo "${tmp#*://}"| awk -F[./:] '{print $1"_"$4}') )
         fi
     fi
+    ## set -x시 필요없는 log 건너띄기
+    [[ $- == *x* ]] && { set +x ; setflag=true; }
     [ -z "$_line" ] && { err "server infomation is null"; return 1; }
-
+    #cache the match
+    echo "$_line" |base64 > "$CACHEPATH.$remote"
     local _item=$(echo "$_line"  | cut -d'|' -f2)
-
+    ${setflag:-false} && { set -x ; setflag=false; }
 
     case ${return_type} in                                                                         # return value
             http)    prn=$(echo "${_item%:*}")                                                     # http://vgit.lge.com/na
@@ -2681,12 +2690,12 @@ EOF
                     done < <(cat "$HOME/.key_server.en" | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey | awk -F'|' 'p{print} $1 ~ /^REMOTEKEY */ {p=1}')
                 return 0;
             else
-                #[[ $- == *x* ]] && { set +x ; setflag=true; }
+                [[ $- == *x* ]] && { set +x ; setflag=true; }
                 printf "%s\n" "${REVV_SERVER[@]}" |sort | awk -v tag="$server" -F '[[:space:]]*\\|' '
                     $1 == tag   {print; exit}   #먼저 match하면 출력후 종료
                     $5 ~ tag    {print; exit}
                     $2 ~ tag    {print; exit}'
-                #${setflag:-false} && { set -x ; setflag=false; }
+                ${setflag:-false} && { set -x ; setflag=false; }
             fi
 
     ;;check|info) #revvserver_item 함수 test용으로 모든 format대로 제대로 출력하는지 확인할수 있다.
