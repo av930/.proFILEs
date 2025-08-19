@@ -23,7 +23,6 @@ else source ${proFILEdir}/tools/prelibrary; fi
 ACCOUNT=vc.integrator
 PATH_MIRROR="/data001/${ACCOUNT}"/mirror
 
-
 ##------------------------ alias & oneline func ------------------------------
 ##============================================================================
 #### when running script, register git alias automatically
@@ -1988,6 +1987,8 @@ function revv_initvar(){
     local key
     #default initial gerrit API key is na (vgit_na).
 
+    #load revvserver list from .key_server.en
+    revvserver de load
     key=$(revvserver_item ${GITT_REMOTE:?'ERROR: check server info!!'} pass)
     if (( 40 > ${#key} )); then
         warn "if problem continue, check gerrit http key value in [~/.key_server] \n
@@ -2576,8 +2577,142 @@ EOF
 
 ## revv ======================================================================================================================
 
+function  revvserver_item() {
+## ---------------------------------------------------------------------------
+## return remote (gerrit server) info as a various type
+## format: revvserver_item [29420|na|vgit|lamp|review]     [port|http|sub|domain|subdomain|path|url|remote|debug]
+## exception: vgitxxx lampxxx will return only postfix after delimter _
+##            aaa-bbb같이 -를 포함하는 sub은 -앞의 string(aaa)만 사용한다.
 
-JSON_IDFY=")]}'"
+    local ret=0 remote=$1 prn _line remote_key tmp
+    local return_type=$2
+    ## server list로 부터 remote정보가 있는지 찾아 가져온다.
+    _line=$(revvserver de $remote)
+    if [ "$?" -ne 0 ] || [ -z "$_line" ]; then
+        if [ -f "${REPPFILE_JSON_REMOTE}" ] && [ "$remote" != "origin" ]; then
+            ## 없다면 repo manifest에서 server 실제이름을 번역한 이름으로 다시 찾는다.
+            _line=$(revvserver de $(cat ${REPPFILE_JSON_REMOTE}|jq -rM --arg jq_remote "$remote" '.[]|select(.name == $jq_remote) | .review'))
+            if [ -z "$_line" ]; then
+                remote_key=$(cat ${REPPFILE_JSON_REMOTE}|jq -rM --arg jq_remote "$remote" '.[]|select(.name == $jq_remote) | .fetch'| cut -d'|' -f1)
+                _line=$(revvserver de $remote_key )
+            fi
+        else
+            tmp=$(git config --get-regexp remote.$(git remote|head -1).url|cut -d' ' -f2|head -1)
+            _line=$(revvserver de $(echo "${tmp#*://}"| awk -F[./:] '{print $1"_"$4}') )
+        fi
+    fi
+    [ -z "$_line" ] && { err "server infomation is null"; return 1; }
+
+    local _item=$(echo "$_line"  | cut -d'|' -f2)
+
+
+    case ${return_type} in                                                                         # return value
+            http)    prn=$(echo "${_item%:*}")                                                     # http://vgit.lge.com/na
+    ;;      port)    prn=$(echo "${_item##*:}")                                                    # 29420
+    #;;       sub)   prn=$( echo "${_item#*://}"| awk -F[./:] '{sub(/-.*/,"",$1);print $1}'
+    ;;       sub)    prn=$(echo "${_item#*://}"| awk -F[./:\ ] '{print $1}')                       # vgit
+    ;;    domain)    prn=$(echo "${_item#*://}"| awk -F[./:\ ] '{print $2"."$3}')                  # lge.com
+    ;; subdomain)    prn=$(echo "${_item#*://}"| awk -F[./:\ ] '{print $1"."$2"."$3}')             # vgit.lge.com
+    ;;      path)    prn=$(echo "${_item#*://}"| awk -F[./:\ ] '{if ($4 !~ /^[0-9]+$/) print $4}') # na
+    ;;       url)    prn=$(echo "${_item#*://}"| awk -F[./:\ ] '{$4="/"$4;gsub(/\/none_.*/,"",$4);print $1"."$2"."$3$4}')  # vgit.lge.com/na
+    ;;       key)    prn=$(echo "$_line"  | cut -d'|' -f1)                                         # vgit_29420
+    ;;      user)    prn=$(echo "$_line"  | cut -d'|' -f3)                                         # vc.integrator
+    ;;      pass)    prn=$(echo "$_line"  | cut -d'|' -f4)                                         # N4lIA0SoQAoUfxlmCZudjNA12344
+    ;;     alias)    prn=$(echo "$_line"  | cut -d'|' -f5)                                         # vgit_na,na
+    ;;     debug)    prn=$(echo "${_item}")                                                        # http://vgit.lge.com/na:29420
+    ;;         *)    prn='';  ret=1                                                                # error
+    esac
+    [ -n "$prn" ] && { echo "$prn" |xargs; return 0; }  || return 1
+}
+
+
+
+function revvserver(){
+## ---------------------------------------------------------------------------
+# encoding as variable: code env <keyname> <key>
+# encoding as file: code en <keyfile> <key>
+# decode de <keyfile>
+# $1 : cmd
+# $2 : query server (vgit_na, na, as, lamp, ...)
+local setflag key_id
+local cmd=$1 server=$2
+
+    case $cmd in
+       gen) #default server 접속정보 파일인 ~/.key_server를 생성한다.
+            clog ".key_server" "is generated, \nplease add your server info with http key from: https://gerrit.url.com/settings/#HTTPCredentials\n"
+
+            # REMOTEKEY must be made by 'SubDomain + Port'
+            cat <<-EOF  >.key_server
+			REMOTEKEY       |URL to GERRIT                                         |ACCOUNT         |HTTP KEY                      |ALIAS
+			vgit_29420      |http://vgit.lge.com/na:29420                          |vc.integrator   |ex: N4lIA0SoQAoUfxlmCZudjNA1  |na,vgit_na
+			vgit_29430      |http://vgit.lge.com/eu:29430                          |vc.integrator   |~~~                           |eu,vgit_eu
+			vgit_29440      |http://vgit.lge.com/as:29440                          |vc.integrator   |~~~                           |as,vgit_as
+			vgit_29550      |http://vgit.lge.com/adas:29550                        |vc.integrator   |                              |adas,vgit_adas
+			vgit_29999      |http://vgit.lge.com/devops_test:29999                 |vc.integrator   |                              |devops,test,devops_test
+			lamp_29418      |http://lamp.lge.com/review:29418                      |vc.integrator   |                              |review,lampauto,lamp
+EOF
+        cat .key_server
+
+    ;;  en) #~/.key_server.en 로 암호화한다.
+            if [ -f $HOME/.key_server ]; then
+                clog "$HOME/.key_server will be converted to $HOME/.key_server.en with encrypting"
+                cat $HOME/.key_server | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey > $HOME/.key_server.en
+                rm -f $HOME/.key_server
+            else
+                clog "$HOME/.key_server.en" "could be updated by '$revv server editing' [$HOME/.key_server]"
+                err "You must create server connection info, use '$revv server gen'"; return 1
+            fi
+
+    ;;edit) #~/.key_server.en으로 부터 ~/.key_server를 생성하여 편집할수 있게 해준다.
+            cat $HOME/.key_server.en | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey >$HOME/.key_server
+            clog "$HOME/.key_server" "is decrypted from $HOME/.key_server.en"
+            [ -f "$HOME/.key_server" ] && cat $HOME/.key_server || { err "You must create server connection info, use '$revv server gen'"; return 1; }
+
+    ;;  de) #~/.key_server.en에서 server정보가 들어있는 line을 리턴한다.
+            #이름이 정확히 key에 match하며 key를 해당 line을 리턴, 그렇지 않으면 alias에서 확인, 그렇지 않으면 전체 line에서 확인하여 해당 line을 리턴
+            #revvserver de <remote>는 subshell에서 호출/실행되므로 revvserver de load만 직접호출하여 부모 shell에서 실행되도록 하였다.
+            #그 이유는 REVV_SERVER 배열값이 subshell에서 초기값으로 할당되면 subshell 종료시 사라지므로 부모shell에서 참조가 불가능하다.
+            if ! [ -f $HOME/.key_server.en ]; then err "You must create server connection info, use 'revv server gen'" >2 ; return 1; fi
+            if [ "$server" = "load" ]; then
+                while IFS='|' read -r key url account pass alias; do
+                    key=$(echo "$key" | xargs) # 앞뒤 공백 제거
+                    REVV_SERVER["$key"]="${key}|${url}|${account}|${pass}|${alias}"
+                    #REMOTEKEY이후부터 출력해서 REMOTEKEY, ALIAS, URL 순으로 match하는지 검색한다.
+                    done < <(cat "$HOME/.key_server.en" | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey | awk -F'|' 'p{print} $1 ~ /^REMOTEKEY */ {p=1}')
+                return 0;
+            else
+                #[[ $- == *x* ]] && { set +x ; setflag=true; }
+                printf "%s\n" "${REVV_SERVER[@]}" |sort | awk -v tag="$server" -F '[[:space:]]*\\|' '
+                    $1 == tag   {print; exit}   #먼저 match하면 출력후 종료
+                    $5 ~ tag    {print; exit}
+                    $2 ~ tag    {print; exit}'
+                #${setflag:-false} && { set -x ; setflag=false; }
+            fi
+
+    ;;check|info) #revvserver_item 함수 test용으로 모든 format대로 제대로 출력하는지 확인할수 있다.
+            test_revvserver_item $cmd
+    ;;help) cat <<- EOF
+			usage) revv server <cmd> <option>
+
+			revv server   gen             #generate template .key_server file for easy creation
+			revv server    en             #after update .key_server, encrypt it to .key_server.en
+			revv server  edit             #encrypted .key_server.en will be decryped to .key_server to edit
+			revv server    de vgit_na     #search vgit_na server and get info of it from .key_server.en
+			revv server  show             #show current server info from .key_server.en
+			revv server check             #check connection of server. if success, key is correct!
+			revv server  info             #check connection of server and format of revvserver_item api
+EOF
+    ;;show|*)  #현재 .key_server파일을 보여준다.
+            [ ! -f $HOME/.key_server.en ] && err "You must create server connection info, use '$revv server gen'"
+            cat $HOME/.key_server.en | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey
+
+            clog "You can refer:" "'revv server help'"
+
+    esac
+}
+
+
+
 function revvcheck_server(){
 ## ---------------------------------------------------------------------------
 # check gerrit is permitted for input user on git project > branch
@@ -2587,8 +2722,6 @@ function revvcheck_server(){
 
     local server=$1
     local flag=$2
-
-    [ "$REVV_TAG" = "$server" ] && return 0
     local key=$(revvserver_item ${server}  pass)
     local user=$(revvserver_item ${server} user)
 
@@ -2599,7 +2732,7 @@ function revvcheck_server(){
     #$DEBUG ["$server"]["$port"]
 
     ## gerrit api에 access가 가능한지를 gerrit version을 제대로 return하는지 여부로 판단한다.
-    [ "${flag}" = "log" ] && info "curl -su ${user}:${key} ${server}/a/config/server/version |sed '1d'| jq -cC '.'"
+    [ "${flag}" = "log" ] && bar inline "${server}"; echo "curl -su ${user}:${key} ${server}/a/config/server/version |sed '1d'| jq -cC '.'"
     REVV_VER=$(curl -su ${user}:${key} ${server}/a/config/server/version |sed '1d'| jq -cC '.')
     if ! [[ "${REVV_VER}" =~ [2-9].[0-9].[0-9]* ]]; then REVV_VER='NA'; err "gerrit is not working, please check"; return 1; fi
 
@@ -2722,7 +2855,7 @@ function test_revvserver_item() {
         if [ "$cmd" = info ]||[ "$cmd" = check ]; then revvcheck_server $_item log; fi
 
         if [ "$cmd" = info ]; then
-        for _test in http port sub domain subdomain path url remote debug;do
+        for _test in http port sub domain subdomain path url key user pass alias debug;do
             bbar cyan "${_item##*/}:$_test"  "$(revvserver_item "${_item##*/}" "$_test")\n"
         done
         fi
@@ -2796,6 +2929,7 @@ EOF
 
 
 
+JSON_IDFY=")]}'"
 function revvaccount(){
 ## ---------------------------------------------------------------------------
 
@@ -3529,15 +3663,15 @@ function revv(){
 
 #set +o noglob
 local MENU=(
-"  connect: check if input account can access branch in gitproject on server"
 "   server: check/add/listup predefined git server list or status"
 "     info: shows repository info such as manifest path, repo cmd, tree of manifests, etc"
 "  project: find/add/delete project or change parents of project"
 "   branch: find/add/remove branches by name"
 "   commit: find commit in review system"
 "   forall: repoforal for revv branch commands"
-"   access: show access permission/group in specific git including child & parents"
 "     user: check if account is existed & get account info "
+"   access: show access permission/group in specific git including child & parents"
+"  connect: check if input account can access branch in gitproject on server"
 "   sshkey: get registered SSH-key for an account in server "
 "    group: find/findmember/add/delete group by name"
 "      cmd: list useful command from gerrit"
@@ -3549,15 +3683,15 @@ case "$1" in
                      ##$1:cmd      ${@:2}:parameters
                         help)                                            reppmenu help "${MENU[@]}"
     ;;                    '')                                            reppmenu revv "${MENU[@]}"
-    ;;               connect)      reppcheck_initvar gittrevv        &&  revvconnect "${@:2}"
     ;;                server)  [ "$2" = "status" ] && revvserverstatus "${@:3}" || revvserver "${@:2}"
     ;;                  info)      reppcheck_initvar gittrevv        &&  revvinfo  "${@:2}"
     ;;              project*)      reppcheck_initvar repprevv         ;  revvproject "${@:1}"
     ;;               branch*)      reppcheck_initvar reppgittrevv     ;  revvbranch "${@:1}"
     ;;                commit)      reppcheck_initvar reppgittrevv     ;  revvcommit "${@:2}"  # repp변수확인시 실패해도 계속진행
     ;;                forall)      reppcheck_initvar repprevv        &&  revvforall "${@:2}"
-    ;;               access*)      reppcheck_initvar reppgittrevv     ;  revvaccess "${@:1}"
     ;;    user|sshkey|group*)      reppcheck_initvar repprevv        &&  revvaccount "${@:1}"
+    ;;               access*)      reppcheck_initvar reppgittrevv     ;  revvaccess "${@:1}"
+    ;;               connect)      reppcheck_initvar gittrevv        &&  revvconnect "${@:2}"
     ;;                   cmd)      reppcheck_initvar reppgittrevv    &&  revvshowcmd "${@:2}"
     ;;                 debug)      reppcheck_initvar gittrevv        &&  revvdebug "${@:2}"
 
@@ -3709,7 +3843,7 @@ function reppdebug(){
     source <(cat <<'EOL'
         bar inline "GITT_VARIABLE && REPP_VARIABLE for all repository"
         for var in \
-        '${REVV_VER}' '${REVV_TAG}' '${REVV_SERVER}' \
+        '${REVV_VER}'  \
         '${GITT_REMOTE}' '${GITT_PROJECT}' '${GITT_BRANCH}' '${GITT_PATH}' '${GITT_REVIEW}' '${GITT_URL}' \
         '${REPP_PATH}' '${REPP_ROOT}' '${REPP_INIT}' '${REPP_REMOTE}' '${REPP_PROJECT}' '${REPP_BRANCH}' '${REPP_URL}' '${REPP_REPOURL}' '${REPP_REF}' '${REPP_GROUPS}' '${REPP_COUNT}' \
         '${REPPFILE_STATUS}' '${REPPFILE_COMMIT}' '${REPPFILE_CSV}' '${REPPFILE_XML}' '${REPPFILE_MANI}'
@@ -3812,6 +3946,7 @@ esac
 ##============================================================================
 ## Main
 ##============================================================================
+declare -A REVV_SERVER
 REVV_VER=
 GITT_REMOTE= &&GITT_PROJECT= &&GITT_BRANCH= &&GITT_REVIEW= &&GITT_URL= &&GITT_PATH=
 ##REPP_PATH=.repo/manifests, REPP_ROOT=src root, REPP_COUNT=total repo count, REPP_CMD=repo command
