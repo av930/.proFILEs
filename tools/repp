@@ -54,8 +54,8 @@ EOF
 
 ## oneline function defined below
 ## suppress print path
-pushd() { command pushd "$@" > /dev/null ;}
-popd() { command popd "$@" > /dev/null ;}
+pushd() { command pushd "$@" &> /dev/null ;}
+popd() { command popd "$@" &> /dev/null ;}
 NJOBS=$(( $(nproc --all) / 4))
 gittcheck_isgitproject(){ git -C "$1" rev-parse --is-inside-work-tree &> /dev/null ;}
 
@@ -1989,8 +1989,8 @@ function revv_initvar(){
 
     #load revvserver list from .key_server.en
     revvserver de load
-    key=$(revvserver_item ${GITT_REMOTE:?'ERROR: check server info!!'} pass)
-    if (( 40 > ${#key} )); then
+    key=$(revvserver_item ${GITT_REMOTE} pass)
+    if (( ${#key} > 0 )) && (( 40 > ${#key} ))  ; then
         warn "if problem continue, check gerrit http key value in [~/.key_server] \n
         you can generate file [.key_server] : cmd[revvserver gen] and add access key"
         ret=1
@@ -2587,24 +2587,10 @@ function  revvserver_item() {
     local ret=0 remote=$1 prn _line remote_key tmp
     local return_type=$2
     ## server list로 부터 remote정보가 있는지 찾아 가져온다.
-    _line=$(revvserver de $remote)
-    if [ "$?" -ne 0 ] || [ -z "$_line" ]; then
-        if [ -f "${REPPFILE_JSON_REMOTE}" ] && [ "$remote" != "origin" ]; then
-            ## 없다면 repo manifest에서 server 실제이름을 번역한 이름으로 다시 찾는다.
-            _line=$(revvserver de $(cat ${REPPFILE_JSON_REMOTE}|jq -rM --arg jq_remote "$remote" '.[]|select(.name == $jq_remote) | .review'))
-            if [ -z "$_line" ]; then
-                remote_key=$(cat ${REPPFILE_JSON_REMOTE}|jq -rM --arg jq_remote "$remote" '.[]|select(.name == $jq_remote) | .fetch'| cut -d'|' -f1)
-                _line=$(revvserver de $remote_key )
-            fi
-        else
-            tmp=$(git config --get-regexp remote.$(git remote|head -1).url|cut -d' ' -f2|head -1)
-            _line=$(revvserver de $(echo "${tmp#*://}"| awk -F[./:] '{print $1"_"$4}') )
-        fi
-    fi
+    _line=$(revvserver de "$remote")
     [ -z "$_line" ] && { err "server infomation is null"; return 1; }
 
     local _item=$(echo "$_line"  | cut -d'|' -f2)
-
 
     case ${return_type} in                                                                         # return value
             http)    prn=$(echo "${_item%:*}")                                                     # http://vgit.lge.com/na
@@ -2634,7 +2620,7 @@ function revvserver(){
 # decode de <keyfile>
 # $1 : cmd
 # $2 : query server (vgit_na, na, as, lamp, ...)
-local setflag key_id
+local setflag
 local cmd=$1 server=$2
 
     case $cmd in
@@ -2681,12 +2667,45 @@ EOF
                     done < <(cat "$HOME/.key_server.en" | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey | awk -F'|' 'p{print} $1 ~ /^REMOTEKEY */ {p=1}')
                 return 0;
             else
-                #[[ $- == *x* ]] && { set +x ; setflag=true; }
-                printf "%s\n" "${REVV_SERVER[@]}" |sort | awk -v tag="$server" -F '[[:space:]]*\\|' '
-                    $1 == tag   {print; exit}   #먼저 match하면 출력후 종료
-                    $5 ~ tag    {print; exit}
-                    $2 ~ tag    {print; exit}'
-                #${setflag:-false} && { set -x ; setflag=false; }
+                [[ $- == *x* ]] && { set +x ; setflag=true; }
+                # 1st try: 입력된 이름으로 바로 lookup by key/alias/url from REVV_SERVER array
+                local _line=
+                _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | awk -v tag="$server" -F '[[:space:]]*\\|' '
+                    $1 == tag   {print; exit}   # key exact
+                    $5 ~ tag    {print; exit}   # alias contains
+                    $2 ~ tag    {print; exit}') # url contains
+
+                # 2nd try: manifest remote에서 유추된 이름으로 찾기 (name -> review or fetch -> REMOTEKEY)
+                if [ -z "$_line" ] && [ -f "${REPPFILE_JSON_REMOTE}" ] && [ "$server" != "origin" ]; then
+                    local _review _remotekey
+                    _review=$(jq -rM --arg jq_remote "$server" '.[]|select(.name == $jq_remote) | .review' "${REPPFILE_JSON_REMOTE}" 2>/dev/null)
+                    if [ -n "$_review" ] && [ "$_review" != "null" ]; then
+                        _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | awk -v tag="$_review" -F '[[:space:]]*\\|' '$1 == tag {print; exit}; $5 ~ tag {print; exit}; $2 ~ tag {print; exit}')
+                    fi
+                    if [ -z "$_line" ]; then
+                        _remotekey=$(jq -rM --arg jq_remote "$server" '.[]|select(.name == $jq_remote) | .fetch' "${REPPFILE_JSON_REMOTE}" 2>/dev/null | cut -d'|' -f1)
+                        if [ -n "$_remotekey" ] && [ "$_remotekey" != "null" ]; then
+                            _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | awk -v tag="$_remotekey" -F '[[:space:]]*\\|' '$1 == tag {print; exit}; $5 ~ tag {print; exit}; $2 ~ tag {print; exit}')
+                        fi
+                    fi
+                fi
+
+                # 3rd try: 독립된 git으로 간주하여 remote url에서 찾기 (subdomain_port -> REMOTEKEY like vgit_29420)
+                if [ -z "$_line" ]; then
+                    local tmp guessed
+                    tmp=$(git config --get-regexp remote.$(git remote | head -1).url 2>/dev/null | cut -d' ' -f2 | head -1)
+                    if [ -n "$tmp" ]; then
+                        guessed=$(echo "${tmp#*://}" | awk -F[./:] '{print $1"_"$4}')
+                        if [ -n "$guessed" ]; then
+                            _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | awk -v tag="$guessed" -F '[[:space:]]*\\|' '$1 == tag {print; exit}; $5 ~ tag {print; exit}; $2 ~ tag {print; exit}')
+                        fi
+                    fi
+                fi
+
+                if [ -z "$_line" ]; then err "server infomation is null"; return 1; fi
+                printf "%s\n" "$_line"
+                ${setflag:-false} && { set -x ; setflag=false; }
+                return 0
             fi
 
     ;;check|info) #revvserver_item 함수 test용으로 모든 format대로 제대로 출력하는지 확인할수 있다.
@@ -2981,12 +3000,12 @@ EOF
             fi
 
     ;;    sshkey~*)
-            info "config: " "${server}/na/settings/#SSHKeys"
+            info "config: " "${server}/settings/#SSHKeys"
             bar outline "get registered SSH-key for account [${source}] in server [$server]"
             #curl -su ${user}:${key} ${server}/a/accounts/${source}/sshkeys |sed '1d'| jq -cC '.[]|{ssh_public_key, comment}'
             out=$(curl -su ${user}:${key} ${server}/a/accounts/${source}/sshkeys)
-            if [ "$(echo "${out}" | head -1)" = "${JSON_IDFY}" ];
-            then echo "$out"| sed '1d'| jq -cC '.[]|{ssh_public_key, comment}'
+            if [ "$(echo "${out}" | head -1)" = "${JSON_IDFY}" ]; then echo "$out"| sed '1d'| jq -cC '.[]|{ssh_public_key, comment}'
+            elif [[ "$out" =~ "modify account not permitted" ]]; then  info "You don't have the permission 'modify account', Only can refer your own key"
             else err "$out"
             fi
 
@@ -3158,6 +3177,7 @@ EOF
 }
 
 
+
 function revvpermission(){
 ## ---------------------------------------------------------------------------
 
@@ -3199,6 +3219,7 @@ function revvpermission(){
     ;; *) :
     esac
 }
+
 
 
 ## ---------------------------------------------------------------------------
@@ -3683,20 +3704,18 @@ case "$1" in
                      ##$1:cmd      ${@:2}:parameters
                         help)                                            reppmenu help "${MENU[@]}"
     ;;                    '')                                            reppmenu revv "${MENU[@]}"
-    ;;                server)  [ "$2" = "status" ] && revvserverstatus "${@:3}" || revvserver "${@:2}"
+    ;;                server) if [ "$2" = "status" ]; then revvserverstatus "${@:3}"
+                              else reppcheck_initvar reppgittrevv     ;  revvserver "${@:2}"; fi
     ;;                  info)      reppcheck_initvar gittrevv        &&  revvinfo  "${@:2}"
     ;;              project*)      reppcheck_initvar repprevv         ;  revvproject "${@:1}"
     ;;               branch*)      reppcheck_initvar reppgittrevv     ;  revvbranch "${@:1}"
     ;;                commit)      reppcheck_initvar reppgittrevv     ;  revvcommit "${@:2}"  # repp변수확인시 실패해도 계속진행
     ;;                forall)      reppcheck_initvar repprevv        &&  revvforall "${@:2}"
-    ;;    user|sshkey|group*)      reppcheck_initvar repprevv        &&  revvaccount "${@:1}"
+    ;;    user|sshkey|group*)      reppcheck_initvar repprevvgitt    &&  revvaccount "${@:1}"
     ;;               access*)      reppcheck_initvar reppgittrevv     ;  revvaccess "${@:1}"
-    ;;               connect)      reppcheck_initvar gittrevv        &&  revvconnect "${@:2}"
+    ;;               connect)      reppcheck_initvar gittrevv         ;  revvconnect "${@:2}"
     ;;                   cmd)      reppcheck_initvar reppgittrevv    &&  revvshowcmd "${@:2}"
     ;;                 debug)      reppcheck_initvar gittrevv        &&  revvdebug "${@:2}"
-
-
-
 
 esac
 return $ret
