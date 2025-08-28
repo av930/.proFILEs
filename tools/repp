@@ -3211,8 +3211,14 @@ function revvpermission(){
                 ## [ "$(cat /tmp/pCount)" -gt 10 ] && { read -t 2 -p "Press Ctrl+C not to see more ..."; cat $cmdfile|sed -f - <(cat $file|jq -C '.local'); }
                 ## compact display
                 ## jq -cC '.local |to_entries[] | .value.permissions | to_entries[] | {key: .key, value: .value}') 여기서 action과 force값을 제외
-                cat $cmdfile| sed -f - <(cat $file | jq -cC '.local | to_entries[] | .value.permissions | to_entries[] |
-                    {key: .key, value: (.value | walk(if type == "object" then del(.action, .force) else . end))}') >&2
+                #cat $cmdfile| sed -f - <(cat $file | jq -cC '.local | to_entries[] | .value.permissions | to_entries[] |
+                #    {key: .key, value: (.value | walk(if type == "object" then del(.action, .force) else . end))}') >&2
+                cat $cmdfile| sed -f - <(cat $file | jq -cC '
+                    .local| to_entries[]|
+                    "BRANCH:  " + .key  + "  ",
+                    ( .value.permissions| to_entries[]| {key: .key, value: (.value | walk(if type == "object" then del(.action, .force) else . end))} )
+                ') >&2
+
     ;; accessparents*) bar inline "show permission parents git"
                 ## 입력된 project의 부모 project 정보를 stdout, stderr로 동시 출력한다.
                 cat $file|jq 'if .inherits_from then .inherits_from | {name, id, parent, state} | del(.web_links) else "No more parents" end' >&2
@@ -3248,6 +3254,7 @@ function revvaccess(){
 				usage) revv access[all|add|group|groupall|permission|permissionall|parents|parentsall]   na <project>
 				   ex) revv access              na vendor/qct/sa515m/sa515m_modem/modem_proc  #get permission info for current git
 				   ex) revv accessall           na vendor/qct/sa515m/sa515m_modem/modem_proc  #get all permission info including parents
+
 				   ex) revv accessgroup         na vendor/qct/sa515m/sa515m_modem/modem_proc  #get permission group for current git
 				   ex) revv accessgroupall      na vendor/qct/sa515m/sa515m_modem/modem_proc  #get permission group including parents
 				   ex) revv accesspermission    na vendor/qct/sa515m/sa515m_modem/modem_proc  #get permission setting for current git
