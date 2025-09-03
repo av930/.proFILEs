@@ -2663,54 +2663,57 @@ EOF
             #revvserver de <remote>는 subshell에서 호출/실행되므로 revvserver de load만 직접호출하여 부모 shell에서 실행되도록 하였다.
             #그 이유는 REVV_SERVER 배열값이 subshell에서 초기값으로 할당되면 subshell 종료시 사라지므로 부모shell에서 참조가 불가능하다.
             if ! [ -f $HOME/.key_server.en ]; then err "You must create server connection info, use 'revv server gen'" >2 ; return 1; fi
-            if [ "$server" = "load" ]; then
+
+            if [ ${#REVV_SERVER[@]} -eq 0 ]; then
                 while IFS='|' read -r key url account pass alias; do
                     key=$(echo "$key" | xargs) # 앞뒤 공백 제거
                     REVV_SERVER["$key"]="${key}|${url}|${account}|${pass}|${alias}"
                     #REMOTEKEY이후부터 출력해서 REMOTEKEY, ALIAS, URL 순으로 match하는지 검색한다.
-                    done < <(cat "$HOME/.key_server.en" | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey | awk -F'|' 'p{print} $1 ~ /^REMOTEKEY */ {p=1}')
-                return 0;
-            else
-                [[ $- == *x* ]] && { set +x ; setflag=true; }
-                # 1st try: 입력된 이름으로 바로 lookup by key/alias/url from REVV_SERVER array
-                local _line=
-                _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | awk -v tag="$server" -F '[[:space:]]*\\|' '
-                    $1 == tag   {print; exit}   # key exact
-                    $5 ~ tag    {print; exit}   # alias contains
-                    $2 ~ tag    {print; exit}') # url contains
-
-                # 2nd try: manifest remote에서 유추된 이름으로 찾기 (name -> review or fetch -> REMOTEKEY)
-                if [ -z "$_line" ] && [ -f "${REPPFILE_JSON_REMOTE}" ] && [ "$server" != "origin" ]; then
-                    local _review _remotekey
-                    _review=$(jq -rM --arg jq_remote "$server" '.[]|select(.name == $jq_remote) | .review' "${REPPFILE_JSON_REMOTE}" 2>/dev/null)
-                    if [ -n "$_review" ] && [ "$_review" != "null" ]; then
-                        _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | awk -v tag="$_review" -F '[[:space:]]*\\|' '$1 == tag {print; exit}; $5 ~ tag {print; exit}; $2 ~ tag {print; exit}')
-                    fi
-                    if [ -z "$_line" ]; then
-                        _remotekey=$(jq -rM --arg jq_remote "$server" '.[]|select(.name == $jq_remote) | .fetch' "${REPPFILE_JSON_REMOTE}" 2>/dev/null | cut -d'|' -f1)
-                        if [ -n "$_remotekey" ] && [ "$_remotekey" != "null" ]; then
-                            _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | awk -v tag="$_remotekey" -F '[[:space:]]*\\|' '$1 == tag {print; exit}; $5 ~ tag {print; exit}; $2 ~ tag {print; exit}')
-                        fi
-                    fi
-                fi
-
-                # 3rd try: 독립된 git으로 간주하여 remote url에서 찾기 (subdomain_port -> REMOTEKEY like vgit_29420)
-                if [ -z "$_line" ]; then
-                    local tmp guessed
-                    tmp=$(git config --get-regexp remote.$(git remote | head -1).url 2>/dev/null | cut -d' ' -f2 | head -1)
-                    if [ -n "$tmp" ]; then
-                        guessed=$(echo "${tmp#*://}" | awk -F[./:] '{print $1"_"$4}')
-                        if [ -n "$guessed" ]; then
-                            _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | awk -v tag="$guessed" -F '[[:space:]]*\\|' '$1 == tag {print; exit}; $5 ~ tag {print; exit}; $2 ~ tag {print; exit}')
-                        fi
-                    fi
-                fi
-
-                if [ -z "$_line" ]; then err "server infomation is null"; return 1; fi
-                printf "%s\n" "$_line"
-                ${setflag:-false} && { set -x ; setflag=false; }
-                return 0
+                done < <(cat "$HOME/.key_server.en" | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey | awk -F'|' 'p{print} $1 ~ /^REMOTEKEY */ {p=1}')
+                [ "$server" = "load" ] && return 0;
             fi
+
+            ## suppress -x
+            [[ $- == *x* ]] && { set +x ; setflag=true; }
+            # 1st try: 입력된 이름으로 바로 lookup by key/alias/url from REVV_SERVER array
+            local _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | awk -v tag="$server" -F '[[:space:]]*\\|' '
+                $1 == tag   {print; exit}   # key exact
+                $5 ~ tag    {print; exit}   # alias contains
+                $2 ~ tag    {print; exit}') # url contains
+
+            # 2nd try: manifest remote에서 유추된 이름으로 찾기 (name -> review or fetch -> REMOTEKEY)
+            if [ -z "$_line" ] && [ -f "${REPPFILE_JSON_REMOTE}" ] && [ "$server" != "origin" ]; then
+                local _review _remotekey
+                _review=$(jq -rM --arg jq_remote "$server" '.[]|select(.name == $jq_remote) | .review' "${REPPFILE_JSON_REMOTE}" 2>/dev/null)
+                if [ -n "$_review" ] && [ "$_review" != "null" ]; then
+                    _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | awk -v tag="$_review" -F '[[:space:]]*\\|' '$1 == tag {print; exit}; $5 ~ tag {print; exit}; $2 ~ tag {print; exit}')
+                fi
+                if [ -z "$_line" ]; then
+                    _remotekey=$(jq -rM --arg jq_remote "$server" '.[]|select(.name == $jq_remote) | .fetch' "${REPPFILE_JSON_REMOTE}" 2>/dev/null | cut -d'|' -f1)
+                    if [ -n "$_remotekey" ] && [ "$_remotekey" != "null" ]; then
+                        _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | awk -v tag="$_remotekey" -F '[[:space:]]*\\|' '$1 == tag {print; exit}; $5 ~ tag {print; exit}; $2 ~ tag {print; exit}')
+                    fi
+                fi
+            fi
+
+            # 3rd try: 독립된 git으로 간주하여 remote url에서 찾기 (subdomain_port -> REMOTEKEY like vgit_29420)
+            if [ -z "$_line" ]; then
+                local tmp guessed
+                tmp=$(git config --get-regexp remote.$(git remote | head -1).url 2>/dev/null | cut -d' ' -f2 | head -1)
+                if [ -n "$tmp" ]; then
+                    guessed=$(echo "${tmp#*://}" | awk -F[./:] '{print $1"_"$4}')
+                    if [ -n "$guessed" ]; then
+                        _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | awk -v tag="$guessed" -F '[[:space:]]*\\|' '$1 == tag {print; exit}; $5 ~ tag {print; exit}; $2 ~ tag {print; exit}')
+                    fi
+                fi
+            fi
+
+            if [ -z "$_line" ]; then err "server infomation is not loaded or null"; return 1; fi
+            printf "%s\n" "$_line"
+            ## suppress -x
+            ${setflag:-false} && { set -x ; setflag=false; }
+            return 0
+
 
     ;;check|info) #revvserver_item 함수 test용으로 모든 format대로 제대로 출력하는지 확인할수 있다.
             test_revvserver_item $cmd
@@ -2784,12 +2787,7 @@ function revvcheck_account(){
     local key=$(revvserver_item ${server} pass)
     local ret=()
 
-    #local port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)')
-    if [ -z "${server}" ];
-    then port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)'); server=$(revvserver_item ${port} http)
-    else port=$(revvserver_item ${server} port); server=$(revvserver_item ${server} http);
-    fi
-
+    server=$(revvserver_item ${server} http)
     readarray -d',' -t ret < <(curl -su ${ACCOUNT}:${key} ${server}/a/accounts/?suggest\&q=${user}|sed '1d'| jq -c '.[]|{_account_id,username,name,email}'|sed  's/[{}"]//g')
     ! [[ "${ret[*]}" =~ "${user}" ]] && err "there is no account [${user}] in gerrit" && return 1
 
@@ -2827,17 +2825,14 @@ function revvcheck_permission(){
     local gitproject=${oriproject//'/'/'%2F'}
     local branch=$4
     local perm=$5
-    local flag=$6
     local key=$(revvserver_item ${server} pass)
     local log ret
+    local file=$(mktemp)
 
     revvcheck_account ${server} ${user}
 
     #local port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)')
-    if [ -z "${server}" ];
-    then port=$(echo ${REPP_URL#*@} | grep -oP '(?<=:)[0-9]+(?=/)'); server=$(revvserver_item ${port} http)
-    else port=$(revvserver_item ${server} port); server=$(revvserver_item ${server} http);
-    fi
+    server=$(revvserver_item ${server} http);
     if [ -z "${oriproject}" ];then info "guide) repp connect help" && return 1;fi
 
     ##[ "${oriproject}" = "${REPP_PROJECT}" ] && server=origin #change remote name for manifest git to origin
@@ -2852,14 +2847,27 @@ function revvcheck_permission(){
 
     bar inline "step1.4-gerritserver: [remote] check if ${user} can access branch on the project (checked by $ACCOUNT)"
     clog try "check git/branch is correct and can access it [case sensitive]"
-    dnlog "commit" "read,submit,push,pushMerge,revert,forgeCommitter,forgeAuthor,editTopicName,label-Code-Review"
+    dnlog "commit" "read,push,submit,abandon,pushMerge,revert,rebase,revert"
+    dnlog "extra" "directPush,forgeCommitter,forgeAuthor,editTopicName,label-Code-Review"
     dnlog "branchtag" "create,delete,createTag,createSignedTag"
     dnlog "server" "priority,streamEvents,administrateServer"
-    [ -z "${branch}" ] && branch="master"
     [ -z "${perm}" ] && perm="read"
-    log=$(set -x; curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject}/check.access?account=${REVV_USERID}\&ref=refs%2fheads%2f${branch}\&perm=${perm})
-    readarray -d $'\n' -t ret < <(echo "${log}" |sed '1d'| jq -rM '.message,.status')
-    ! [[ "${ret[1]}" =~ 200 ]] && { err "check gerrit project error: ${log}"; return 1;}
+    if [[ "${branch}" =~ "refs" ]]; then :
+    elif [ -z "${branch}" ]; then branch="refs/heads/master";
+    else branch="refs/heads/${branch}"
+    fi
+    branch="${branch//'/'/'%2F'}"
+
+    #for branch in refs/heads/branch1 refs/heads/branch2; do 반복필요.
+    log=$(set -x; curl -su ${ACCOUNT}:${key} ${server}/a/projects/${gitproject}/check.access?account=${REVV_USERID}\&ref=${branch}\&perm=${perm})
+    if [ "$(echo "${log}" | head -1)" = "${JSON_IDFY}" ]; then log=$(echo "$log" | sed '1d'); else err "$log"; return 1; fi
+
+    ##access하고자 하는 user의 group정보를 얻어와 어떤 group id가 아닌 group name으로 log를 출력해준다.
+    curl -su ${ACCOUNT}:${key} ${server}/a/accounts/${user}/groups |sed '1d'|jq -crM '.[]|{id,name}'  > $file
+    awk -F'"' '/id/ {id=$4} /name/ {name=$8; print "s#"id"#"name"#g"}' $file > /tmp/replace.sed
+    echo ${log}| sed -f /tmp/replace.sed |sed "s/user ${REVV_USERID}/${REVV_USER}/g"| jq .
+    ! [[ "$(echo "${log}" | jq -rM '.status')" = 200 ]] && { err "check gerrit project error"; return 1;}
+
     ##get username & accountID from gerrit
     echo "ok. gerrit branch[${branch}] existed and can accessed with[${perm}] permission by[${REVV_USER}]"
 
@@ -2910,7 +2918,7 @@ EOF
     ;;     *) :
     esac
 
-    local user oriserver gitproject branch port
+    local user oriserver gitproject branch port perm=$5
     local temp_p=$(expr "${REPP_URL}" : ".*[0-9]/\(.*\)\..*")
     [ -z "$4" ] && info "use default branch: ${GITT_BRANCH}"        ;branch=${4:-${GITT_BRANCH}} ;
     [ -z "$3" ] && info "use default git project: ${GITT_PROJECT}"  ;gitproject=${3:-${GITT_PROJECT}} ;
@@ -2922,9 +2930,9 @@ EOF
     bbar PURPLE "[$user] in" "\nchecked as 'revv connect $oriserver $user $gitproject $branch'\n\n"
 
     under "step1: check gerrit permission for ${user} from WEB(HTTP) by account admin[${ACCOUNT}]\n"
-    showRUN revvcheck_server ${oriserver} log                                              ;wave
-    showRUN revvcheck_account ${oriserver} ${user} log                                     ;wave
-    showRUN revvcheck_permission ${oriserver} ${user} ${gitproject} ${branch} read         ;wave
+    showRUN revvcheck_server ${oriserver} log                                                 ;wave
+    showRUN revvcheck_account ${oriserver} ${user} log                                        ;wave
+    showRUN revvcheck_permission ${oriserver} ${user} ${gitproject} ${branch} ${perm:-read}   ;wave
 }
 
 
@@ -2971,7 +2979,6 @@ function revvaccount(){
     local source=${3:-$USER}
     local target=$4
     local extra=$5
-    local file=$(mktemp)
     local out
 
 
@@ -2995,12 +3002,11 @@ EOF
     ;;      user~*)
             [ "$extra" != "none" ] && bar inline "check if account is existed & get account info "
             curl -su ${user}:${key} ${server}/a/accounts/?suggest\&q=${source} |sed '1d'|jq -cC .[]|pCount
-
             [ "$(cat /tmp/pCount)" -ne 1 ] && return 0
 
             if [ "$extra" != "none" ]; then
                 bar inline "list group name which account belongs to"
-                curl -su ${user}:${key} ${server}/a/accounts/${source}/groups |sed '1d'| jq -cC '.[]|{name, created_on}' | more -60
+                curl -su ${user}:${key} ${server}/a/accounts/${source}/groups |sed '1d'|jq -cC '.[]|{name, id, created_on}'
             fi
 
     ;;    sshkey~*)
@@ -3722,7 +3728,7 @@ case "$1" in
     ;;               branch*)      reppcheck_initvar reppgittrevv     ;  revvbranch "${@:1}"
     ;;                commit)      reppcheck_initvar reppgittrevv     ;  revvcommit "${@:2}"  # repp변수확인시 실패해도 계속진행
     ;;                forall)      reppcheck_initvar repprevv        &&  revvforall "${@:2}"
-    ;;    user|sshkey|group*)      reppcheck_initvar repprevvgitt    &&  revvaccount "${@:1}"
+    ;;    user|sshkey|group*)      reppcheck_initvar repprevvgitt     ;  revvaccount "${@:1}"
     ;;               access*)      reppcheck_initvar reppgittrevv     ;  revvaccess "${@:1}"
     ;;               connect)      reppcheck_initvar gittrevv         ;  revvconnect "${@:2}"
     ;;                   cmd)      reppcheck_initvar reppgittrevv    &&  revvshowcmd "${@:2}"
@@ -3909,11 +3915,8 @@ if [[ ! $(column -V 2>/dev/null|grep util-linux) =~ "util-linux" ]] ;then clog "
     cat << GUIDE
     1. dpkg -l | grep -i util-linux ##find a nearest version
     2. wget https://mirrors.edge.kernel.org/pub/linux/utils/util-linux/v2.31/util-linux-2.31.tar.gz
-    3. tar zxvf util-linux-2.31.tar.gz
-    4. cd util-linux-2.31
-    5. ./configure
-    6. make column
-    7. sudo cp .libs/column /usr/bin/column
+    3. tar zxvf util-linux-2.31.tar.gz && cd util-linux-2.31 && ./configure && make column
+    4. sudo cp .libs/column /usr/bin/column
 GUIDE
 fi
 }
