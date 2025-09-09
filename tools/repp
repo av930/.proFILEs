@@ -1532,7 +1532,7 @@ EOF
         ;;   '')    info "repp reset help : for more usage\n"
                     ## git reset --hard;   #reset to local lastest commit status.
                     ## git clean -xdf      #remove uncommitted change
-                    showRUNQ y repo forall -cj${NJOBS} 'git reset --hard FETCH_HEAD; git clean -xdf'
+                    showRUNQ y repo forall -cj${NJOBS} 'git rebase --abort||true; git fetch; git reset --hard @{u}; git clean -xdf'
 
                     #showRUN repo sync -dlvj${NJOBS} --force-remove-dirty
                     info "\nfinish reset all repositories, and reset FETCH_HEAD"
@@ -1541,7 +1541,7 @@ EOF
                     ${REPP_ROOT}/.repo/project.list
                     ${REPP_ROOT}/.repo/project-objects/
                     ${REPP_ROOT}/.repo/projects/"
-                    rm  -rf ${REPP_ROOT}/.repo/project.list \
+                    rm -rf ${REPP_ROOT}/.repo/project.list \
                     ${REPP_ROOT}/.repo/project-objects/ \
                     ${REPP_ROOT}/.repo/projects/
         ;;check|*)  showRUN repo status -vj${NJOBS}
@@ -1891,6 +1891,7 @@ function repp_initvar(){
     REPPFILE_JSON_REMOTE=${REPP_DIR}/repp_remote.json   #repp.json에서 remote정보만 추출한 파일, /tmp/에 임시저장됨
     REPPFILE_TXT=${REPP_DIR}/repp.txt                   #위 json을 parsing한 결과를 formatted txt로 저장한 파일, 구분자(|)
     REPPFILE_CSV=${REPP_DIR}/repp.csv                   #위 json 파일과 repo forall을 비교하여 최종 생성된 파일 DB, 구분자(|)로 excel로 읽을때는 변환필요.
+    REPPFILE_COMMITS=${REPPFILE_SCRIPT}.list            #reppapply로 들어오는 모든 commit의 dependency commit까지 저장
                                                         #repp.csv항목은 repo forall list와 동일하며, 세부 git정보만 더 포함되어 있다.
     #repp.csv.json                                      #manifest json을 parsin하여 생성된 DB
     #repp.csv.repo                                      #repo forall로부터 생성된 DB, json파일로 생성이 어려울때 최종사용하게 된다.
@@ -1901,6 +1902,7 @@ function repp_initvar(){
     REPPFILE_SCRIPT=${REPP_DIR}/reppscript              #repp forall에서 사용하는 script를 저장하는 파일들이다. in.tm.pre.post등이 존재한다.
     REPPSCRIPT_IN=${REPPFILE_SCRIPT}.in.sh              #repp forall -c <cmd> 부분으로 만들어진 임시 script
     REPPSCRIPT_OUT=${REPPFILE_SCRIPT}.out.sh            #pre + in + post = out으로 최종 실행되는 script
+
 
     #reppforall.csv.tmp                                 #reppforall.csv를 실제 실행할때 구분자(`)로 변경하여 처리하기 위한 중간파일
 
@@ -2074,14 +2076,12 @@ EOF
 
 
 
-
 shortname_of_branch() {
-    local input="$1"
     # branch name에서 뒤에서부터 _가 2번 나올때까지 삭제하고 prefix만 취해서 검색
+    local input="$1"
     local out="${input%_*_*}";
     if [ ${#out} -gt 12 ] || [ ${#out} -le 6 ]; then echo "${input:0:10}" ; else echo "$out"; fi
 }
-
 
 function gittinfo(){
 ## ---------------------------------------------------------------------------
@@ -2287,14 +2287,152 @@ function gittcommit(){
                 if [ $? -ne 0 ];then echo "need to install 'sudo apt-get install icdiff'"; fi
     ;; help|*)    cat <<-EOF
 				usage) gitt commit info         # show commit info and diff with cached
-				usage) gitt commit auto         # add auto commit
-				   ex) gitt commit auto misc    # add auto commit with msg 'misc'
+				usage) gitt commit auto         # add auto commit with msg '<date>: test'
+				   ex) gitt commit auto misc    # add auto commit with msg '<date>: misc'
 				usage) gitt commit reset        # show useful reset command
 
 				 info) gitt diff                # diff advanced with HEAD, HEAD^, staged, unstaged, revision
 				 info) gitt info                # overall info for current git
 				 info) gitt branch info         # branch info
 EOF
+    esac
+}
+
+
+
+function revv_pull() {
+#---------------------------------
+# commit list에 기록된 commit url을 하나씩 가져와서 git pull을 한다.
+# $1: change url
+    local c_info=/tmp/commit.json
+    local c_url c_list="$1" count=0
+    [ ! -s "$c_list" ] && { err "empty commit list: $c_list"; return 1; }
+
+    for c_url in $(cat ${c_list}); do
+        #print commit info into file
+        revvcommit url $c_url $c_info
+
+        local project_name="$(cat "${c_info}" | jq -r '.[].project')"
+        local project_path="$(repo list -p "$project_name" | head -1 )"
+        local cmt_pull_cmd="$(cat "${c_info}" | jq -r '.[].revisions[].fetch.ssh.commands.Pull')"
+
+        if [[ -z "${project_name}" ]] ||\
+        [[ -z "${project_path}" ]] ||\
+        [[ -z "${cmt_pull_cmd}" ]]; then
+            err "cannot get corrent commit info"; return 1;
+        fi
+
+        pushd ${REPP_ROOT}/${project_path}
+        bar outline "$((count++))"
+        showRUN ${cmt_pull_cmd}
+        [ $? -eq 0 ] && continue || { ${cmt_pull_cmd/git pull /git pull --rebase } && continue || return 1; }
+        popd
+    done
+}
+
+
+
+function revv_getdependent(){
+#----------------------------------------------------------------------------------------------------------
+# dependenct commit들을 찾아 입력파일에 저장해준다.
+# $1: dependent commit을 저장할 file: ex)/tmp/commit.list
+# $2: 분석할 commit url
+    local c_info=/tmp/commit.json
+    local c_list="$1"
+    local r_url c_url="$2"
+    local c_out=$(mktemp)
+
+    revvcommit url $c_url $c_info
+    # 현재 commit의 relate permalink를 모두 정리해서 모은다.
+    cat "${c_info}" | jq -r '.[].revisions[].commit.message' |sed -n 's/^\[+\][[:space:]]*\(https\?:\/\/.*\)/\1/p' |sort |uniq > ${c_out}
+    while IFS= read -r dep_url; do
+        grep -Fxq "$dep_url" "$c_list" && continue
+        echo "$dep_url" >> "$c_list"
+        revv_getdependent "$c_list" "$dep_url"
+    done < "${c_out}"
+}
+: '
+    if  diff -q -B ${c_list} ${c_out};
+    then echo "find to end"; return 0
+    else
+        for c_url in $(cat ${c_out}); do
+        cat ${c_list} ${c_out} |sort |uniq > ${c_list}
+        revv_getdependent "${c_list}" "${c_url}"
+        done
+    fi
+'
+
+function gittapply() {
+#---------------------------------
+# change_url로 부터 git pull명령을 가져와 해당 dir로 이동하여 git pull 진행
+# $1: one|all one:only base comit, all:base and its all dependent commits
+# $2: change url (단 1개만 입력받을수 있다.)
+    local c_list=/tmp/commit.list
+    local cmd="$1"
+    local c_url="$2"
+
+
+    echo "$c_url" > "$c_list"
+    case $cmd in
+    help)    cat <<-EOF
+		usage) gitt apply one <change url>          # apply only base commit
+		usage) gitt apply all <change url>          # apply base and its dependent commits
+		   ex) gitt apply all <http://   >
+EOF
+    ;;all)  #현재 commit의 dependency commit까지 queue넣음
+            clog "${cmd}" "Apply changes for commit with all dependent commits"
+            revv_getdependent "${c_list}" "${c_url}"
+    ;;one)  #현재 commit만 queue에 넣음
+            clog "${cmd}" "Apply changes for current commit only"
+    esac
+
+    #현재 commit의 종속commit까지 repp commit list에 저장
+    cat "$c_list" >> "${REPPFILE_COMMITS}"
+    #c_list에 들어있는 모든 commit을 적용
+    under "all commit list (top is base commit)\n"
+    cat "$c_list"
+    printf "\n\n"
+    revv_pull $c_list
+}
+
+
+
+function reppapply(){
+#----------------------------------------------------------------------------------------------------------
+# base commit and it's dependency commits을 git pull명령어로 현재 repo에 적용시킨다.
+# $@: list of commit changes URL (GERRIT_CHANGE_URL)
+    local cmd="$1"
+    local opt="${@:2}"
+    local change
+
+    ## commit list 생성
+    rm -f "${REPPFILE_COMMITS}" || true
+    for change in ${opt}; do echo "${change}" >> ${REPPFILE_COMMITS}; done
+    sort -u "${REPPFILE_COMMITS}" -o "${REPPFILE_COMMITS}"
+
+    case $cmd in
+    help)    cat <<-EOF
+		usage) repp apply one <change url>          # apply only base commit
+		usage) repp apply all <change url>          # apply base and its dependent commits
+		   ex) repp apply all <http://
+
+		 info) repp show                            # show overall change list
+EOF
+    ;;one)  #cmd is change_id, base commit들만 가져온다.
+            clog "${cmd}" "Apply changes for commit without dependency"
+            for change in $(cat ${REPPFILE_COMMITS}); do
+                gittapply one "${change}"
+                [ $? -ne 0 ] && { err "failed to apply patch for [$change]"; return 1; }
+            done
+
+    ;;all)  #base commit들과 dependency commit들을 모두 가져온다.
+            clog "${cmd}" "Apply changes for commit with all dependent commits"
+            for change in $(cat ${REPPFILE_COMMITS}); do
+                gittapply all "${change}"
+                [ $? -ne 0 ] && { err "failed to apply patch for [$change]"; return 1; }
+            done
+
+    ;;*) err "please check command" ; repp apply help; return 1
     esac
 }
 
@@ -2372,6 +2510,7 @@ function gittbranch_list(){
     #set +o noglob
     showRUNQ git branch -rvv --sort=committerdate --list ${opt} | tail -60
 }
+
 
 
 function gittbranch(){
@@ -2664,6 +2803,7 @@ EOF
             #그 이유는 REVV_SERVER 배열값이 subshell에서 초기값으로 할당되면 subshell 종료시 사라지므로 부모shell에서 참조가 불가능하다.
             if ! [ -f $HOME/.key_server.en ]; then err "You must create server connection info, use 'revv server gen'" >2 ; return 1; fi
 
+            ## revvserver de load가 호출되지 않더라도 server정보가 없으면 자동으로 load
             if [ ${#REVV_SERVER[@]} -eq 0 ]; then
                 while IFS='|' read -r key url account pass alias; do
                     key=$(echo "$key" | xargs) # 앞뒤 공백 제거
@@ -2675,13 +2815,14 @@ EOF
 
             ## suppress -x
             [[ $- == *x* ]] && { set +x ; setflag=true; }
-            # 1st try: 입력된 이름으로 바로 lookup by key/alias/url from REVV_SERVER array
+            ## 1st try: 입력된 이름을 정리하여 key/alias/url 항목에서 찾기from REVV_SERVER array
+            [[ $server =~ ^https?://[^/]+/[^/]+ ]] && server="${BASH_REMATCH[0]/https/http}"
             local _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | awk -v tag="$server" -F '[[:space:]]*\\|' '
                 $1 == tag   {print; exit}   # key exact
                 $5 ~ tag    {print; exit}   # alias contains
                 $2 ~ tag    {print; exit}') # url contains
 
-            # 2nd try: manifest remote에서 유추된 이름으로 찾기 (name -> review or fetch -> REMOTEKEY)
+            ## 2nd try: manifest remote에서 유추된 이름으로 찾기 (name -> review or fetch -> REMOTEKEY)
             if [ -z "$_line" ] && [ -f "${REPPFILE_JSON_REMOTE}" ] && [ "$server" != "origin" ]; then
                 local _review _remotekey
                 _review=$(jq -rM --arg jq_remote "$server" '.[]|select(.name == $jq_remote) | .review' "${REPPFILE_JSON_REMOTE}" 2>/dev/null)
@@ -3449,13 +3590,24 @@ function revvcommit(){
 
                 wave
             done
+    ;; url)
+            #revv commit url https://vgit.lge.com/as/c/honda/linux/build_tsu/+/1897104 file
+            #subcmd=change_url, source=file
+            #source가 file이면 해당file과 화면출력, 아니면 화면으로 출력
+            local queryURL="$(echo "$subcmd" | sed  's#c/.*/+/#a/changes/?q=#')"
+            curl -su ${user}:${key} "${queryURL/https/http}&o=CURRENT_REVISION&o=DOWNLOAD_COMMANDS&o=CURRENT_COMMIT&n=1" | sed '1d' > $file
+            if [ -f "$source" ]; then mv $file $source;
+            elif [ "$source" = "view" ]; then cat $file | jq -c '.[]|to_entries[]' #print only
+            else cat $file | tee $source |jq -c '.[]|to_entries[]' #both
+            fi
 
     ;;*|help)
             cat <<-EOF
 			usage) revv commit find [na|as|eu|devops_test|review] <commit-id>    # find commit info from server
 			   ex) revv commit find na 57a4eeeca914                              # get change-id from commit-id
+			usage) revv commit url  <change url>                                 # find comit by change url
+			   ex) revv commit url  <http://vgit.lge.com/as/c/honda/con/linux/services/posprovidermgr/+/1903821>
 
-			info) 'review' is lamp-sever, others are vgit server, these servers must be predefined.
 			info) to find in all server, use 'repp commit find 57a4eeec'.
 EOF
 
@@ -3766,6 +3918,7 @@ case "$1" in
     ;;    show)     reppcheck_initvar gitt      &&  gittshow "${@:2}"
     ;;      go)     reppcheck_initvar gittgo    &&  gittgo "${@:2}"
     ;;  commit)     reppcheck_initvar gitt      &&  gittcommit "${@:2}"
+    ;;   apply)     reppcheck_initvar gitt      &&  gittapply "${@:2}"
     ;;  branch)     reppcheck_initvar gitt      &&  gittbranch "${@:2}"
     ;;    find)     reppcheck_initvar gitt      &&  gittfind "${@:2}"
     ;;    diff)     reppcheck_initvar gitt      &&  gittdiff "${@:2}"
@@ -3812,6 +3965,7 @@ case "$1" in
     ;; show)        reppcheck_initvar repp              &&  reppshow "${@:2}"
     ;; go)          reppcheck_initvar repp              &&  reppgo "${@:2}"
     ;; commit)      reppcheck_initvar repp              &&  reppcommit "${@:2}"
+    ;; apply)       reppcheck_initvar repp              &&  reppapply "${@:2}"
     ;; find|list)   reppcheck_initvar repp              &&  reppfind "${@:2}"
     ;; branch)      reppcheck_initvar repp              &&  reppbranch "${@:2}"
     ;; mani)        reppcheck_initvar reppmani          &&  reppmani "${@:2}";
