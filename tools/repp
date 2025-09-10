@@ -2305,8 +2305,12 @@ function revv_pull() {
 # commit list에 기록된 commit url을 하나씩 가져와서 git pull을 한다.
 # $1: change url
     local c_info=/tmp/commit.json
-    local c_url c_list="$1" count=0
+    local debug="$1"
+    local c_url c_list="$2"
+    local count=1 t_count=$(cat ${c_list}| wc -l)
+
     [ ! -s "$c_list" ] && { err "empty commit list: $c_list"; return 1; }
+
 
     for c_url in $(cat ${c_list}); do
         #print commit info into file
@@ -2323,7 +2327,11 @@ function revv_pull() {
         fi
 
         pushd ${REPP_ROOT}/${project_path}
-        bar outline "$((count++))"
+        case $debug in
+        true)  bar outline "$((count++))/$t_count] [enter:continue| ctrl+c:break"; read
+        ;; *)  bar outline "$((count++))/$t_count"
+        esac
+
         showRUN ${cmt_pull_cmd}
         [ $? -eq 0 ] && continue || { ${cmt_pull_cmd/git pull /git pull --rebase } && continue || return 1; }
         popd
@@ -2339,7 +2347,7 @@ function revv_getdependent(){
 # $2: 분석할 commit url
     local c_info=/tmp/commit.json
     local c_list="$1"
-    local r_url c_url="$2"
+    local c_url="$2"
     local c_out=$(mktemp)
 
     revvcommit url $c_url $c_info
@@ -2351,16 +2359,8 @@ function revv_getdependent(){
         revv_getdependent "$c_list" "$dep_url"
     done < "${c_out}"
 }
-: '
-    if  diff -q -B ${c_list} ${c_out};
-    then echo "find to end"; return 0
-    else
-        for c_url in $(cat ${c_out}); do
-        cat ${c_list} ${c_out} |sort |uniq > ${c_list}
-        revv_getdependent "${c_list}" "${c_url}"
-        done
-    fi
-'
+
+
 
 function gittapply() {
 #---------------------------------
@@ -2370,14 +2370,30 @@ function gittapply() {
     local c_list=/tmp/commit.list
     local cmd="$1"
     local c_url="$2"
-
+    local f_debug=false f_print=false
+    [ -n "$3" ] && { err "only one commit url is valid: see) gitt apply help"; return 1; }
 
     echo "$c_url" > "$c_list"
+
+    #extra기능을 위한 flag filter out, debug/print등의 flag를 추출한다.
+    case ${cmd::1} in
+      D) f_debug=true; cmd=${cmd:1}
+    ;;P) f_print=true; cmd=${cmd:1}
+    ;;*) : #do nothing
+    esac
+
     case $cmd in
     help)    cat <<-EOF
-		usage) gitt apply one <change url>          # apply only base commit
-		usage) gitt apply all <change url>          # apply base and its dependent commits
-		   ex) gitt apply all <http://   >
+		guide) gitt apply <cmd> <change url>..<change url>
+		 info) Dcmd: run step by step by asking
+		       Pcmd: print dependency commit list without run
+
+		usage) gitt apply one <change url>                 # apply only base commit
+		usage) gitt apply all <change url>                 # apply base and its dependent commits
+		   ex) gitt apply all <http://   >                 # same as above
+		   ex) gitt apply Pone <http://vgit.lge.com/c/~~>  # print all commits without run
+		   ex) gitt apply Dall <http://vgit.lge.com/c/~~>  # run apply with asking before run
+
 EOF
     ;;all)  #현재 commit의 dependency commit까지 queue넣음
             clog "${cmd}" "Apply changes for commit with all dependent commits"
@@ -2392,7 +2408,9 @@ EOF
     under "all commit list (top is base commit)\n"
     cat "$c_list"
     printf "\n\n"
-    revv_pull $c_list
+
+    #gitt apply Pall|Pone 으로 입력되면, 실제 git pull은 하지 않는다.
+    ${f_print:-false} || revv_pull "$f_debug" "$c_list"
 }
 
 
@@ -2412,28 +2430,28 @@ function reppapply(){
 
     case $cmd in
     help)    cat <<-EOF
-		usage) repp apply one <change url>          # apply only base commit
-		usage) repp apply all <change url>          # apply base and its dependent commits
-		   ex) repp apply all <http://
+		guide) repp apply <cmd> <change url>..<change url>
+		 info) Dcmd: run step by step by asking
+		       Pcmd: print dependency commit list without run
 
-		 info) repp show                            # show overall change list
+		usage) repp apply one <change url>..<change url>   # apply only base commit
+		usage) repp apply all <change url>..<change url>   # apply base and its dependent commits
+		   ex) repp apply all <http://vgit.lge.com/c/~~>   # same as above
+		   ex) repp apply Pone <http://vgit.lge.com/c/~~>  # print all commits without run
+		   ex) repp apply Dall <http://vgit.lge.com/c/~~>  # run apply with asking before run
+
+		 info) repp show                                   # show overall change list
+		 info) repp reset                                  # revert to origin
 EOF
-    ;;one)  #cmd is change_id, base commit들만 가져온다.
-            clog "${cmd}" "Apply changes for commit without dependency"
-            for change in $(cat ${REPPFILE_COMMITS}); do
-                gittapply one "${change}"
-                [ $? -ne 0 ] && { err "failed to apply patch for [$change]"; return 1; }
-            done
-
-    ;;all)  #base commit들과 dependency commit들을 모두 가져온다.
-            clog "${cmd}" "Apply changes for commit with all dependent commits"
-            for change in $(cat ${REPPFILE_COMMITS}); do
-                gittapply all "${change}"
-                [ $? -ne 0 ] && { err "failed to apply patch for [$change]"; return 1; }
-            done
-
+    ;;?one)  clog "${cmd}" "Apply changes for commit without dependency"
+    ;;?all)  clog "${cmd}" "Apply changes for commit with all dependent commits"
     ;;*) err "please check command" ; repp apply help; return 1
     esac
+
+    for change in $(cat ${REPPFILE_COMMITS}); do
+        gittapply "$cmd" "${change}"
+        [ $? -ne 0 ] && { err "failed to apply patch for [$change]"; return 1; }
+    done
 }
 
 
@@ -3903,6 +3921,7 @@ local MENU=(
 "   show: shows git (default 15) commits history, file change list"
 "     go: move dir to repo root, git root, manifest dir or specific git"
 " commit: git auto commit or show commit info (change file list and diff view)"
+"  apply: apply commit base or its dependent commits"
 " branch: lookup, create, delete remote branch"
 "   find: find string(changes) in commit history by multiple way."
 "   diff: compare commit, branch with dir/file"
@@ -3943,13 +3962,14 @@ local MENU=(
 "    show: shows uncommitted changes, top -1 commits, md5 sum for all repository"
 "      go: move to repo root dir, manifest dir, git path nearby with similar depth"
 "  commit: shows latest commits(git log -1) from all repository (default 20)"
+"   apply: apply commits for multiple gits in repo project"
 "    find: search(list) string in all (repo revision, remote, branch, project, path)"
 "  branch: show branch info, push remote branch, look-up remote-branch"
 "    mani: repo manifest handling"
 "    init: repo init with automatic options"
 "    sync: repo sync with optimized multi-job and options"
 "   reset: reset all repositories to original state"
-"  ersion: check repo & python version and provide repo upgrade"
+" version: check repo & python version and provide repo upgrade"
 "  onnect: check the connection with git host server and accessibilty for branch of git"
 "   debug: show variable REPO, REPP, REPPFILE, GITT variable used in script"
 " install: check essential linux packages to run repp utility"
