@@ -1962,9 +1962,9 @@ function gitt_initvar(){
 
     #git config --get-regexp remote.$GITT_REMOTE |sort|grep -Ee "(projectname|url)"
     #git config --get-regexp remote.*.projectname|cut -d' ' -f2
-    temp=$(git config --get-regexp remote.* |grep -e "projectname" |head -1|cut -f2 -d' ')
+    temp=$(git config --get-regexp remote.* |grep -Ee "(url)" |head -1| sed -E 's#.*://[^/]+/(.*)#\1#')
     if [ -n "${GITT_PROJECT}" ] && [ "${temp}" = "${GITT_PROJECT}" ]; then return 0; else GITT_PROJECT=${temp}; fi
-    if [ -z "${GITT_PROJECT}" ]; then GITT_PROJECT=$(git config --get-regexp remote.* |grep -Ee "(url)" |head -1| sed -E 's#.*://[^/]+/(.*)#\1#'); fi
+    if [ -z "${GITT_PROJECT}" ]; then GITT_PROJECT=$(git config --get-regexp remote.* |grep -e "projectname" |head -1|cut -f2 -d' '); fi
 
     #NEEDTO WORK: find more secure way to get current branch revision
     GITT_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null| sed 's:.*/::')
