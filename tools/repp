@@ -1870,14 +1870,14 @@ function repp_initvar(){
     ## set variable REPP if manifest dir exists
     if [ ! -d "${REPP_PATH}" ];then $DEBUG ${REPP_PATH_ALL[@]}; $DEBUG "you are not in repo project, please check !"; return 1;fi
     REPP_ROOT=${REPP_PATH%/.repo*}
-    ## 이미 초기화된 dir인지 판단.
-    if [ ! -f "${REPP_ROOT}/.repo/project.list" ] || [ ! -d "${REPP_ROOT}/.repo/projects" ] || [ ! -d "${REPP_ROOT}/.repo/project-objects" ];
-    then  err "repo sync is need, please check" ; return 1
-    else  REPP_INIT=1 #repo sync까지 완료
+    ## .repo/manifests.git/config 를 확인하여 mirror repo가 아닐때만 정상적인 repo인지 확인
+    if ! grep -A 5 '^\[repo\]' ${REPP_ROOT}/.repo/manifests.git/config | grep -q '^\s*mirror\s*=\s*true'; then
+        if [ ! -f "${REPP_ROOT}/.repo/project.list" ] || [ ! -d "${REPP_ROOT}/.repo/projects" ] || [ ! -d "${REPP_ROOT}/.repo/project-objects" ];
+        then  err "repo sync is need, please check" ; return 1
+        else  REPP_INIT=1 #repo sync까지 완료
+        fi
     fi
-
     (( "${REPP_INIT}" > 1 ))  && [ -d "${REPP_PATH}" ] && [[ "${REPP_PATH}" =~ "${REPP_ROOT}" ]] && return 0
-
 
     pushd ${REPP_PATH}
     REPP_DIR=${REPP_ROOT}/.repp
