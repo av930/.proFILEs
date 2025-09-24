@@ -1,0 +1,27 @@
+{
+	"servers": {
+        "bash-mcp-server": {
+            "type": "sse",
+            "url": "http://10.159.47.21:8000/sse"
+        }
+	},
+	"inputs": [
+		{
+			"id": "say_hello",
+			"type": "string",
+			"name": "Say Hello",
+			"server": "bash-mcp-server",
+			"method": "hello",
+			"initialValue": "hello"
+		},
+		{
+			"id": "say_bye",
+			"type": "string",
+			"name": "Say bye",
+			"server": "bash-mcp-server",
+			"method": "bye",
+			"initialValue": "bye"
+		}
+
+	]
+}
