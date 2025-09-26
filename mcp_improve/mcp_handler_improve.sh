@@ -47,25 +47,19 @@ done
 
 # 라우팅 처리
 case "$METHOD:$REQ_PATH" in
-    "GET:/sse")
-        # SSE 연결이 열릴 때마다 로그 파일 삭제
-        true > "$LOG"
-        ## HTTP SSE 프로토콜인지 확인한다.
-        {
-            printf "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\n\r\n"
+    "GET:/sse") ## HTTP SSE 프로토콜인지 확인한다.
+        true > "$LOG" # SSE 연결이 열릴 때마다 로그 파일 삭제
+        {   printf "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\n\r\n"
             printf "event: ready\\ndata: {\"status\":\"connected\"}\n\n"
-        } > "$TEMP_DIR/sse_response"
-
-        cat "$TEMP_DIR/sse_response"
+        } | tee "$TEMP_DIR/sse_response"
         log "SSE opened"
         # 15초마다 keepalive 전송 (확장 프로그램이 연결 지속을 인지하도록)
         while sleep 15; do printf ": keepalive %s\n\n" "$(date +%s)" || break; done
         log "SSE closed"
         ;;
 
-    "POST:/sse")
-        ## HTTP SSE 프로토콜 POST 명령이면
-        #Body 읽기
+    "POST:/sse") ## HTTP SSE 프로토콜 POST 명령이면
+        #Body 읽되, 크기가 있으면 크기만큼 없으면 한줄만 읽기.
         if (( CONTENT_LENGTH > 0 )); then
             body=$(dd bs=1 count=$CONTENT_LENGTH 2>/dev/null || {
                 for ((i=0; i<CONTENT_LENGTH; i++)); do
@@ -99,8 +93,7 @@ case "$METHOD:$REQ_PATH" in
                     },
                     id: $id
                 }' > "$response_file"
-                ;;
-            tools/list)
+            ;; tools/list)
                 jq -n --argjson id "$id" '{
                     jsonrpc: "2.0",
                     result: {
@@ -123,12 +116,33 @@ case "$METHOD:$REQ_PATH" in
                     },
                     id: $id
                 }' > "$response_file"
-                ;;
-            tools/call)
-                tool_name=$(echo "$body" | jq -r '.params.tool // empty')
+            ;; resources/list)
+                jq -n --argjson id "$id" '{
+                    jsonrpc: "2.0",
+                    result: { resources: [ { uri: "file:///example", name: "Example", description: "Example resource", mimeType: "text/plain" } ] },
+                    id: $id
+                }' > "$response_file"
+            ;; resources/read)
+                uri=$(echo "$body" | jq -r '.params.uri // empty')
+                if [[ "$uri" == "file:///example" ]]; then
+                    jq -n --argjson id "$id" --arg uri "$uri" '{jsonrpc:"2.0", result:{ contents:[ { uri:$uri, mimeType:"text/plain", text:"This is example resource content" } ] }, id:$id}' > "$response_file"
+                else
+                    jq -n --argjson id "$id" --arg uri "$uri" '{jsonrpc:"2.0", error:{code:-32602, message:("Resource not found: " + $uri)}, id:$id}' > "$response_file"
+                fi
+            ;; prompts/list)
+                jq -n --argjson id "$id" '{
+                    jsonrpc: "2.0",
+                    result: { prompts: [] },
+                    id: $id
+                }' > "$response_file"
+            ;; shutdown) make_response 'null' "$id" '' ''
+            ;; tools/call)
+                # VS Code uses .params.name, but also support .params.tool for compatibility
+                tool_name=$(echo "$body" | jq -r '.params.name // .params.tool // empty')
                 case "$tool_name" in
                     hello-tool)
-                        person=$(echo "$body" | jq -r '.params.input.name // empty')
+                        # VS Code uses .params.arguments.name, also support .params.input.name
+                        person=$(echo "$body" | jq -r '.params.arguments.name // .params.input.name // empty')
                         [[ -n $person ]] && msg="Hello, $person" || msg="Hello"
                         jq -n --argjson id "$id" --arg msg "$msg" '{jsonrpc:"2.0", result:{content:[{type:"text", text:$msg}]}, id:$id}' > "$response_file"
                         ;;
@@ -139,26 +153,7 @@ case "$METHOD:$REQ_PATH" in
                         jq -n --argjson id "$id" --arg tn "$tool_name" '{jsonrpc:"2.0", error:{code:-32602, message:("Unknown tool: " + $tn)}, id:$id}' > "$response_file"
                         ;;
                 esac
-                ;;
-            resources/list)
-                jq -n --argjson id "$id" '{
-                    jsonrpc: "2.0",
-                    result: { resources: [ { uri: "file:///example", name: "Example", description: "Example resource", mimeType: "text/plain" } ] },
-                    id: $id
-                }' > "$response_file"
-                ;;
-            resources/read)
-                uri=$(echo "$body" | jq -r '.params.uri // empty')
-                if [[ "$uri" == "file:///example" ]]; then
-                    jq -n --argjson id "$id" --arg uri "$uri" '{jsonrpc:"2.0", result:{ contents:[ { uri:$uri, mimeType:"text/plain", text:"This is example resource content" } ] }, id:$id}' > "$response_file"
-                else
-                    jq -n --argjson id "$id" --arg uri "$uri" '{jsonrpc:"2.0", error:{code:-32602, message:("Resource not found: " + $uri)}, id:$id}' > "$response_file"
-                fi
-                ;;
-            hello)   make_response '"world"' "$id" '' '' ;;
-            bye)     make_response '"what??"' "$id" '' '' ;;
-            shutdown) make_response 'null' "$id" '' '' ;;
-            *)       make_response '' "$id" -32601 "Method not found" ;;
+            ;; *)       make_response '' "$id" -32601 "Method not found" ;;
         esac
 
         log "Response: $(cat "$response_file")"
