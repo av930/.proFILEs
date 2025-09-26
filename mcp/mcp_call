@@ -10,7 +10,7 @@ mcp_call() {
     echo "Calling method: $method"
     curl -s -X POST "$SERVER_URL" \
         -H "Content-Type: application/json" \
-        -d "{\"jsonrpc\":\"2.0\",\"id\":$id,\"method\":\"$method\"}" | jq .
+        -d "{\"jsonrpc\":\"2.0\",\"id\":$id,\"method\":\"$method\"}" | jq .result
 }
 
 # 사용법 출력
