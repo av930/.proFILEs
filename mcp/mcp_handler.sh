@@ -22,9 +22,9 @@ if [[ "$METHOD" == "GET" && "$REQ_PATH" == "/sse" ]]; then
     printf "event: ready\ndata: {\"status\":\"connected\"}\n\n"
 
     #keepalive를 10마다 보내면서 대기한다.
-    log "SSE opened"
-    while :; do sleep 10 && printf ": keepalive $(date +%s)\n\n" || break; done
-    log "SSE closed"; exit 0
+    #log "SSE opened"
+    #while :; do sleep 10 && printf ": keepalive $(date +%s)\n\n" || break; done
+    #log "SSE closed"; exit 0
 
 ## HTTP SSE 프로토콜 POST 명령이면
 elif [[ "$METHOD" == "POST" && "$REQ_PATH" == "/sse" ]]; then
@@ -53,11 +53,42 @@ elif [[ "$METHOD" == "POST" && "$REQ_PATH" == "/sse" ]]; then
 
     # response생성하여 회신한다.
     case "$method" in
-        initialize) resp='{"jsonrpc":"2.0","result":{"capabilities":{}},"id":'$id'}' ;;
-        hello)      resp='{"jsonrpc":"2.0","result":"world","id":'$id'}' ;;
-        bye)        resp='{"jsonrpc":"2.0","result":"what??","id":'$id'}' ;;
-        shutdown)   resp='{"jsonrpc":"2.0","result":null,"id":'$id'}' ;;
-        *)          resp='{"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found"},"id":'$id'}' ;;
+        init*) resp='{"jsonrpc":"2.0","result":{"capabilities":{"tools":{"listChanged":true},"resources":{"subscribe":true,"listChanged":true}}},"id":'$id'}'
+        ;; tools/list) resp='{"jsonrpc":"2.0","result":{"tools":[{"name":"echo","description":"Echo back the input","inputSchema":{"type":"object","properties":{"message":{"type":"string","description":"Message to echo back"}},"required":["message"]}}]},"id":'$id'}'
+        ;; tools/call)
+            # Extract tool name and arguments from request
+            tool_name=""
+            [[ $body =~ \"name\":[[:space:]]*\"([^\"]+)\" ]] && tool_name="${BASH_REMATCH[1]}"
+
+            case "$tool_name" in
+                echo)
+                    # Extract message argument
+                    message=""
+                    [[ $body =~ \"message\":[[:space:]]*\"([^\"]+)\" ]] && message="${BASH_REMATCH[1]}"
+                    resp='{"jsonrpc":"2.0","result":{"content":[{"type":"text","text":"Echo: '"$message"'"}]},"id":'$id'}'
+                    ;;
+                *)
+                    resp='{"jsonrpc":"2.0","error":{"code":-32602,"message":"Unknown tool: '"$tool_name"'"},"id":'$id'}'
+                    ;;
+            esac
+        ;; resources/list) resp='{"jsonrpc":"2.0","result":{"resources":[{"uri":"file:///example","name":"Example Resource","description":"An example resource","mimeType":"text/plain"}]},"id":'$id'}'
+        ;; resources/read)
+            # Extract URI from request
+            uri=""
+            [[ $body =~ \"uri\":[[:space:]]*\"([^\"]+)\" ]] && uri="${BASH_REMATCH[1]}"
+
+            case "$uri" in
+                "file:///example")
+                    resp='{"jsonrpc":"2.0","result":{"contents":[{"uri":"'"$uri"'","mimeType":"text/plain","text":"This is example resource content"}]},"id":'$id'}'
+                    ;;
+                *)
+                    resp='{"jsonrpc":"2.0","error":{"code":-32602,"message":"Resource not found: '"$uri"'"},"id":'$id'}'
+                    ;;
+            esac
+        ;; hello)      resp='{"jsonrpc":"2.0","result":"world","id":'$id'}'
+        ;; bye)        resp='{"jsonrpc":"2.0","result":"what??","id":'$id'}'
+        ;; shutdown)   resp='{"jsonrpc":"2.0","result":null,"id":'$id'}'
+        ;; *)          resp='{"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found"},"id":'$id'}'
     esac
 
     log "Response: $resp"
