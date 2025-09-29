@@ -1,8 +1,0 @@
-{
-	"servers": {
-		"bash-mcp": {
-			"url": "http://10.159.47.21:8002/sse",
-			"type": "http"
-		}
-	}
-}
