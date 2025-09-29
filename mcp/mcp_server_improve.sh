@@ -1,5 +1,5 @@
 #!/bin/bash
-#실행방법: nohup bash mcp_server.sh &
+#실행방법: nohup bash mcp_server_improve.sh &
 
 TEMP_DIR="/tmp/bash-mcp"
 F_LOG="$TEMP_DIR/mcp_server.log"
@@ -7,12 +7,12 @@ mkdir -p "$TEMP_DIR"
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
 PORT=8002
-HANDLER="$(dirname "$0")/mcp_handler_hello.sh"
+HANDLER="$(dirname "$0")/mcp_handler_improve.sh"
 
 log() { echo "[$(date '+%F %T')] $*" >> "$F_LOG"; }
 log "=== MCP Improved Server Starting on port $PORT ==="
 
-true > "$F_LOG"
+> $F_LOG
 while true; do
     log "Starting socat listener..."
     socat TCP-LISTEN:$PORT,reuseaddr,fork EXEC:"$HANDLER" 2>&1 | tee -a "$F_LOG"   #1
