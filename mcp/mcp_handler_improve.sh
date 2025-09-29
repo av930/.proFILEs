@@ -27,15 +27,19 @@ send_response() {
 
 # MCP 메서드 처리 함수들
 handle_initialize() {
-    jq -n --argjson id "$1" '{ jsonrpc: "2.0",
-                                result: { serverInfo:   { name : "bash-mcp", version: "0.1.0" },
-                                          capabilities: { tools: { listChanged: true }        }},
-                                id: $id
+    local id="$1"
+    jq -n --argjson id "$id" '{
+        jsonrpc: "2.0",
+        result: {   serverInfo:   { name : "bash-mcp", version: "0.1.0" },
+                    capabilities: { tools: { listChanged: true }        }
+               },
+        id: $id
     }' > "$F_RES"
 }
 
 handle_tools_unknown() {
-    make_response '' "$1" -32601 "Method not found"
+    local id="$1"
+    make_response '' "$id" -32601 "Method not found"
 }
 
 
@@ -72,9 +76,13 @@ case "$METHOD:$REQ_PATH" in
         log "SSE closed"
 
     ;; "POST:/sse") ## HTTP SSE 프로토콜 POST 명령이면
-        #Body 읽되, 크기가 있으면 크기만큼(dd가 있으면 읽어보고 없으면 for로 읽음) 없으면 한줄만 읽기.
-        if (( CONTENT_LENGTH > 0 )); then body=$(dd bs=1 count=$CONTENT_LENGTH 2>/dev/null \
-           || for ((i=0; i<CONTENT_LENGTH; i++)); do read -r -n1 ch || break; echo -n "$ch"; done )
+        #Body 읽되, 크기가 있으면 크기만큼 없으면 한줄만 읽기.
+        if (( CONTENT_LENGTH > 0 )); then
+            body=$(dd bs=1 count=$CONTENT_LENGTH 2>/dev/null || {
+                for ((i=0; i<CONTENT_LENGTH; i++)); do
+                    read -r -n1 ch || break; echo -n "$ch"
+                done
+            })
         else
             read -r body
         fi
@@ -92,8 +100,9 @@ case "$METHOD:$REQ_PATH" in
             ;; tools/call)              handle_tools_call       "$id" "$body"
             ;;          *)              handle_tools_unknown    "$id"
         esac
-        send_response "$F_RES"
         log "Response: $(cat "$F_RES")"
+        send_response "$F_RES"
+
     ;; *)
         echo "Not found" > "$TEMP_DIR/error.txt"
         send_response "$TEMP_DIR/error.txt" "text/plain"

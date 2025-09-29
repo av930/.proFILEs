@@ -1,0 +1,27 @@
+#!/bin/bash
+# MCP Client Wrapper Script
+
+SERVER_URL="http://10.159.47.21:8000/sse"
+
+mcp_call() {
+    local method="$1"
+    local id="${2:-1}"
+
+    echo "Calling method: $method"
+    curl -s -X POST "$SERVER_URL" \
+        -H "Content-Type: application/json" \
+        -d "{\"jsonrpc\":\"2.0\",\"id\":$id,\"method\":\"$method\"}" | jq .result
+}
+
+# 사용법 출력
+if [ $# -eq 0 ]; then
+    echo "Usage: $0 <method> [id]"
+    echo "Available methods: initialize, hello, bye, shutdown"
+    echo "Examples:"
+    echo "  $0 initialize"
+    echo "  $0 hello 2"
+    echo "  $0 bye 3"
+    exit 1
+fi
+
+mcp_call "$@"
