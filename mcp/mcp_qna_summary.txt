@@ -1,0 +1,22 @@
+Q: TEMP_DIR 값에는 뭐가 들어가?
+A: TEMP_DIR에는 /tmp/bash-mcp 값이 들어갑니다. MCP 서버와 핸들러 스크립트에서 임시 파일(로그, 응답 등)을 저장할 때 사용합니다.
+
+Q: @bash-mcp hello-tool jkhello
+A: 결과: "Hello, jkhello". MCP 서버와 핸들러가 올바르게 연결되어 있습니다.
+
+Q: Jenkins API 호출 시 holding 현상이 왜 발생하는지 확인해줘.
+A: curl 옵션 오류(-siu → -si)와 과도한 타임아웃, 네트워크 지연 등이 원인입니다. 코드 수정으로 해결됨.
+
+Q: curl --max-time 옵션에 대해서 자세히 설명해줘
+A: --max-time은 curl 명령이 전체 요청/응답을 완료하는 데 허용되는 최대 시간(초 단위)을 지정합니다. 지정한 시간 내에 완료되지 않으면 강제로 중단하고 에러를 반환합니다.
+
+Q: @bash-mcp tool-jenkins http://vjenkins.lge.com/jenkins06/job/toyota_24dcm_commit_build_nad_trigger/163931
+A: Jenkins job started: location: http://vjenkins.lge.com/jenkins03/queue/item/749888/
+
+Q: @bash-mcp hello-tool jkhello
+A: 결과: "Hello, jkhello". MCP 서버와 핸들러가 정상적으로 연결되어 있습니다.
+
+Q: @bash-mcp tool-hello jkhello
+A: 결과: "Hello, jkhello". MCP 서버와 핸들러가 정상적으로 연결되어 있습니다.
+
+(이외에도 MCP 서버 구조, 다중 클라이언트 테스트, socat fork 옵션, Jenkins 트리거 등 다양한 질문과 답변이 포함되어 있습니다.)

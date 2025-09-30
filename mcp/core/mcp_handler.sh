@@ -1,19 +1,26 @@
 #!/bin/bash
 
 TEMP_DIR="/tmp/bash-mcp"
-F_LOG="$TEMP_DIR/mcp_$$.log"
-F_RES="$TEMP_DIR/res_$$.json"
+mkdir -p "$TEMP_DIR"
+FILE_LOG="$TEMP_DIR/mcp_$$.log"
+FILE_RES="$TEMP_DIR/res_$$.json"
 
-log() { echo "[$(date '+%F %T')] $*" >> "$F_LOG"; }
+log() { echo "[$(date '+%F %T')] $*" >> "$FILE_LOG"; }
 
-# 응답 파일 생성 함수
+# 공유 유틸리티 함수들 로드
+MCP_BASE_DIR="/data001/vc.integrator/.proFILEs/mcp"
+source "${MCP_BASE_DIR}/core/mcp_utils.sh"
+
+# 기존 make_response 함수를 make_tool_response로 대체
+# 호환성을 위해 wrapper 함수 제공
 make_response() {
     local result="$1" id="$2" error_code="$3" error_msg="$4"
-    if [[ -n $error_code ]];
-    then jq -n --argjson id "$id" --argjson code "$error_code" --arg msg "$error_msg" \
-         '{jsonrpc: "2.0", error: {code: $code, message: $msg}, id: $id}' > "$F_RES"
-    else jq -n --argjson id "$id" --argjson result "$result" \
-         '{jsonrpc: "2.0", result: $result, id: $id}' > "$F_RES"
+    if [[ -n $error_code ]]; then
+        make_tool_response "$id" "" "$error_code" "$error_msg"
+    else
+        # result가 JSON 객체인 경우 직접 처리
+        jq -n --argjson id "$id" --argjson result "$result" \
+         '{jsonrpc: "2.0", result: $result, id: $id}' > "$FILE_RES"
     fi
 }
 
@@ -31,16 +38,15 @@ handle_initialize() {
                                 result: { serverInfo:   { name : "bash-mcp", version: "0.1.0" },
                                           capabilities: { tools: { listChanged: true }        }},
                                 id: $id
-    }' > "$F_RES"
+    }' > "$FILE_RES"
 }
 
 handle_tools_unknown() {
-    make_response '' "$1" -32601 "Method not found"
+    make_tool_error "$1" -32601 "Method not found"
 }
 
 
-
-################################################ main ################################################
+############################################ main ############################################
 # jq 필수 체크 - 없으면 에러 종료
 command -v jq >/dev/null 2>&1 || {
     echo '{"jsonrpc":"2.0","error":{"code":-32000,"message":"jq not found"},"id":null}'
@@ -62,13 +68,13 @@ done
 # 라우팅 처리
 case "$METHOD:$REQ_PATH" in
     "GET:/sse") ## HTTP SSE 프로토콜인지 확인한다.
-        true > "$F_LOG" # SSE 연결이 열릴 때마다 로그 파일 삭제
+        true > "$FILE_LOG" # SSE 연결이 열릴 때마다 로그 파일 삭제
         {   printf "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\n\r\n"
             printf "event: ready\\ndata: {\"status\":\"connected\"}\n\n"
-        } | tee "$TEMP_DIR/sse_response"
+        } | tee "$FILE_LOG"
         log "SSE opened"
         # 15초마다 keepalive 전송 (확장 프로그램이 연결 지속을 인지하도록)
-        while sleep 15; do printf ": keepalive %s\n\n" "$(date +%s)" || break; done
+        while sleep 15; do printf "... KeepAlive ..."; done
         log "SSE closed"
 
     ;; "POST:/sse") ## HTTP SSE 프로토콜 POST 명령이면
@@ -92,11 +98,11 @@ case "$METHOD:$REQ_PATH" in
             ;; tools/call)              handle_tools_call       "$id" "$body"
             ;;          *)              handle_tools_unknown    "$id"
         esac
-        send_response "$F_RES"
-        log "Response: $(cat "$F_RES")"
+        send_response "$FILE_RES"
+        log "Response: $(cat "$FILE_RES")"
     ;; *)
-        echo "Not found" > "$TEMP_DIR/error.txt"
-        send_response "$TEMP_DIR/error.txt" "text/plain"
+        echo "Not found" > "$PATH_LOG/error.txt"
+        send_response "$PATH_LOG/error.txt" "text/plain"
         log "404: $METHOD $REQ_PATH"
         ;;
 esac
