@@ -1,5 +1,7 @@
 #!/bin/bash
 
+PATH_ROOT="$(dirname "$0")/.."          # core path기준
+PATH_LOG="${PATH_ROOT}/log"             # log dir이하 저장
 TEMP_DIR="/tmp/bash-mcp"
 mkdir -p "$TEMP_DIR"
 FILE_LOG="$TEMP_DIR/mcp_$$.log"
