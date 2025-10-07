@@ -1,6 +1,10 @@
 {
 	"servers": {
-		"bash-mcp": {
+		"mcp-hello": {
+			"url": "http://10.159.47.21:8001/sse",
+			"type": "http"
+		},
+		"mcp-jenkins": {
 			"url": "http://10.159.47.21:8002/sse",
 			"type": "http"
 		}
