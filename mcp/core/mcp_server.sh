@@ -20,7 +20,7 @@ log "Starting socat listeners with multi-client support..."
 socat TCP-LISTEN:${PORT},bind=0.0.0.0,reuseaddr,fork,max-children=100 EXEC:"$PATH_ROOT/$MCP" 2>&1 | tee -a "$PATH_LOG/${MCP/.sh/.log}" &
 log "$MCP handler started on port ${PORT} with PID: $!"
 
-((++PORT)); MCP=mcp_handler_retrigger.sh
+((++PORT)); MCP=mcp_handler_gerrit.sh
 socat TCP-LISTEN:${PORT},bind=0.0.0.0,reuseaddr,fork,max-children=100 EXEC:"$PATH_ROOT/$MCP" 2>&1 | tee -a "$PATH_LOG/${MCP/.sh/.log}" &
 log "$MCP handler started on port ${PORT} with PID: $!"
 
