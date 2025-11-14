@@ -47,7 +47,7 @@ source <(cat <<'EOF'
     #git config --global alias.diffi "difftool --extcmd 'icdiff'"
      git config --global alias.diffi "!_gitdiff() { git difftool --extcmd 'icdiff'; }; _gitdiff"
     #git config --global alias.diffi '!_gitdiff() { git difftool --extcmd "icdiff $@"; }; _gitdiff' --replace-all
-     git config --global alias.clear "!_gitclear() { git reset --hard $1; git clean -xdf; }; _gitclear"
+     git config --global alias.clear '!_gitclear() { git reset --hard $1; git clean -xdf; git rebase --abort||true; }; _gitclear'
 EOF
 ) 2> /dev/null
 
@@ -3529,8 +3529,12 @@ EOF
 
     ;;branchadd~*)
             bar inline "create branch with base revision"
-            if [ -z "${extra}" ]; then read -p "input base branch which new branch is created from: ";fi
-            showRUNQ y curl -su ${user}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -H "Content-Type:application/json" --data "{"revision":"${extra:-${REPLY}}"}"  -X PUT
+            if [ -z "${extra}" ];
+            then read -p "input base branch which new branch is created from: "
+                 showRUNQ y curl -su ${user}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -H "Content-Type:application/json" --data "{"revision":"${REPLY}"}"  -X PUT
+            else showRUN curl -su ${user}:${key} ${server}/a/projects/${source//'/'/'%2F'}/branches/${target} -H "Content-Type:application/json" --data "{"revision":"${extra}"}"  -X PUT
+            fi
+
 
     ;;branchdel~*)
             bar inline "delete branch by name"
