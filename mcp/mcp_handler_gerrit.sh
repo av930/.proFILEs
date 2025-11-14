@@ -8,14 +8,16 @@ handle_tools_list() {
         jsonrpc: "2.0",
         result: { tools: [
                 {   name: "tool-jenkins",
-                    description: "Return a greeting (optionally with a name)",
+                    description: "call jenkins url",
                     inputSchema: {  type: "object",
                                     properties: { name: { type: "string", description: "Optional name" } },
                                     required: []  }
                 },
                 {   name: "tool-gerrit",
-                    description: "Return a bye message",
-                    inputSchema: { type: "object", properties: {}, required: [] }
+                    description: "call gerrit url",
+                    inputSchema: {  type: "object",
+                                    properties: { name: { type: "string", description: "Optional name" } },
+                                    required: []  }
                 }
             ]},
         id: $id
@@ -28,8 +30,9 @@ handle_tools_call() {
     tool_name=$(echo "$body" | jq -r '.params.name // .params.tool // empty')
 
     case "$tool_name" in
-        tool-gerrit)   handle_TGerrit "$id" "$body"
-        ;;           *)   handle_TEtc "$id" "$tool_name"
+          tool-gerrit)   handle_TGerrit "$id" "$body"
+        ;;tool-jenkins)  handle_TGerrit "$id" "$body"
+        ;;           *)  handle_TEtc "$id" "$tool_name"
     esac
 }
 
