@@ -2747,6 +2747,10 @@ function  revvserver_item() {
 
     local ret=0 remote=$1 prn _line remote_key tmp
     local return_type=$2
+
+    ## 파라미터 개수가 반드시 2개이상이어야 동작
+    [ $# -lt 2 ] && { err "revvserver_item requires 2 params: <$remote> <$return_type>"; return 1; }
+
     ## server list로 부터 remote정보가 있는지 찾아 가져온다.
     _line=$(revvserver de "$remote")
     [ -z "$_line" ] && { err "server infomation is null"; return 1; }
@@ -2817,8 +2821,9 @@ EOF
 
     ;;  de) #~/.key_server.en에서 server정보가 들어있는 line을 리턴한다.
             #이름이 정확히 key에 match하며 key를 해당 line을 리턴, 그렇지 않으면 alias에서 확인, 그렇지 않으면 전체 line에서 확인하여 해당 line을 리턴
-            #revvserver de <remote>는 subshell에서 호출/실행되므로 revvserver de load만 직접호출하여 부모 shell에서 실행되도록 하였다.
+            #revvserver de <remote>는 subshell에서 호출/실행되므로 revvserver de load만 부모 shell에서 최초 1회 호출되도록 하였다.
             #그 이유는 REVV_SERVER 배열값이 subshell에서 초기값으로 할당되면 subshell 종료시 사라지므로 부모shell에서 참조가 불가능하다.
+            #따라서 아래 sever정보고 없으면 자동 load되는 logic은 revvserver de load에서만 동작하고, 나머지는 호출에서는 사용되지 않는다.
             if ! [ -f $HOME/.key_server.en ]; then err "You must create server connection info, use 'revv server gen'" >2 ; return 1; fi
 
             ## revvserver de load가 호출되지 않더라도 server정보가 없으면 자동으로 load
@@ -2828,19 +2833,20 @@ EOF
                     REVV_SERVER["$key"]="${key}|${url}|${account}|${pass}|${alias}"
                     #REMOTEKEY이후부터 출력해서 REMOTEKEY, ALIAS, URL 순으로 match하는지 검색한다.
                 done < <(cat "$HOME/.key_server.en" | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey | awk -F'|' 'p{print} $1 ~ /^REMOTEKEY */ {p=1}')
-                [ "$server" = "load" ] && return 0;
             fi
+            [ "$server" = "load" ] && return 0;
 
+
+            ## 1st try: 입력된 이름을 정리하여 key/alias/url 항목에서 찾기 from REVV_SERVER array
             ## suppress -x
-            [[ $- == *x* ]] && { set +x ; setflag=true; }
-            ## 1st try: 입력된 이름을 정리하여 key/alias/url 항목에서 찾기from REVV_SERVER array
+            #[[ $- == *x* ]] && { set +x ; setflag=true; }
             [[ $server =~ ^https?://[^/]+/[^/]+ ]] && server="${BASH_REMATCH[0]/https/http}"
             local _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | awk -v tag="$server" -F '[[:space:]]*\\|' '
                 $1 == tag   {print; exit}   # key exact
                 $5 ~ tag    {print; exit}   # alias contains
                 $2 ~ tag    {print; exit}') # url contains
 
-            ## 2nd try: manifest remote에서 유추된 이름으로 찾기 (name -> review or fetch -> REMOTEKEY)
+            ## 2nd try: manifest remote(REPPFILE_JSON_REMOTE 파일)에서 유추된 이름으로 찾기 (name -> review or fetch -> REMOTEKEY)
             if [ -z "$_line" ] && [ -f "${REPPFILE_JSON_REMOTE}" ] && [ "$server" != "origin" ]; then
                 local _review _remotekey
                 _review=$(jq -rM --arg jq_remote "$server" '.[]|select(.name == $jq_remote) | .review' "${REPPFILE_JSON_REMOTE}" 2>/dev/null)
@@ -2855,7 +2861,7 @@ EOF
                 fi
             fi
 
-            # 3rd try: 독립된 git으로 간주하여 remote url에서 찾기 (subdomain_port -> REMOTEKEY like vgit_29420)
+            # 3rd try: 독립된 git으로 간주하여 git config명령결과 remote url에서 찾기 (subdomain_port -> REMOTEKEY like vgit_29420)
             if [ -z "$_line" ]; then
                 local tmp guessed
                 tmp=$(git config --get-regexp remote.$(git remote | head -1).url 2>/dev/null | cut -d' ' -f2 | head -1)
@@ -3244,9 +3250,9 @@ function revvproject(){
     local file=$(mktemp)
 
     [ -z "$server" ] && { err "server name is provided" ; return 1; }
-    if [ -z "$project" ]; then
+    if  [ "$subcmd" != "help" ] && [ -z "$project" ]; then
         warn "all project will be searched, it takes time";
-        read -p '[y:yes continue | other:break] :'0958
+        read -p '[y:yes continue | other:break] :'
         [ "$REPLY" = 'y' ] || return 0
     fi
 
@@ -3280,7 +3286,7 @@ EOF
 
             bar inline "add new project inherited All-projects(default), and create emtpy master"
             curl -su ${user}:${key} $url_gerrit -H "Content-Type:application/json" \
-                 --data "{\"description\":\"revvcreate\",\"parent\":\"${parent:-'All-Projects'}\", \"create_empty_commit\":true }" \
+                 --data "{\"description\":\"revvcreate\",\"parent\":\"${parent:-All-Projects}\", \"create_empty_commit\":true }" \
                  -X PUT |sed '1d' > $file
             clog "result for creaing project: "
             cat $file| jq -C .
@@ -3316,7 +3322,7 @@ EOF
             printf "\n\n"
 
     ;;  project~*)
-            dnlog "[gerrit url] gerrit cli:" "curl -su ${user}:${key} $url_gerrit | sed '1d'| jq  -cC '.[]'"
+            #dnlog "[gerrit url] gerrit cli:" "curl -su ${user}:${key} $url_gerrit | sed '1d'| jq  -cC '.[]'"
 
             info "config: " "${server}/admin/repos/${project}"
             bar inline "find project and show project url"
