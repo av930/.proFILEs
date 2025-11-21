@@ -51,7 +51,66 @@
 # revv forall projectdel                                # manifest에 기록된 모든 프로젝트에 대해 삭제가 가능한 link제공
                                                         # gerrit은 project를 삭제할수 있는 cli cmd는 제공하지 않음.
 
-source ${proFILEdir}/tools/prelibrary
+source ${proFILEdir}/tools/prelibrary > /dev/null
+
+
+###### revvserver_item function (independent from repp script)
+function revvserver_item() {
+## ---------------------------------------------------------------------------
+## return remote (gerrit server) info as a various type
+## format: revvserver_item <remote> <return_type>
+## return_type: port|http|sub|domain|subdomain|path|url|key|user|pass|alias|debug
+## This function is independent from repp script and loads server info from ~/.key_server.en
+
+    local ret=0 remote=$1 prn _line
+    local return_type=$2
+
+    ## 파라미터 개수가 반드시 2개이상이어야 동작
+    [ "$remote" = "help" ] && return 0
+    [ $# -lt 2 ] && { err "revvserver_item requires 2 params: <remote> <return_type>"; return 1; }
+
+    ## ~/.key_server.en 파일이 없으면 에러
+    if ! [ -f $HOME/.key_server.en ]; then
+        err "You must create server connection info, use 'revv server gen'" >&2
+        return 1
+    fi
+
+    ## REVV_SERVER 배열이 없으면 로드
+    if [ -z "${REVV_SERVER_LOADED}" ] || [ ${#REVV_SERVER[@]} -eq 0 ]; then
+        declare -gA REVV_SERVER  # global associative array
+        while IFS='|' read -r key url account pass alias; do
+            key=$(echo "$key" | xargs) # 앞뒤 공백 제거
+            REVV_SERVER["$key"]="${key}|${url}|${account}|${pass}|${alias}"
+        done < <(cat "$HOME/.key_server.en" | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey | awk -F'|' 'p{print} $1 ~ /^REMOTEKEY */ {p=1}')
+        REVV_SERVER_LOADED=1
+    fi
+
+    ## 입력된 remote 이름을 정리 (URL 형식이면 http로 통일)
+    [[ $remote =~ ^https?://[^/]+/[^/]+ ]] && remote="${BASH_REMATCH[0]/https/http}"
+
+    ## REVV_SERVER 배열에서 server 정보 찾기
+    ## 1) key 정확히 일치, 2) alias에 포함, 3) url에 포함
+    _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | awk -v tag="$remote" -F '[[:space:]]*\\|' '
+        $1 == tag   {print; exit}   # key exact match
+        $5 ~ tag    {print; exit}   # alias contains
+        $2 ~ tag    {print; exit}') # url contains
+
+    ## server 정보가 없으면 에러
+    [ -z "$_line" ] && { err "server information[$remote] is null"; return 1; }
+    local _item=$(echo "$_line" | cut -d'|' -f2)
+
+    case ${return_type} in
+            http)    prn=$(echo "${_item%:*}")                                                     # http://vgit.lge.com/na
+    ;;       url)    prn=$(echo "${_item#*://}"| awk -F[./:\ ] '{$4="/"$4;gsub(/\/none_.*/,"",$4);print $1"."$2"."$3$4}')  # vgit.lge.com/na
+    ;;      user)    prn=$(echo "$_line"  | cut -d'|' -f3)                                         # vc.integrator
+    ;;      pass)    prn=$(echo "$_line"  | cut -d'|' -f4)                                         # HTTP password
+    ;;         *)    prn='';  ret=1                                                                # error
+    esac
+
+    [ -n "$prn" ] && { echo "$prn" | xargs; return 0; } || return 1
+}
+
+
 ###### setting for env
 ## USER input
 cmd=$1         #branch, project
@@ -178,7 +237,8 @@ $DEBUG "CURR_branch:${CURR_branch}| CURR_upstream:${REPO_UPSTREAM}| CURR_destbra
 $DEBUG "input param: cmd: [$cmd]| target: ${target}| source: ${source}"
 $DEBUG "positional params: [$0][$1][$2][$3][${@:4}]"
 
-key_http=$(getServer ${CURR_remote} pass)
+key_http=$(revvserver_item ${CURR_remote} pass)
+
 cmd_branch="curl -su $REPO__$USER:${key_http} ${CURR_url}/a/projects/${CURR_project//'/'/'%2F'}/branches/${target} -o ${tempf}"
 cmd_project="curl -su $REPO__$USER:${key_http} ${CURR_url}/a/projects/${CURR_project//'/'/'%2F'} -o ${tempf}"
 ## main handler by git branch
@@ -223,8 +283,8 @@ case ${CURR_branch} in
         esac
 
         if [ "$(cat ${tempf} | head -1)" = "${JSON_IDFY}" ]; then
-        cat ${tempf} | sed 1d| jq -rM > ${tempf}__
-        mv ${tempf}__ ${tempf}
+            cat ${tempf} | sed 1d| jq -rM > ${tempf}_bk; mv ${tempf}_bk ${tempf}
+
             if [ "$(cat ${tempf} | sed -n '1p')" = "[]" ]; then clog "executed" "result is nothing"; cat ${tempf} | tail -n +3;  RET=FAIL1
             elif [ "$(cat ${tempf} | sed -n '1p')" = "{" ]; then cat "${tempf}" | jq -cC ".|${PRINT_INFO}"; RET=OKAY1
             else cat "${tempf}" | jq  -cC ".[]|${PRINT_INFO}";  RET=OKAY2
