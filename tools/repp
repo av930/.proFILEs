@@ -1997,22 +1997,14 @@ function revv_initvar(){
 ## ---------------------------------------------------------------------------
 # find repo, gitt, review variable
     local ret=0
-    local key
     #default initial gerrit API key is na (vgit_na).
 
     #load revvserver list from .key_server.en
     revvserver de load
-    key=$(revvserver_item ${GITT_REMOTE} pass)
-    if (( ${#key} > 0 )) && (( 40 > ${#key} ))  ; then
-        warn "if problem continue, check gerrit http key value in [~/.key_server] \n
-        you can generate file [.key_server] : cmd[revvserver gen] and add access key"
-        ret=1
-    fi
 
-    # if ! revvcheck_server ; then
-    #     err "please check correct account&key is saved using revv server "
-    #     ret=1
-    # fi
+    ## .key_server 무결성 검증
+    revvserver verify
+    ret=$?
 
     return $ret
 }
@@ -2786,6 +2778,84 @@ function  revvserver_item() {
 
 
 
+function revvserver_decode(){
+## ---------------------------------------------------------------------------
+## ~/.key_server.en에서 server정보가 들어있는 line을 리턴한다.
+## 이름이 정확히 key에 match하면 해당 line을 리턴, 그렇지 않으면 alias에서 확인, 그렇지 않으면 url에서 확인
+## $1: server name to search
+## return: server info line (key|url|account|pass|alias)
+
+    local server=$1
+    local keyfile=$HOME/.key_server.en
+    local setflag _line
+
+    ## 파일 존재 확인
+    if ! [ -f $keyfile ]; then
+        err "You must create server connection info, use 'revv server gen'" >&2
+        return 1
+    fi
+
+    ## REVV_SERVER 배열이 비어있으면 자동 로드
+    if [ ${#REVV_SERVER[@]} -eq 0 ]; then
+        while IFS='|' read -r key url account pass alias; do
+            key=$(echo "$key" | xargs) # 앞뒤 공백 제거
+            REVV_SERVER["$key"]="${key}|${url}|${account}|${pass}|${alias}"
+        done < <(cat "$keyfile" | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey | awk -F'|' 'p{print} $1 ~ /^REMOTEKEY */ {p=1}')
+    fi
+
+    ## "load" 명령이면 여기서 종료 (배열만 로드)
+    [ "$server" = "load" ] && return 0
+
+    ## 1st try: 입력된 이름을 정리하여 key/alias/url 항목에서 찾기 from REVV_SERVER array
+    ## suppress -x
+    [[ $- == *x* ]] && { set +x ; setflag=true; }
+    [[ $server =~ ^https?://[^/]+/[^/]+ ]] && server="${BASH_REMATCH[0]/https/http}"
+    _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | awk -v tag="$server" -F '[[:space:]]*\\|' '
+        $1 == tag   {print; exit}   # key exact
+        $5 ~ tag    {print; exit}   # alias contains
+        $2 ~ tag    {print; exit}') # url contains
+
+    ## 2nd try: manifest remote(REPPFILE_JSON_REMOTE 파일)에서 유추된 이름으로 찾기 (name -> review or fetch -> REMOTEKEY)
+    if [ -z "$_line" ] && [ -f "${REPPFILE_JSON_REMOTE}" ] && [ "$server" != "origin" ]; then
+        local _review _remotekey
+        _review=$(jq -rM --arg jq_remote "$server" '.[]|select(.name == $jq_remote) | .review' "${REPPFILE_JSON_REMOTE}" 2>/dev/null)
+        if [ -n "$_review" ] && [ "$_review" != "null" ]; then
+            _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | awk -v tag="$_review" -F '[[:space:]]*\\|' '$1 == tag {print; exit}; $5 ~ tag {print; exit}; $2 ~ tag {print; exit}')
+        fi
+        if [ -z "$_line" ]; then
+            _remotekey=$(jq -rM --arg jq_remote "$server" '.[]|select(.name == $jq_remote) | .fetch' "${REPPFILE_JSON_REMOTE}" 2>/dev/null | cut -d'|' -f1)
+            if [ -n "$_remotekey" ] && [ "$_remotekey" != "null" ]; then
+                _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | awk -v tag="$_remotekey" -F '[[:space:]]*\\|' '$1 == tag {print; exit}; $5 ~ tag {print; exit}; $2 ~ tag {print; exit}')
+            fi
+        fi
+    fi
+
+    ## 3rd try: 독립된 git으로 간주하여 git config명령결과 remote url에서 찾기 (subdomain_port -> REMOTEKEY like vgit_29420)
+    if [ -z "$_line" ]; then
+        local tmp guessed
+        tmp=$(git config --get-regexp remote.$(git remote | head -1).url 2>/dev/null | cut -d' ' -f2 | head -1)
+        if [ -n "$tmp" ]; then
+            guessed=$(echo "${tmp#*://}" | awk -F[./:] '{print $1"_"$4}')
+            if [ -n "$guessed" ]; then
+                _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | awk -v tag="$guessed" -F '[[:space:]]*\\|' '$1 == tag {print; exit}; $5 ~ tag {print; exit}; $2 ~ tag {print; exit}')
+            fi
+        fi
+    fi
+
+    ## 결과 출력
+    if [ -z "$_line" ]; then
+        warn "server infomation is not loaded or null"
+        ${setflag:-false} && set -x
+        return 1
+    fi
+
+    printf "%s\n" "$_line"
+    ## suppress -x
+    ${setflag:-false} && set -x
+    return 0
+}
+
+
 function revvserver(){
 ## ---------------------------------------------------------------------------
 # encoding as variable: code env <keyname> <key>
@@ -2795,6 +2865,7 @@ function revvserver(){
 # $2 : query server (vgit_na, na, as, lamp, ...)
 local setflag
 local cmd=$1 server=$2
+local keyfile=$HOME/.key_server.en
 
     case $cmd in
        gen) #default server 접속정보 파일인 ~/.key_server를 생성한다.
@@ -2814,82 +2885,64 @@ EOF
 
     ;;  en) #~/.key_server.en 로 암호화한다.
             if [ -f $HOME/.key_server ]; then
-                clog "$HOME/.key_server will be converted to $HOME/.key_server.en with encrypting"
-                cat $HOME/.key_server | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey > $HOME/.key_server.en
+                clog "$HOME/.key_server will be converted to $keyfile with encrypting"
+                cat $HOME/.key_server | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey > $keyfile
                 rm -f $HOME/.key_server
             else
-                clog "$HOME/.key_server.en" "could be updated by '$revv server editing' [$HOME/.key_server]"
+                clog "$keyfile" "could be updated by '$revv server editing' [$HOME/.key_server]"
                 err "You must create server connection info, use '$revv server gen'"; return 1
             fi
 
     ;;edit) #~/.key_server.en으로 부터 ~/.key_server를 생성하여 편집할수 있게 해준다.
-            cat $HOME/.key_server.en | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey >$HOME/.key_server
-            clog "$HOME/.key_server" "is decrypted from $HOME/.key_server.en"
+            cat $keyfile | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey >$HOME/.key_server
+            clog "$HOME/.key_server" "is decrypted from $keyfile"
             [ -f "$HOME/.key_server" ] && cat $HOME/.key_server || { err "You must create server connection info, use '$revv server gen'"; return 1; }
 
     ;;  de) #~/.key_server.en에서 server정보가 들어있는 line을 리턴한다.
-            #이름이 정확히 key에 match하며 key를 해당 line을 리턴, 그렇지 않으면 alias에서 확인, 그렇지 않으면 전체 line에서 확인하여 해당 line을 리턴
-            #revvserver de <remote>는 subshell에서 호출/실행되므로 revvserver de load만 부모 shell에서 최초 1회 호출되도록 하였다.
-            #그 이유는 REVV_SERVER 배열값이 subshell에서 초기값으로 할당되면 subshell 종료시 사라지므로 부모shell에서 참조가 불가능하다.
-            #따라서 아래 sever정보고 없으면 자동 load되는 logic은 revvserver de load에서만 동작하고, 나머지는 호출에서는 사용되지 않는다.
-            if ! [ -f $HOME/.key_server.en ]; then err "You must create server connection info, use 'revv server gen'" >2 ; return 1; fi
-
-            ## revvserver de load가 호출되지 않더라도 server정보가 없으면 자동으로 load
-            if [ ${#REVV_SERVER[@]} -eq 0 ]; then
-                while IFS='|' read -r key url account pass alias; do
-                    key=$(echo "$key" | xargs) # 앞뒤 공백 제거
-                    REVV_SERVER["$key"]="${key}|${url}|${account}|${pass}|${alias}"
-                    #REMOTEKEY이후부터 출력해서 REMOTEKEY, ALIAS, URL 순으로 match하는지 검색한다.
-                done < <(cat "$HOME/.key_server.en" | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey | awk -F'|' 'p{print} $1 ~ /^REMOTEKEY */ {p=1}')
-            fi
-            [ "$server" = "load" ] && return 0;
+            revvserver_decode "$server"
+            return $?
 
 
-            ## 1st try: 입력된 이름을 정리하여 key/alias/url 항목에서 찾기 from REVV_SERVER array
-            ## suppress -x
-            #[[ $- == *x* ]] && { set +x ; setflag=true; }
-            [[ $server =~ ^https?://[^/]+/[^/]+ ]] && server="${BASH_REMATCH[0]/https/http}"
-            local _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | awk -v tag="$server" -F '[[:space:]]*\\|' '
-                $1 == tag   {print; exit}   # key exact
-                $5 ~ tag    {print; exit}   # alias contains
-                $2 ~ tag    {print; exit}') # url contains
+    ;;verify) #.key_server.en의 무결성을 검증한다. (캐싱 기능 포함)
+            local key url account invalid_count=0
+            local verified_keyfile="${REPP_DIR}/log/.key_server_verified"
 
-            ## 2nd try: manifest remote(REPPFILE_JSON_REMOTE 파일)에서 유추된 이름으로 찾기 (name -> review or fetch -> REMOTEKEY)
-            if [ -z "$_line" ] && [ -f "${REPPFILE_JSON_REMOTE}" ] && [ "$server" != "origin" ]; then
-                local _review _remotekey
-                _review=$(jq -rM --arg jq_remote "$server" '.[]|select(.name == $jq_remote) | .review' "${REPPFILE_JSON_REMOTE}" 2>/dev/null)
-                if [ -n "$_review" ] && [ "$_review" != "null" ]; then
-                    _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | awk -v tag="$_review" -F '[[:space:]]*\\|' '$1 == tag {print; exit}; $5 ~ tag {print; exit}; $2 ~ tag {print; exit}')
-                fi
-                if [ -z "$_line" ]; then
-                    _remotekey=$(jq -rM --arg jq_remote "$server" '.[]|select(.name == $jq_remote) | .fetch' "${REPPFILE_JSON_REMOTE}" 2>/dev/null | cut -d'|' -f1)
-                    if [ -n "$_remotekey" ] && [ "$_remotekey" != "null" ]; then
-                        _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | awk -v tag="$_remotekey" -F '[[:space:]]*\\|' '$1 == tag {print; exit}; $5 ~ tag {print; exit}; $2 ~ tag {print; exit}')
-                    fi
+            # .repp/log 디렉토리 생성
+            mkdir -p "${REPP_DIR}/log"
+
+            # .key_server.en과 .key_server_verified 파일 비교 (캐싱)
+            if [ -f "$verified_keyfile" ] && [ -f "$keyfile" ]; then
+                if cmp -s "$keyfile" "$verified_keyfile"; then
+                    return 0
                 fi
             fi
 
-            # 3rd try: 독립된 git으로 간주하여 git config명령결과 remote url에서 찾기 (subdomain_port -> REMOTEKEY like vgit_29420)
-            if [ -z "$_line" ]; then
-                local tmp guessed
-                tmp=$(git config --get-regexp remote.$(git remote | head -1).url 2>/dev/null | cut -d' ' -f2 | head -1)
-                if [ -n "$tmp" ]; then
-                    guessed=$(echo "${tmp#*://}" | awk -F[./:] '{print $1"_"$4}')
-                    if [ -n "$guessed" ]; then
-                        _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | awk -v tag="$guessed" -F '[[:space:]]*\\|' '$1 == tag {print; exit}; $5 ~ tag {print; exit}; $2 ~ tag {print; exit}')
-                    fi
-                fi
-            fi
+            ## .key_server 무결성 검증: 모든 서버 항목의 필수 필드 확인
+            [ ${#REVV_SERVER[@]} -eq 0 ] && { warn "No server information found in ~/.key_server.en\n\Generate file with: revv server gen"; return 1; }
 
-            if [ -z "$_line" ]; then warn "server infomation is not loaded or null"; return 1; fi
-            printf "%s\n" "$_line"
-            ## suppress -x
-            ${setflag:-false} && { set -x ; setflag=false; }
+            for server_key in "${!REVV_SERVER[@]}"; do
+                url=$(revvserver_item "$server_key" http 2>/dev/null)
+                account=$(revvserver_item "$server_key" user 2>/dev/null)
+                key=$(revvserver_item "$server_key" pass 2>/dev/null)
+
+                # 필수 필드 검증: key, url, account
+                if [ -z "$server_key" ] || [ -z "$url" ] || [ -z "$account" ]; then
+                    err "Server [$server_key] has missing required fields (key/url/account)"; return 1
+                fi
+
+                # HTTP key 길이 검증 (optional, 있으면 최소 길이 확인)
+                if [ -n "$key" ] && (( ${#key} < 20 )); then
+                    err "Server [$server_key] has invalid HTTP key (too short: ${#key} chars)"; return 1
+                fi
+            done
+
+            # 검증 성공시 verified 파일에 복사
+            cp "$keyfile" "$verified_keyfile" 2>/dev/null
             return 0
-
 
     ;;check|info) #revvserver_item 함수 test용으로 모든 format대로 제대로 출력하는지 확인할수 있다.
             test_revvserver_item $cmd
+
     ;;help) cat <<- EOF
 			usage) revv server <cmd> <option>
 
@@ -2902,12 +2955,32 @@ EOF
 			revv server  info             #check connection of server and format of revvserver_item api
 EOF
     ;;show|*)  #현재 .key_server파일을 보여준다.
-            [ ! -f $HOME/.key_server.en ] && err "You must create server connection info, use '$revv server gen'"
-            cat $HOME/.key_server.en | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey
+            [ ! -f $keyfile ] && err "You must create server connection info, use '$revv server gen'"
+            cat $keyfile | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey
 
             clog "You can refer:" "'revv server help'"
 
     esac
+}
+
+
+
+function test_revvserver_item() {
+## ---------------------------------------------------------------------------
+## check all format is well printed
+## print remote (gerrit server) info for all supported format
+## awk print 2nd line to last-1 line
+#revvserver show |awk -F '|' 'NR>1{print $1}'
+    local cmd=$1
+    for _item in $(revvserver show |awk -F '|' 'NR>2 {print last} {last=$1}');do
+        if [ "$cmd" = info ]||[ "$cmd" = check ]; then revvcheck_server $_item log; fi
+
+        if [ "$cmd" = info ]; then
+        for _test in http port sub domain subdomain path url key user pass alias debug;do
+            bbar cyan "${_item##*/}:$_test"  "$(revvserver_item "${_item##*/}" "$_test")\n"
+        done
+        fi
+    done
 }
 
 
@@ -3045,25 +3118,6 @@ function revvcheck_permission(){
     echo "ok. gerrit branch[${branch}] existed and can accessed with[${perm}] permission by[${REVV_USER}]"
 
     return 0
-}
-
-
-function test_revvserver_item() {
-## ---------------------------------------------------------------------------
-## check all format is well printed
-## print remote (gerrit server) info for all supported format
-## awk print 2nd line to last-1 line
-#revvserver show |awk -F '|' 'NR>1{print $1}'
-    local cmd=$1
-    for _item in $(revvserver show |awk -F '|' 'NR>2 {print last} {last=$1}');do
-        if [ "$cmd" = info ]||[ "$cmd" = check ]; then revvcheck_server $_item log; fi
-
-        if [ "$cmd" = info ]; then
-        for _test in http port sub domain subdomain path url key user pass alias debug;do
-            bbar cyan "${_item##*/}:$_test"  "$(revvserver_item "${_item##*/}" "$_test")\n"
-        done
-        fi
-    done
 }
 
 
@@ -3667,6 +3721,7 @@ function revvforall(){
 # $3 gitproject
 # $4 branch
 ###### *는 쓰지말자. 대신 명시적으로 써야 한다. @all, @curr 등으로 사용하자
+
     local cmd=$1
     local target=$2 #no need * for all file in gerrit, remove
     local source=$3
