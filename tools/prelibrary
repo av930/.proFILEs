@@ -263,6 +263,7 @@ function handler_args(){
 }
 
 
+
 function print_menu() {
 ## ---------------------------------------------------------------------------
 # called from run_menu
@@ -281,55 +282,6 @@ function print_menu() {
     done
 }
 
-
-function __run_menu() {
-## ---------------------------------------------------------------------------
-# refresh menu when cursor move and number input
-
-    menu_selected=""
-    local menu_items=("$@" "0" ) #0 is endmark
-    local menu_size=${#menu_items[@]}
-    local menu_limit=$((menu_size - 1))
-
-    clear
-    print_menu "${menu_items[@]}"
-
-    while read -rsn1 input
-    do
-        case "$input" in
-            $'\x1B')  # ESC ASCII code (https://dirask.com/posts/ASCII-Table-pJ3Y0j)
-                read -rsn1 -t 0.1 input
-                if [ "$input" = "[" ]  # occurs before arrow code
-                then
-                    read -rsn1 -t 0.1 input
-                    case "$input" in
-                        A)  # Up Arrow
-                            if [ "${menu_items[$menu_limit]}" -ge 1 ]
-                            then
-                                menu_items[$menu_limit]=$(( ${menu_items[$menu_limit]} - 1 ))
-                                clear
-                                print_menu "${menu_items[@]}"
-                            fi;;
-                        B)  # Down Arrow
-                            if [ "${menu_items[$menu_limit]}" -lt "$menu_limit" ]
-                            then
-                                menu_items[$menu_limit]=$(( ${menu_items[$menu_limit]} + 1 ))
-                                clear
-                                print_menu "${menu_items[@]}"
-                            fi;;
-                    esac
-                fi
-                read -rsn5 -t 0.1  ;;# flushing stdin
-            "")  # Enter key
-                menu_selected=${menu_items[${menu_items[$menu_limit]}]}
-                return $(( 11 + ${menu_items[$menu_limit]} ))
-                ;;
-            *)  menu_selected=${menu_items[$input]}
-                return "$input"
-                ;;
-        esac
-    done
-}
 
 
 function run_menu() {
@@ -382,6 +334,8 @@ function run_menu() {
         esac
     done
 }
+
+
 
 
 ## source로 실행되었으면 파일path를 출력하고 아니면 바로 해당함수를 호출해라.
