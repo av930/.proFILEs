@@ -64,7 +64,7 @@ laptime() {  local _now=$(date +%s.%N);
 }
 
 mark=('/' '-' '\' '|')
-#progreass는 반복문안에서 호출되어야 함.
+#progress는 반복문안에서 호출되어야 함.
 #                    색상 시계 문자열    문자열 |  제목       시계                   내용
 progress()  { printf "${!1}%s%s ${NCOL}%b\r" "${2:+$2 }" "${mark[$((count%4))]}" "$3" ;}
 

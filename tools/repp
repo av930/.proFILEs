@@ -2756,11 +2756,12 @@ function  revvserver_item() {
     local return_type=$2
 
     ## 파라미터 개수가 반드시 2개이상이어야 동작
-    [ $# -lt 2 ] && { err "revvserver_item requires 2 params: <$remote> <$return_type>"; return 1; }
+    [ "$remote" = "help" ] && return 0
+    [ $# -lt 2 ] && { err "revvserver_item requires 2 params: <$remote> <$return_type>"; return 0; }
 
     ## server list로 부터 remote정보가 있는지 찾아 가져온다.
     _line=$(revvserver de "$remote")
-    [ -z "$_line" ] && { err "server infomation is null"; return 1; }
+    [ -z "$_line" ] && { err "server infomation[$remote] is null"; return 1; }
 
     local _item=$(echo "$_line"  | cut -d'|' -f2)
 
@@ -2880,7 +2881,7 @@ EOF
                 fi
             fi
 
-            if [ -z "$_line" ]; then err "server infomation is not loaded or null"; return 1; fi
+            if [ -z "$_line" ]; then warn "server infomation is not loaded or null"; return 1; fi
             printf "%s\n" "$_line"
             ## suppress -x
             ${setflag:-false} && { set -x ; setflag=false; }
@@ -3247,6 +3248,21 @@ function revvproject(){
 # $4 branch
     local cmd=$1
     local subcmd=$2
+
+    if [ "$subcmd" = "help" ]; then
+            echo "check your cmd [${cmd}]"; cat <<-EOF
+			usage) revv project       na mustang/tm/src                            # find project with project-name
+			usage) revv project       na vendor/qct/sa515m/_lge_only               # find project and its child projects
+			usage) revv projectadd    na sample/target sample/parent               # add git project from parent with empty master
+			usage) revv projectadd    na sample/target                             # add git project from All-project with empty master
+			usage) revv projectdel    na sample/target                             # get remove page url in gerrit
+			usage) revv projectparent na sample/target sample/parent               # change parent of the project
+			 info) project delete is not supported in CLI, WEB support it, please access it revv projectdel cmd
+
+EOF
+    return 0
+    fi
+
     local server=$(revvserver_item ${subcmd:-${GITT_REMOTE:-${REPP_REMOTE}}} http)
     local key=$(revvserver_item $server pass)
     local user=$(revvserver_item $server user)
@@ -3267,18 +3283,7 @@ function revvproject(){
     [ -z "$user" ] && user=$ACCOUNT
     local SEP='~'
     case ${cmd}${SEP}${subcmd} in
-           *~help)
-            echo "check your cmd [${cmd}]"; cat <<-EOF
-			usage) revv project       na mustang/tm/src                            # find project with project-name
-			usage) revv project       na vendor/qct/sa515m/_lge_only               # find project and its child projects
-			usage) revv projectadd    na sample/target sample/parent               # add git project from parent with empty master
-			usage) revv projectadd    na sample/target                             # add git project from All-project with empty master
-			usage) revv projectdel    na sample/target                             # get remove page url in gerrit
-			usage) revv projectparent na sample/target sample/parent               # change parent of the project
-			 info) project delete is not supported in CLI, WEB support it, please access it revv projectdel cmd
-
-EOF
-    ;;projectadd~*)
+    projectadd~*)
             bar inline "check if project already existed"
             local temp=$(curl -su ${user}:${key} $url_gerrit |sed '1d' | jq -cC '.name')
             if [ -n "${temp}" ]
