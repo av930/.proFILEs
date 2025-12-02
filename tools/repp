@@ -533,7 +533,7 @@ EOF
         (( $total == 0 )) && { err "No target git project is found in $REPPFILE_FORALL
         If create above file by 'repp forall gen', Please add <your command> in REPP_SCRIPT column using excel" ; return 1; }
     done
-    printf "total git sum #%s/#%s\n" "$subtotal" "$count"
+    printf "total git sum #%04d/#%04d\n" "$subtotal" "$count"
 
     #laptime
     ## REPPSCRIPT_V1, REPPSCRIPT_V2의 값을 보여준다.
@@ -594,7 +594,7 @@ EOF
             ccmd=$(cat $fileincmd)
             : > $fileincmd
         fi
-        [ "${reppscript_pre}" != "NONE" ] && printf "%s\n" "${reppscript_post}" >> $REPPSCRIPT_OUT
+        [ "${reppscript_post}" != "NONE" ] && printf "%s\n" "${reppscript_post}" >> $REPPSCRIPT_OUT
 
         #if ! shellcheck -s bash -S error $REPPSCRIPT_OUT ; then err "input command is not correct!"; return 1; fi
 
@@ -1094,9 +1094,9 @@ function repp_initdb(){
 
         ## 칼럼순서대로 1:revision, 2:group, 3:remote, 4:upstream, 5:dest_branch, 6:rrev, 7:project, 8:path
         ##process item according to index
-        [[ $lrev == "null" ]]    && { err "${lineout}"; return 1; }
-        [[ $project == "null" ]] && { err "${lineout} name is null"; return 1; }
-        [[ $path == "null" ]]    && { err "${lineout} name is null"; return 1; }
+        [[ $lrev == "null" ]]    && { warn "${lineout} lrev is null, use repo not manifest"; break; }
+        [[ $project == "null" ]] && { warn "${lineout} project is null, use repo not manifest"; break; }
+        [[ $path == "null" ]]    && { warn "${lineout} path is null, use repo not manifest"; break; }
 
         #KJK_DEBUG [ "$remote" == "v9" ] && { set -x; read -p "KJK_DEBUG"; } || set +x
         #3.remote: alias를 원래 remote이름으로 변경한다.
@@ -3352,7 +3352,7 @@ EOF
 
             bar inline "add new project inherited All-projects(default), and create emtpy master"
             curl -su ${user}:${key} $url_gerrit -H "Content-Type:application/json" \
-                 --data "{\"description\":\"revvcreate\",\"parent\":\"${parent:-All-Projects}\", \"create_empty_commit\":true }" \
+                 --data "{\"description\":\"revvcreate\",\"parent\":\"${parent:-All-Projects}\", \"create_empty_commit\":false }" \
                  -X PUT |sed '1d' > $file
             clog "result for creaing project: "
             cat $file| jq -C .
@@ -3761,9 +3761,7 @@ function revvforall(){
 			   ex) revv forall branchdelpost _new @branch                # delete branch with name of <current_branch>_new from current
 
 			   ex) revv forall project                                   # check if projects exist listed in manifest
-			   ex) revv forall projectadd    parent                      # add projects listed in manifest
 			   ex) revv forall projectdel                                # list up all url can delete the git
-
 			   ex) revv forall accessurl     @project                    # list up all url can access setting
 EOF
             return 0
