@@ -84,7 +84,7 @@ hardstatus on
 ## global frame status-bar
 # hardstatus alwayslastline '%{= kB}[%H]%{= kW}%-Lw%{= kG}%50> %n*%f %t%{= kW}%+Lw%< %{kC}%50=%d/%m/%Y %{kB}%80=%c%='
 # hardstatus alwayslastline '%{= kB}[%H]%{= kW}%-Lw%{= kG}%50> %n*%f %t%{= kW}%+Lw%< %{= kC}%-= %Y/%m/%d (%c %a)'
-hardstatus alwayslastline '%{= kB}[%H]%{= kW}%-Lw%{= kG}%50> %n*%f %t%{= kW}%+Lw%< %{= kC}%-= %Y/%m/%d (%c %a)'
+hardstatus alwayslastline '%{= kB}[%H]%{= kW}%-w%{= kG}%50> %n: %t%{= kW}%+w%< %{= kC}%-= %Y/%m/%d (%c %a)'
 
 
 
