@@ -171,7 +171,7 @@ log on
 
 ## ESCAPE - the COMMAND CHARACTER
 ## ---------------------------------------------------------------
-## ^l(ctrl+l is screen escape character), 
+## ^l(ctrl+l is screen escape character),
 ## l (ctrl+l, l send ctrl+l[esacpe] to app[or screen] in screen)
 escape ^ll
 
@@ -202,7 +202,8 @@ bind r eval "source $HOME/.screenrc" "echo '.screenrc reloaded!'"
 #bind , screen
 #bind , stuff "screen^M" #send command 'screen' to current screen session
 #bind , eval "chdir $(pwd)" "screen" #send command 'screen' to current screen session
-bind , 'screen' #send command 'screen' to current screen session
+#bind , 'screen' #send command 'screen' to current screen session
+bind , exec /data001/vc.integrator/.proFILEs/screen_insert.sh
 bind . eval 'kill' 'remove'
 
 ## window split horizontal
@@ -245,7 +246,7 @@ bindkey -m -k k1 stuff ^u            #copy mode
 bindkey -k k2 eval "copy" "stuff ^d"
 bindkey -m -k k2 stuff ^d
 
-## clear currnt screen on F3 
+## clear currnt screen on F3
 bindkey -k k3 eval "clear" "scrollback 0" "scrollback 90000"
 ## copy current buffer on F4
 bindkey -k k4 eval "copy" "stuff ^a["
