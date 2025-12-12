@@ -282,7 +282,7 @@ function dockhello(){
         echo "You must move your [$DOC_F] to other dir not in HOME. " && exit 0;
     fi
     ## use DOCKER_BUILDKIT, under docker version 25.0.3
-    echorun DOCKER_BUILDKIT=1 docker build --progress=plain -f $DOC_F -t $DOC_F .
+    echorun DOCKER_BUILDKIT=1 docker build --network=host --progress=plain -f $DOC_F -t $DOC_F .
     echo "please find generated dockerfile ${DOC_F}: "
     echo
     readlink -f $DOC_F
@@ -313,7 +313,7 @@ function dockbuild(){
 
     fi
     if [ "$cntr_img" = "" ];then cntr_img=$today; fi
-    echorun DOCKER_BUILDKIT=1 docker build --progress=plain -f ${cntr_file} -t ${cntr_img,,} . "$@" |& tee -a log.docker
+    echorun DOCKER_BUILDKIT=1 docker build --network=host --progress=plain -f ${cntr_file} -t ${cntr_img,,} . "$@" |& tee -a log.docker
 
 
     printf "docker build log is saved to ./log.docker"
