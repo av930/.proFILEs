@@ -1094,9 +1094,9 @@ function repp_initdb(){
 
         ## 칼럼순서대로 1:revision, 2:group, 3:remote, 4:upstream, 5:dest_branch, 6:rrev, 7:project, 8:path
         ##process item according to index
-        [[ $lrev == "null" ]]    && { warn "${lineout} lrev is null, use repo not manifest"; break; }
-        [[ $project == "null" ]] && { warn "${lineout} project is null, use repo not manifest"; break; }
-        [[ $path == "null" ]]    && { warn "${lineout} path is null, use repo not manifest"; break; }
+        [[ $lrev == "null" ]]    && { err "${lineout}"; return 1; }
+        [[ $project == "null" ]] && { err "${lineout} name is null"; return 1; }
+        [[ $path == "null" ]]    && { err "${lineout} name is null"; return 1; }
 
         #KJK_DEBUG [ "$remote" == "v9" ] && { set -x; read -p "KJK_DEBUG"; } || set +x
         #3.remote: alias를 원래 remote이름으로 변경한다.
@@ -1954,10 +1954,24 @@ function repp_initvar(){
 
 
 
-function gitt_initvar(){
+function gitt_trackbranch(){
 ## ---------------------------------------------------------------------------
-# find input-path up and down,
+#NEEDTO WORK: find more secure way to get current branch revision
+    GITT_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null| sed 's:.*/::')
+    [ -z "${GITT_BRANCH}" ] && GITT_BRANCH=$(git branch -ar |grep -e '->' |sed -E 's#.*[/|>](.*)$#\1#')
+    [ -z "${GITT_BRANCH}" ] && GITT_BRANCH=$(git branch -ar |grep -e 'm/' |sed -E 's#.*[/|>](.*)$#\1#')
+    [ -z "${GITT_BRANCH}" ] && warn "'repo start <workingbranch> --all' is recommended"
+    [ -z "${GITT_BRANCH}" ] && ( err "check your branch with 'git branch'
+    repo start <working branch> --all       # make working branch
+    source repp                             # reload repp script"
+    )
+}
 
+
+
+function gitt_initvar(){
+## -----------------------------------------------------
+# find input-path up and down,
     local temp
     if ! gittcheck_isgitproject; then
         GITT_REMOTE=; GITT_PROJECT=; GITT_BRANCH=; GITT_PATH=; GITT_URL=; GITT_REVIEW=;
@@ -1974,15 +1988,7 @@ function gitt_initvar(){
     if [ -z "${GITT_PROJECT}" ]; then GITT_PROJECT=$(git config --get-regexp remote.* |grep -e "projectname" |head -1|cut -f2 -d' '); fi
 
     #NEEDTO WORK: find more secure way to get current branch revision
-    GITT_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null| sed 's:.*/::')
-    [ -z "${GITT_BRANCH}" ] && GITT_BRANCH=$(git branch -ar |grep -e '->' |sed -E 's#.*[/|>](.*)$#\1#')
-    [ -z "${GITT_BRANCH}" ] && GITT_BRANCH=$(git branch -ar |grep -e 'm/' |sed -E 's#.*[/|>](.*)$#\1#')
-    [ -z "${GITT_BRANCH}" ] && warn "'repo start <workingbranch> --all' is recommended"
-    [ -z "${GITT_BRANCH}" ] && ( err "check your branch with 'git branch'
-    repo start <working branch> --all       # make working branch
-    source repp                             # reload repp script"
-    )
-
+    gitt_trackbranch
     GITT_URL=$(git config --get-regexp remote.${GITT_REMOTE}.url|cut -d' ' -f2|head -1)
     GITT_REVIEW=$(git config --get-regexp remote.*.review|cut -d' ' -f2|head -1)
     GITT_REVIEW=${GITT_REVIEW:="${GITT_URL/${GITT_PROJECT}/}"}
@@ -2566,6 +2572,22 @@ EOF
                 bar inline "delete branch: branch [${name}] will be removed from REMOTE"
                 showRUNQ y git push ${GITT_REMOTE} --delete ${name}
     ;; info)    gittbranch_info
+    ;; checkout)
+                ## checkout or create local branch
+                if git show-ref --verify --quiet "refs/heads/${name}"; then
+                    bar inline "checkout existing local branch: ${name}"
+                    git switch "${name}"
+                else
+                    bar inline "create new local branch: ${name}"
+                    git switch -c "${name}"
+                fi
+
+                if [ -n "$(git ls-remote -h "${GITT_REMOTE}" "refs/heads/${name}")" ]; then
+                    bar inline "current remote tracking branch is: ${GITT_BRANCH}"
+                    showRUNQ y git branch --set-upstream-to=${GITT_REMOTE}/${name}
+                    gitt_trackbranch
+                    clog "changed remote tracking branch is: ${GITT_BRANCH}"
+                fi
     ;; list)    #test case all) gitt branch list, gitt branch list '*', gitt branch list '*mas*',  exact) gitt branch list m/master, gitt branch list 'm/master'
                 #gittbranch_list \'"${name:-*}"\'
                 set -o noglob
@@ -2626,12 +2648,12 @@ EOF
     echo "ex) git grep -e regexp1 --or -e regexp2"
     echo "ex) git grep -e regexp1 --and -e regexp2"
     showRUN git grep -n "${keyword}" ${area}
-
-    under "find function(${keyword}) in file history(${area:-all}) \n"
-    read -p "[enter:continue| ctrl+c:break]"
-    showRUN git log -L :${keyword}:${area}
 EOL
 )
+
+    #under "find function(${keyword}) in file history(${area:-all}) \n"
+    #read -p "[enter:continue| ctrl+c:break]"
+    #showRUN git log -L :${keyword}:${area}
 
     ## show commit diff including keyword
     #git log -p -S"${keyword}" ${area}
@@ -3352,7 +3374,7 @@ EOF
 
             bar inline "add new project inherited All-projects(default), and create emtpy master"
             curl -su ${user}:${key} $url_gerrit -H "Content-Type:application/json" \
-                 --data "{\"description\":\"revvcreate\",\"parent\":\"${parent:-All-Projects}\", \"create_empty_commit\":false }" \
+                 --data "{\"description\":\"revvcreate\",\"parent\":\"${parent:-All-Projects}\", \"create_empty_commit\":true }" \
                  -X PUT |sed '1d' > $file
             clog "result for creaing project: "
             cat $file| jq -C .
@@ -3761,7 +3783,9 @@ function revvforall(){
 			   ex) revv forall branchdelpost _new @branch                # delete branch with name of <current_branch>_new from current
 
 			   ex) revv forall project                                   # check if projects exist listed in manifest
+			   ex) revv forall projectadd    parent                      # add projects listed in manifest
 			   ex) revv forall projectdel                                # list up all url can delete the git
+
 			   ex) revv forall accessurl     @project                    # list up all url can access setting
 EOF
             return 0
