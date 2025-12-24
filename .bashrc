@@ -187,7 +187,42 @@ alias dus='_dus(){ _bar "each directory size is\n"; du -hs */|sort -n ;}; _dus'
 alias df${TAG}='df -Thx squashfs| (read -r; printf "%s\n" "$REPLY"; sort -k 7)'
 alias ps${TAG}='_bar "usage: psl"; ps -u vc.integrator -o pid,ppid,user,stime,etime,pcpu,pmem,tty,args --forest'
 alias pst='_pst(){ _bar  "usage: pst [$USER]"; pstree -hapgT --ascii -u ${1:-$USER} ;}; _pst'
+
+#### process
 alias kil='_kil(){ _bar "kill -SIGTERM -- -[PGID]"; kill -SIGTERM -- -$1 ;}; _kil'
+alias kildir='kill_dir'
+function kill_dir() {
+    _bar "try to kill process in current dir"
+    # 1. 현재 경로의 깊이(Depth) 계산 (Root / 기준 '/' 개수 카운트)
+    local current_dir=$(pwd)
+    local depth=$(echo "$current_dir" | awk -F"/" '{print NF-1}')
+
+    # 2. 깊이가 3단계 미만인 경우 (예: /, /usr, /home/user 등) 실행 차단
+    if [ "$depth" -lt 3 ]; then
+        echo "this script only work with more 3 depth path: ex) /home/user/example"
+        echo "skip $current_dir [depth:$depth]"
+        return 1
+    fi
+
+    # 3. 현재 디렉토리를 점유 중인 프로세스 PID 추출
+    # fuser가 없거나 프로세스가 없으면 에러 메시지 없이 종료
+    # ps 명령을 위해 쉼표로 구분된 형식으로 변환
+    local pids=$(fuser . 2>/dev/null | xargs | tr ' ' ',')
+    [ -z "$pids" ] && { echo "there are no process running in $current_dir"; return 0; }
+
+    # 4. 프로세스 정보 출력 (PID, 소유자, 프로세스명 - PID순 정렬)
+    echo "========================================================"
+    ps -p $pids -o pid,user,comm --sort=pid
+    echo "========================================================"
+
+    # 5. 사용자 확인 (Enter 입력 시 실행)
+    echo ""
+    read -p "kill above processes [contineu: enter | break: ctrl+c] "
+
+    # 6. 실제 종료 명령 수행
+    sudo fuser -k -9 .
+    ps -p $pids -o pid,user,comm --sort=pid 2>/dev/null
+}
 
 alias lls='_bar size-base; ls -agohrS'
 alias llt='_bar time-base; ls -agohrt'
