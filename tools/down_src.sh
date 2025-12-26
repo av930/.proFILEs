@@ -6,7 +6,7 @@
 # ==============================================================================
 INPUT_FILE="$1"
 MAX_JOBS=3
-LOG_DIR="log.down_src"
+LOG_DIR="log"
 JOB_DIR="result."
 
 # 색상 코드 (가독성용)
@@ -30,7 +30,7 @@ if [ -z "$INPUT_FILE" ] || [ ! -f "$INPUT_FILE" ]; then
 	2. download 명령은 여러줄도 가능하지만 동시 실행은 최대 3개까지 가능하다.
     3. 실행후 [RUNNING] 상태에 있으면 정상동작이다.
     4. 모든 다운로드가 완료되면 [FINISH]가 출력되고 그렇지 않으면 [ERROR]가 출력된다.
-
+    * 기존 다운로드 결과를 재사용하지 않으려면, 먼저 rm -rf result.* 로 지워야함.
 EOF
     exit 1
 fi
@@ -108,7 +108,7 @@ for idx in "${!command_blocks[@]}"; do
     sleep 2
     # 프로세스가 아직 실행 중인 경우에만 출력
     if kill -0 "$pid" 2>/dev/null; then
-        echo -e "${job_color}[RUNNING]: ${job_id} in ${job_dir}/ (PID: $pid, Log: $log_file)${NC}"
+        echo -e "${job_color}[RUNNING]: ${job_id} in ${job_dir}/ (PID: $pid, Log: ${LOG_DIR}/downcmd_${job_id}.log)${NC}"
     fi
     ((active_jobs++))
 
@@ -130,7 +130,7 @@ for idx in "${!command_blocks[@]}"; do
             if ! kill -0 "$p" 2>/dev/null; then
                 job_id_end=${job_pids[$p]}
                 job_color_end="${JOB_COLORS[0]}"
-                echo -e "${job_color_end}[END:${job_id_end}] Check log: ${job_logs[$p]}${NC}"
+                echo -e "${job_color_end}[END:${job_id_end}] Check log: ${LOG_DIR}/downcmd_${job_id_end}.log${NC}"
                 unset "job_logs[$p]"
                 unset "job_pids[$p]"
                 break
@@ -154,7 +154,7 @@ for pid in "${!job_logs[@]}"; do
 
     job_id_final=${job_pids[$pid]}
     job_color_final="${JOB_COLORS[0]}"
-    echo -e "${job_color_final}[END:${job_id_final}] Check log: ${job_logs[$pid]}${NC}"
+    echo -e "${job_color_final}[END:${job_id_final}] Check log: ${LOG_DIR}/downcmd_${job_id_final}.log${NC}"
 done
 
 # error 발생 여부에 따라 메시지 출력
