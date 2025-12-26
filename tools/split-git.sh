@@ -37,17 +37,24 @@ if ! command -v git-filter-repo &> /dev/null; then
 fi
 
 
-#### push logic ####
+#################################### push logic ####################################
 ## remote 정보가 있으면 push작업을 진행한다. 이경우 split 작업은 skip한다.
 if [ -n "${REMOTE_NAME}" ]; then
+
+	cd "${WORK_DIR}" #split을 진행할 dir
+	[ ! -d "${WORK_DIR}" ] && { "Please check input dir :[${WORK_DIR}]"; exit 1; }
+
 
 	# 실행할 명령어를 함수로 정의
 	push_to_remote() {
 		local dir="$1" cmd="$2"
+		set +e;
 		$cmd pushd "$dir"
-		$cmd git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}
+		$cmd git remote get-url $REMOTE_NAME && { git remote rm $REMOTE_NAME; git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}; } || git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}
+		$cmd git ls-remote $REMOTE_NAME > /dev/null || { echo "[err] you must create remote first"; exit 1; }
 		$cmd git push $REMOTE_NAME HEAD:${REMOTE_BNCH} ${PUSH_OPT}
 		$cmd popd
+		set -e;
 	}
 
 	# common도 dir로 진입해서 동일하게 작업처리
@@ -57,16 +64,16 @@ if [ -n "${REMOTE_NAME}" ]; then
 		push_to_remote "$item" echo
 		[ ! "$REPLY" = "g" ] && read -p "please confirm [to stop: ctrl+c| next: enter| go all: g] : "
 		# 실제 명령어 실행
-		push_to_remote "$item" echo
+		push_to_remote "$item"
 	done
 
 exit 0
 fi
 
 
-#### split logic ####
+#################################### split logic ####################################
 PATH_CURRENT="${WORK_DIR}" #split을 진행할 dir
-[ ! -d "$PATH_CURRENT/.git" ] && { "$0 must be run at .git directory"; exit 1; }
+[ ! -d "$PATH_CURRENT/.git" ] && { "$0 must be run at .git repository"; exit 1; }
 ## split dir를 clone하여 split dir생성
 PATH_SPLIT=${PATH_CURRENT}_split
 rm -rf ${PATH_SPLIT} && mkdir -p ${PATH_SPLIT} && pushd ${PATH_SPLIT}
@@ -76,7 +83,6 @@ rm -rf ${PATH_SPLIT} && mkdir -p ${PATH_SPLIT} && pushd ${PATH_SPLIT}
 printf "\e[0;35m [split common]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ \e[0m\n"
 git clone ${PATH_CURRENT} .
 set -x; git filter-repo ${PATH_GIT[@]/#/--path } --invert-paths --force; set +x
-printf "%s\n" ${PATH_GIT[@]}  >> .gitignore
 
 ## 2nd phase: root dir안에서 common을 제외한 나머지 dir를 각 git으로 구성
 for item in ${PATH_GIT[@]}; do
@@ -92,18 +98,21 @@ for item in ${PATH_GIT[@]}; do
 done
 
 
-## 원본 dir과 split dir을 .git 제외하고 비교
+## 원본 dir과 split dir을 .git 제외하고 비교하여, 잘못 생성된건 없는지 확인.
 PATH_SCRIPT=$(dirname $(realpath "$0"))
 [ -f "${PATH_SCRIPT}/cmp_dirs.sh" ] || { echo "error: script file is not existed"; exit 1; }
-if EXCEPT=.git P1="${PATH_SPLIT}" P2="${PATH_CURRENT}" ${PATH_SCRIPT}/cmp_dirs.sh 1 ; then
+if EXCEPT=".git" P1="${PATH_SPLIT}" P2="${PATH_CURRENT}" ${PATH_SCRIPT}/cmp_dirs.sh 1 ; then
 	printf "\e[0;31m [SUCCESS]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ \e[0m\n"
-	echo "=== same: ${PATH_SPLIT} and ${PATH_CURRENT} ==="
+	printf "=== result is same: \n${PATH_CURRENT} and \n${PATH_SPLIT}\n ==="
 	echo ""
-	echo "all dir are split well, Now you need to push it to remote"
+	#root dir에 .gitignore를 넣어서, 분리된 git이 다시 포함되지 않도록 처리해줘야함. 수동으로 git commit필요
+	echo "all dir are split well, Generate .gitignore on root, You need to commit .gitignore"
+	printf "%s\n" ${PATH_GIT[@]}  >> .gitignore
+	echo "Now you need to push it to remote"
 	exit 0
 else #작업후 in/out dir 내용이 다르면
 	printf "\e[0;31m [NEED to CHECK]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ \e[0m\n"
-	echo "=== differ: ${PATH_SPLIT} and ${PATH_CURRENT} ==="
+	printf "=== result is differ: \n${PATH_CURRENT} and \n${PATH_SPLIT} ===\n"
 	echo "You may need to overwrite: \$rsync -a --update --exclude='.git/' ${PATH_CURRENT} ${PATH_SPLIT}"
 	exit 1
 fi
