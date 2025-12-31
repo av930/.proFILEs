@@ -19,8 +19,20 @@ print_usage() {
 # 필수 인자 확인 (dir1, dir2, mode), mode 유효성 확인 (1|2|3)
 [[ -z "$dir1" || -z "$dir2" ]] && { echo "[ERROR] Missing params: dir1 or dir2 is empty."; print_usage; }
 [[ -z "$mode" || ! "$mode" =~ ^[123]$ ]] && { echo "[ERROR] Invalid mode: '${mode:-empty}'. Expected 1|2|3."; print_usage; }
-# EXCEPT 포맷 검증: 2개 이상일 때 세미콜론(;) 아닌것 확인
-[[ "$except_paths" == *[,: ]* ]] && { echo "[ERROR] EXCEPT must be separated by ';'"; print_usage; }
+# EXCEPT 포맷 검증: 2개 이상일 때 세미콜론(;) 아닌것 확인 (공백/콤마/콜론 감지)
+[[ "$except_paths" =~ [,:[:space:]] ]] && { echo "[ERROR] EXCEPT must be separated by ';'"; print_usage; }
+
+# 상대 경로를 절대 경로로 변환 (디렉토리나 파일 모두 처리)
+if [[ -e "$dir1" ]]; then
+    if [[ -d "$dir1" ]]; then dir1=$(cd "$dir1" && pwd)
+    else dir1=$(cd "$(dirname "$dir1")" && pwd)/$(basename "$dir1")
+    fi
+fi
+if [[ -e "$dir2" ]]; then
+	if [[ -d "$dir2" ]]; then dir2=$(cd "$dir2" && pwd)
+    else dir2=$(cd "$(dirname "$dir2")" && pwd)/$(basename "$dir2")
+    fi
+fi
 
 # 확인용 파라미터 출력
 echo "[PARAMS] P1='${dir1}' P2='${dir2}' MODE='${mode}' EXCEPT='${except_paths}'"

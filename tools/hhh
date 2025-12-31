@@ -1,5 +1,5 @@
 #!/bin/bash
-cat << EOF
+cat | more << EOF
 ######################################## BASH SCRIPT ########################################
 
 repp : repo와 git, gerrit을 handling하기 위한 manager
@@ -68,7 +68,7 @@ repo forall -evcj4 bash -c 'reposcript.sh'                               # if ex
 repo forall . -ec bash 'reposcript.sh'                                   # for current git only, make SHELL variable valid
 repo forall -evcj4 bash -c 'reposcript.sh ${@:0}' aaa bbb ccc ddd        # passing parameters to reposcript.sh
 repo forall mustang/tm/src honda/linux/build_tsu -c bash 'reposcript.sh' # for serveral project
-repo forall $(cat fromfilelist.txt)  -c 'reposcript.sh'                  # for serveral project from file
+repo forall \$(cat fromfilelist.txt)  -c 'reposcript.sh'                  # for serveral project from file
 repo forall -r poky/* -c bash 'reposcript.sh'                            # for git projects matched regexp
 repo forall -i poky/* -c bash 'reposcript.sh'                            # for git projects not matched regexp
 repo forall -g hlos -c bash 'reposcript.sh'                              # for git projects included in specific group
