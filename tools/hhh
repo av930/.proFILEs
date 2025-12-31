@@ -1,0 +1,139 @@
+#!/bin/bash
+cat << EOF
+######################################## BASH SCRIPT ########################################
+
+repp : repo와 git, gerrit을 handling하기 위한 manager
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ ex) . repp
+repp info
+
+
+dock : docker를 쉽게 handling하기 위한 manager
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ ex) docker manager
+dock
+
+
+split-git.sh : 1개의 git으로 구성된 git을 각 dir별로 split하고, split된 git을 push해준다.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ ex) split dir to git
+WORK_DIR=/data001/~/sa525m-le-3-1_amss_standard_oem split-git.sh SA525M_aop SA525M_apps ~~
+
+ ex) push git to remote
+WORK_DIR=/data001/~/sa525m-le-3-1_amss_standard_oem REMOTE_NAME=devops
+REMOTE_ADDR=ssh://${USER}@vgit.lge.com:29420/qct/sa525m
+REMOTE_BNCH=refs/heads/release_5.0.9 PUSH_OPT="-o skip-validation --force"
+${proFILEdir}/tools/split-git.sh SA525M_aop SA525M_apps ~~
+
+
+cmp-dirs.sh : 2개의 dir혹은 file 혹은 string을 비교한후, 어느 1곳에만 존재하는것이나 공통에 존재하는 data를 출력해준다.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ ex) compare dirctory
+EXCEPT=<path1;path2> P1=<dir1|file1|str1> P2=<dir2|file2|str2> cmp_dirs.sh <mode:1|2|3>
+EXCEPT=<path1;path2> cmp_dirs.sh <dir1|file1|str1> <dir2|file2|str2> <mode:1|2|3>
+EXCEPT=".git;.repo" P1="${HOME}/mirror/sa525m-le-3-1_amss_standard_oem" P2="${HOME}/mirror/sa525m-le-3-1_amss_standard_oem_split" cmp_dirs.sh 1
+EXCEPT=".git;.repo" cmp_dirs.sh ${HOME}/mirror/sa525m-le-3-1_amss_standard_oem ${HOME}/mirror/sa525m-le-3-1_amss_standard_oem_split 3
+
+
+down-src.sh : 여러개의 src를 동시(3개)에 받는 script
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ ex) write download cmd to file
+echo "repo init ~~~" >> down.list
+echo "repo sync ~~~" >> down.list
+printf "\n\n git clone ~~~" >> down.list (empty line이 들어가면 서로 다른 다운로드 명령으로 인지함)
+
+ ex) download script (backgroud로 다운로드 구동후 입력한 명령이 모두 다운로드되면, 완료로 표기됨)
+down_src.sh down.list
+
+
+revvscript.sh : repp에서 호출하는 script, 독립적으로도 사용가능
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# revv forall branch @branch = repo forall -evc bash 'revvscript.sh' branch @branch
+# revv forall branch        master                      # 정확한 이름의 브랜치 존재여부
+# revv forall Pbranch       master                      # master branch에 대해 실행명령만 출력, 실제 실행안함
+
+# repo forall -evc bash 'revvscript.sh' branch master
+# repo forall -evc bash 'revvscript.sh' branchlist \*
+# repo forall -evc bash -ex 'revvscript.sh' branchlist \*
+
+
+reppscript.sh : repo forall사용시 복잡한 구문을 처리를 위해 제공하는 helper
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## copy this script to your REPO_PATH
+# 1. cp ~/.proFILEs/tools/reposcript.sh ./reposcript.sh
+# 2. or repo forall -evcj4 bash -c 'reposcript.sh'
+
+## call like this
+repo forall -evcj4 bash -c 'reposcript.sh'                               # if exit 1, repo forall will be stopped
+repo forall . -ec bash 'reposcript.sh'                                   # for current git only, make SHELL variable valid
+repo forall -evcj4 bash -c 'reposcript.sh ${@:0}' aaa bbb ccc ddd        # passing parameters to reposcript.sh
+repo forall mustang/tm/src honda/linux/build_tsu -c bash 'reposcript.sh' # for serveral project
+repo forall $(cat fromfilelist.txt)  -c 'reposcript.sh'                  # for serveral project from file
+repo forall -r poky/* -c bash 'reposcript.sh'                            # for git projects matched regexp
+repo forall -i poky/* -c bash 'reposcript.sh'                            # for git projects not matched regexp
+repo forall -g hlos -c bash 'reposcript.sh'                              # for git projects included in specific group
+
+
+vscdm : vscdm project/config compare
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+vscdm <PROJECT> all
+
+
+vbee.sh/vee : vbee handler로 2개중 1개 삭제후 재개발 필요
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+script2exe.sh : shell script를 exe로 바꿔주는 script
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+show-tree.sh : linux의 tree -L 2 명령과 유사한 shell script 구현체
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+jenn.sh : jenkins utility collection
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+rcopy: 2개 서버간 대용량 파일전송을 위한 script
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+indent.sh : file indentation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+adb-push.sh(cygwin) : adb를 이용하여 phone에 dir를 push
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+and.sh(cygwin) : android utiliy
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+capture.sh(cygwin) : ifranview를 이용하여 특정 size로 phone화면을 capture
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+check-proxy.sh : test proxy server
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+test-loop.sh : 다양한 loop구문 example
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+xtrace.sh : shell debug example
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+vscdm <PROJECT> all
+
+
+
+######################################## BATCHFILE #########################################
+
+hybrid.bat(cmd) : 잘모르겠다.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+EOF

@@ -203,7 +203,7 @@ bind r eval "source $HOME/.screenrc" "echo '.screenrc reloaded!'"
 #bind , stuff "screen^M" #send command 'screen' to current screen session
 #bind , eval "chdir $(pwd)" "screen" #send command 'screen' to current screen session
 #bind , 'screen' #send command 'screen' to current screen session
-bind , exec /data001/vc.integrator/.proFILEs/screen_insert.sh
+bind , exec /data001/vc.integrator/.proFILEs/_screen_insert.sh
 bind . eval 'kill' 'remove'
 
 ## window split horizontal
