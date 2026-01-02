@@ -153,10 +153,10 @@ termcapinfo xterm 'hs:ts=\E]2;:fs=\007:ds=\E]2;screen\007'
 # shell  bash
 
 ## should allocate a script that is able to init shell
-## for changing $SHELL variable
- shell "$HOME/.proFILEs/scw"
-## for not changing $SHELL variable
-# exec "$HOME/.proFILEs/scw"
+## for changing $SHELL variable - refactored: removed scw dependency
+## shell "$HOME/.proFILEs/scw"
+## Use bash with proper initialization
+shell bash
 
 ## log file
 deflog on
