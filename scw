@@ -1,5 +1,0 @@
-#change dir to HOME
-#cd $PWD
-# open my profile packages
-PROMPT_COMMAND="" bash --rcfile $HOME/.proFILEs/.bashrc
-
