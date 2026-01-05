@@ -16,6 +16,11 @@ DIR_CURR=$(pwd)
 LC_ALL=C.UTF-8
 $DEBUG "[$_][$BASH_SOURCE][$0][${PATH_FULL}][${PATH_DIR}][${PATH_FILE}]"
 
+## Ensure gawk is used for awk operations (repp requires GNU awk features)
+if command -v gawk >/dev/null 2>&1; then alias awk='gawk'
+elif [[ "$(awk --version 2>&1)" != *"GNU Awk"* ]]; then
+    err "repp requires GNU awk (gawk). Please install: sudo apt install gawk" >&2
+fi
 
 if [ -e "${PATH_DIR:-.}/prelibrary" ]; then source ${PATH_DIR:-.}/prelibrary;
 else source ${proFILEdir}/tools/prelibrary; fi
@@ -1947,10 +1952,10 @@ function repp_initvar(){
 
     #REPP_PROJECT=$(git remote -v |grep fetch | sed -E 's#.*[0-9]+(.*).git.*$#\1#')
     #REPP_PROJECT=$(git config --get-regexp remote.*.url  |head -1|cut -d' ' -f2)
-    REPP_PROJECT=$(git config --get-regexp remote.* |grep -Ee "(projectname|url)" |head -1|grep -Po '\w/\K.\w+[^?]+')
+    REPP_PROJECT=$(git config --get-regexp remote.* 2>/dev/null |grep -Ee "(projectname|url)" |head -1|grep -Po '\w/\K.\w+[^?]+')
     REPP_BRANCH=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null| sed 's:.*/::')  #GITT_BRANCH
-    REPP_REVIEW=$(git config --get-regexp remote.*.review|cut -d' ' -f2|head -1)        #GITT_REVIEW
-    REPP_URL=$(git config --get-regexp remote.$(git remote|head -1).url|cut -d' ' -f2|head -1) #GITT_URL
+    REPP_REVIEW=$(git config --get-regexp remote.*.review 2>/dev/null|cut -d' ' -f2|head -1)        #GITT_REVIEW
+    REPP_URL=$(git config --get-regexp remote.$(git remote 2>/dev/null|head -1).url 2>/dev/null|cut -d' ' -f2|head -1) #GITT_URL
 
     #REPP_REMOTE=$(revvserver_item $(git remote -v |grep fetch | grep -oP '(?<=:)[0-9]+(?=/)') remote)
     if [[ -z $REPP_REMOTE ]]; then
@@ -1958,7 +1963,7 @@ function repp_initvar(){
         REPP_REMOTE=$(cat ${REPPFILE_JSON} 2>/dev/null |jq -r '.default.remote')
         if [ -z "${REPP_REMOTE}" ] || [ "${REPP_REMOTE}" == "null" ] ; then
             reppget_repcmd
-            local tmp=$(git config --get-regexp ^remote.*.url | sed 's/.*:\([0-9]*\).*/\1/')
+            local tmp=$(git config --get-regexp ^remote.*.url 2>/dev/null | sed 's/.*:\([0-9]*\).*/\1/')
             # REPP_REMOTE=$(grep '<remote ' ${REPPFILE_MANI} | sed -n 's/.*name="\([^"]*\)".*/\1/p')
             REPP_REMOTE=$(repo manifest |sed -n "/.*<remote.*fetch.*${tmp}/ s/^.*name=\"\([^\"]*\)\".*/\1/p")
         fi
@@ -2886,7 +2891,7 @@ function revvserver_decode(){
     ## 3rd try: 독립된 git으로 간주하여 git config명령결과 remote url에서 찾기 (subdomain_port -> REMOTEKEY like vgit_29420)
     if [ -z "$_line" ]; then
         local tmp guessed
-        tmp=$(git config --get-regexp remote.$(git remote | head -1).url 2>/dev/null | cut -d' ' -f2 | head -1)
+        tmp=$(git config --get-regexp remote.$(git remote 2>/dev/null | head -1).url 2>/dev/null | cut -d' ' -f2 | head -1)
         if [ -n "$tmp" ]; then
             guessed=$(echo "${tmp#*://}" | awk -F[./:] '{print $1"_"$4}')
             if [ -n "$guessed" ]; then
@@ -4215,6 +4220,7 @@ EOL
 function reppinstall(){
 ## ---------------------------------------------------------------------------
 #install basic package for repp
+if ! command -v gawk > /dev/null ; then clog "gawk need to be installed:" "sudo apt install gawk"; fi
 if ! command -v curl > /dev/null ; then clog "curl need to be installed:" "sudo apt install curl"; fi
 if ! command -v icdiff > /dev/null ; then clog "icdiff need to be installed:" "sudo apt install icdiff"; fi
 if ! command -v jq > /dev/null ; then clog "jq need to be installed:" "sudo apt install icdiff"; fi
