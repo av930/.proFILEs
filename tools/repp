@@ -98,7 +98,7 @@ function reppcopy(){
 				usage) repp copy <ip> <port>       #copy repp to current server for temporary use.
 				   ex) repp copy 10.159.44.215 22  #copy repp from the server to local
 EOF
-    ;; *) showRUN scp -p ${port} $ACCOUNT@${server}:/data001/$ACCOUNT/.proFILEs/tools/repp ~/.proFILEs/tools/repp
+    ;; *) showRUN scp -P ${port} $ACCOUNT@${server}:/data001/$ACCOUNT/.proFILEs/tools/repp ~/.proFILEs/tools/repp
     ;; esac
 }
 
