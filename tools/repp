@@ -84,6 +84,26 @@ EOF
 
 
 
+function reppcopy(){
+## ---------------------------------------------------------------------------
+# template for bash fuction
+# $1 parameter explanation
+# $2 parameter explanation
+    local cmd=$1
+    local server=${2:-10.159.47.21}
+    local port=${3:-22}
+
+    case $cmd in
+       help) cat <<- EOF
+				usage) repp copy <ip> <port>       #copy repp to current server for temporary use.
+				   ex) repp copy 10.159.44.215 22  #copy repp from the server to local
+EOF
+    ;; *) showRUN scp -p ${port} $ACCOUNT@${server}:/data001/$ACCOUNT/.proFILEs/tools/repp ~/.proFILEs/tools/repp
+    ;; esac
+}
+
+
+
 ## repp ======================================================================================================================
 function reppshow_manifesttree(){
 ## ---------------------------------------------------------------------------
@@ -2938,7 +2958,7 @@ EOF
 
     ;;_verify) #.key_server.en의 무결성을 검증한다. (캐싱 기능 포함)
             local key url account invalid_count=0
-            local verified_keyfile="${REPP_DIR}/log/.key_server_verified"
+            local verified_keyfile="${REPP_DIR:=$HOME}/log/.key_server_verified"
 
             # .repp/log 디렉토리 생성
             mkdir -p "${REPP_DIR}/log"
@@ -4014,6 +4034,7 @@ case "$1" in
     ;;               connect)      reppcheck_initvar gittrevv         ;  revvconnect "${@:2}"
     ;;                   cmd)      reppcheck_initvar reppgittrevv    &&  revvshowcmd "${@:2}"
     ;;                 debug)      reppcheck_initvar gittrevv        &&  revvdebug "${@:2}"
+    ;;                  copy)      revvdebug "${@:2}"
 
 esac
 return $ret
@@ -4083,6 +4104,7 @@ local MENU=(
 " version: check repo & python version and provide repo upgrade"
 "  onnect: check the connection with git host server and accessibilty for branch of git"
 "   debug: show variable REPO, REPP, REPPFILE, GITT variable used in script"
+"    copy: copy repp script from input server to local for temporary use"
 " install: check essential linux packages to run repp utility"
 "  forall: run 'repo forall' from .repp/reppforall.csv(plz put your cmds before run)"
 )
@@ -4107,6 +4129,7 @@ case "$1" in
     ;; version)     reppcheck_initvar repp              &&  reppversion "${@:2}"
     ;; connect)                                             reppconnect "${@:2}"
     ;; debug)                                               reppdebug "${@:2}"
+    ;; copy)                                                reppcopy  "${@:2}"
     ;; install)                                             reppinstall
     ;; *)           bar outline "result of native repo";    repo "${@}"
 esac
