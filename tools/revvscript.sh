@@ -283,7 +283,7 @@ case ${CURR_branch} in
         esac
 
         if [ "$(cat ${tempf} | head -1)" = "${JSON_IDFY}" ]; then
-            cat ${tempf} | sed 1d| jq -rM > ${tempf}_bk; mv ${tempf}_bk ${tempf}
+            cat ${tempf} | sed 1d| jq -rM '.' > ${tempf}_bk; mv ${tempf}_bk ${tempf}
 
             if [ "$(cat ${tempf} | sed -n '1p')" = "[]" ]; then clog "executed" "result is nothing"; cat ${tempf} | tail -n +3;  RET=FAIL1
             elif [ "$(cat ${tempf} | sed -n '1p')" = "{" ]; then cat "${tempf}" | jq -cC ".|${PRINT_INFO}"; RET=OKAY1
