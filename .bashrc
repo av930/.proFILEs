@@ -151,8 +151,8 @@ function __get_ip(){
 }
 
 alias scp$ECHO='_bar "Usage"; printf "
-    scp -p <port> <user>@<src-ip>:<full-path-filename> .
-    scp filename -p <port> <user>@<dest-ip>:<full-path-dest-dir>/
+    scp -P <port> <user>@<src-ip>:<full-path-filename> .
+    scp filename -P <port> <user>@<dest-ip>:<full-path-dest-dir>/
     docker cp <container-id>:<full-path-filename> .
     docker cp <filename> <container-id>:<full-path-dest-dir>/
 "'
