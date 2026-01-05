@@ -2020,7 +2020,7 @@ function revv_initvar(){
     revvserver de load
 
     ## .key_server 무결성 검증
-    revvserver verify
+    revvserver _verify
     ret=$?
 
     return $ret
@@ -2936,7 +2936,7 @@ EOF
             return $?
 
 
-    ;;verify) #.key_server.en의 무결성을 검증한다. (캐싱 기능 포함)
+    ;;_verify) #.key_server.en의 무결성을 검증한다. (캐싱 기능 포함)
             local key url account invalid_count=0
             local verified_keyfile="${REPP_DIR}/log/.key_server_verified"
 
@@ -2986,6 +2986,7 @@ EOF
 			revv server  show             #show current server info from .key_server.en
 			revv server check             #check connection of server. if success, key is correct!
 			revv server  info             #check connection of server and format of revvserver_item api
+			revv server status            #check if server is active & gerrit connection is good
 EOF
     ;;show|*)  #현재 .key_server파일을 보여준다.
             [ ! -f $keyfile ] && err "You must create server connection info, use '$revv server gen'"
@@ -4002,7 +4003,7 @@ case "$1" in
                         help)                                            reppmenu help "${MENU[@]}"
     ;;                    '')                                            reppmenu revv "${MENU[@]}"
     ;;                server) if [ "$2" = "status" ]; then revvserverstatus "${@:3}"
-                              else reppcheck_initvar reppgittrevv     ;  revvserver "${@:2}"; fi
+                              else reppcheck_initvar revv             ;  revvserver "${@:2}"; fi
     ;;                  info)      reppcheck_initvar gittrevv        &&  revvinfo  "${@:2}"
     ;;              project*)      reppcheck_initvar reppgittrevv     ;  revvproject "${@:1}"
     ;;               branch*)      reppcheck_initvar reppgittrevv     ;  revvbranch "${@:1}"
