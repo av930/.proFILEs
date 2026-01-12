@@ -2,6 +2,10 @@
 
 ## 생성할 manifest
 MANI=chipcode.xml
+
+## 스크립트 경로를 맨 앞에서 계산 (pushd 전에)
+PATH_SCRIPT=$(dirname $(realpath "$0"))
+
 ## common이 있으면 제거하고 PATH_GIT 설정
 PATH_GIT=()    #split할 path, common은 별도처리(root dir에 포함)
 for item in "$@"; do [[ "$item" != "common" ]] && PATH_GIT+=("$item"); done
@@ -113,7 +117,6 @@ else
 
 
 	## 원본 dir과 split dir을 .git 제외하고 비교하여, 잘못 생성된건 없는지 확인.
-	PATH_SCRIPT=$(dirname $(realpath "$0"))
 	[ -f "${PATH_SCRIPT}/cmp_dirs.sh" ] || { echo "error: script file is not existed"; exit 1; }
 	if EXCEPT=".git;${MANI}" P1="${PATH_SPLIT}" P2="${PATH_CURRENT}" ${PATH_SCRIPT}/cmp_dirs.sh 1 ; then
 		printf "\e[0;31m [SUCCESS]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ \e[0m\n"
