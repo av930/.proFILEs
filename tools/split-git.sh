@@ -53,21 +53,24 @@ if [ ! "$CMD" = "down" ] && [ -n "${REMOTE_NAME}" ]; then
 	# 실행할 명령어를 함수로 정의
 	push_to_remote() {
 		local dir="$1" cmd="$2"
+		set -e
 		case $cmd in
- 		push)
-			pushd "$dir"
-			git push $REMOTE_NAME HEAD:${REMOTE_BNCH} ${PUSH_OPT}
-			popd
-		;;verify|*)
-			pushd "$dir" >/dev/null
-			git remote get-url $REMOTE_NAME && { git remote rm $REMOTE_NAME; git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}; } || git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}
-			printf "\e[0;33m check remote is working \e[0m:"
-			git ls-remote --exit-code $REMOTE_NAME HEAD > /dev/null && echo "[OKAY]" || echo "[ERR ] not existed - remote"
-			printf "\e[0;33m check remote branch is existed \e[0m:"
-			git ls-remote --exit-code $REMOTE_NAME $REMOTE_BNCH > /dev/null && echo "[OKAY]" || echo "[WARN] not existed - remote branch"
-			echo "[CMD] git push $REMOTE_NAME HEAD:${REMOTE_BNCH} ${PUSH_OPT}"
-			popd /dev/null
+ 			push)
+				pushd "$dir"
+				git push $REMOTE_NAME HEAD:${REMOTE_BNCH} ${PUSH_OPT}
+				popd
+			;;verify|*)
+				pushd "$dir" >/dev/null
+				##존재하면 삭제하고 다시 등록, 존재하지 않으면 새로등록
+				git remote get-url $REMOTE_NAME && { git remote rm $REMOTE_NAME; git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}; } || git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}
+				printf "\e[0;33m check remote is working \e[0m:" ##리모트가 동작하는지 확인
+				git ls-remote --exit-code $REMOTE_NAME HEAD > /dev/null && echo "[OKAY]" || echo "[ERR ] not existed - remote"
+				printf "\e[0;33m check remote branch is existed \e[0m:" ##브랜치가 존재하는지 확인
+				git ls-remote --exit-code $REMOTE_NAME $REMOTE_BNCH > /dev/null && echo "[OKAY]" || echo "[WARN] not existed - remote branch"
+				echo "[CMD] git push $REMOTE_NAME HEAD:${REMOTE_BNCH} ${PUSH_OPT}"
+				popd >/dev/null
 		esac
+		set +e
 	}
 
 	[ ! -d "${PATH_CURRENT}/.git/filter-repo" ] && { "Please check if this is split finished git :[${PATH_CURRENT}]"; exit 1; }
