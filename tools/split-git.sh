@@ -24,7 +24,7 @@ if (( "${#PATH_GIT[@]}" == 0 )); then
 	SA525M_aop SA525M_apps ~~
 
 	# ex) push
-	# CMD=down|epush|push|mani 중에 선택(down은 소스다운, epush는 push 명령만 보여줌, push는 실제 push, mani는 manifest만 생성)
+	# CMD=down|verify|push|mani 중에 선택(down은 소스다운, verify는 push전 remote설정, push는 실제 push, mani는 manifest만 생성)
 	CMD=push PUSH_OPT="-o skip-validation --force" \
 	WORK_DIR=/data001/~/sa525m-le-3-1_amss_standard_oem \
 	REMOTE_NAME=devops REMOTE_ADDR=ssh://vgit.lge.com:29420/qct/sa525m REMOTE_BNCH=refs/heads/release_5.0.9 \
@@ -53,13 +53,20 @@ if [ ! "$CMD" = "down" ] && [ -n "${REMOTE_NAME}" ]; then
 	# 실행할 명령어를 함수로 정의
 	push_to_remote() {
 		local dir="$1" cmd="$2"
-		set +e;
-		$cmd pushd "$dir"
-		$cmd git remote get-url $REMOTE_NAME && { git remote rm $REMOTE_NAME; git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}; } || git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}
-		$cmd git ls-remote $REMOTE_NAME > /dev/null || { echo "[err] you must create remote first"; exit 1; }
-		$cmd git push $REMOTE_NAME HEAD:${REMOTE_BNCH} ${PUSH_OPT}
-		$cmd popd
-		set -e;
+		case $cmd in
+		verify)
+			pushd "$dir"
+			echo "check remote and add"
+			git remote get-url $REMOTE_NAME && { git remote rm $REMOTE_NAME; git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}; } || git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}
+			echo "check remote is working"
+			git ls-remote --exit-code $REMOTE_NAME $REMOTE_BNCH > /dev/null || { echo "[info] remote or remote branch is not existed"; exit 1; }
+			echo "[CMD] git push $REMOTE_NAME HEAD:${REMOTE_BNCH} ${PUSH_OPT}"
+			popd
+		;; *)
+			pushd "$dir"
+			git push $REMOTE_NAME HEAD:${REMOTE_BNCH} ${PUSH_OPT}
+			popd
+		esac
 	}
 
 	[ ! -d "${PATH_CURRENT}/.git/filter-repo" ] && { "Please check if this is split finished git :[${PATH_CURRENT}]"; exit 1; }
@@ -78,7 +85,7 @@ if [ ! "$CMD" = "down" ] && [ -n "${REMOTE_NAME}" ]; then
 		;;push)
 			    [ ! "$REPLY" = "g" ] && read -p "please confirm [to stop: ctrl+c| next: enter| go all: g] : "
 			    push_to_remote "$item"
-		;;epush|*)
+		;;veriy|*)
 				printf "\e[0;35m [ $((count++)) push $item] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ \e[0m\n"
 				push_to_remote "$item" echo
 		esac
