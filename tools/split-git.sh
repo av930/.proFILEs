@@ -54,17 +54,17 @@ if [ ! "$CMD" = "down" ] && [ -n "${REMOTE_NAME}" ]; then
 	push_to_remote() {
 		local dir="$1" cmd="$2"
 		case $cmd in
-		verify)
+ 		push)
+			pushd "$dir"
+			git push $REMOTE_NAME HEAD:${REMOTE_BNCH} ${PUSH_OPT}
+			popd
+		;;verify|*)
 			pushd "$dir"
 			echo "check remote and add"
 			git remote get-url $REMOTE_NAME && { git remote rm $REMOTE_NAME; git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}; } || git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}
 			echo "check remote is working"
 			git ls-remote --exit-code $REMOTE_NAME $REMOTE_BNCH > /dev/null || { echo "[info] remote or remote branch is not existed"; exit 1; }
 			echo "[CMD] git push $REMOTE_NAME HEAD:${REMOTE_BNCH} ${PUSH_OPT}"
-			popd
-		;; *)
-			pushd "$dir"
-			git push $REMOTE_NAME HEAD:${REMOTE_BNCH} ${PUSH_OPT}
 			popd
 		esac
 	}
@@ -82,12 +82,9 @@ if [ ! "$CMD" = "down" ] && [ -n "${REMOTE_NAME}" ]; then
 				printf "  <remote name=\"${REMOTE_NAME}\" fetch=\"${url}\" review=\"${url/ssh/http}\"/>\n" >> ${MANI}
 				fi
 			    printf "  <project name=\"${prefix}/${item}\" path=\"${prefix/qct/nad}/${item}\" revision=\"${REMOTE_BNCH#refs/heads/}\"/>\n" >> ${MANI}
-		;;push)
-			    [ ! "$REPLY" = "g" ] && read -p "please confirm [to stop: ctrl+c| next: enter| go all: g] : "
-			    push_to_remote "$item"
-		;;veriy|*)
-				printf "\e[0;35m [ $((count++)) push $item] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ \e[0m\n"
-				push_to_remote "$item" echo
+		;;*)
+				printf "\e[0;35m [ $((count++)) $CMD $item] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ \e[0m\n"
+				push_to_remote "$item" $CMD
 		esac
 	done
 
