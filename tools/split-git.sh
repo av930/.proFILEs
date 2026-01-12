@@ -37,7 +37,9 @@ if ! command -v git-filter-repo &> /dev/null; then
 fi
 
 
-PATH_CURRENT="${WORK_DIR}" #split을 진행할 dir
+
+
+PATH_CURRENT="${WORK_DIR%/}" #split을 진행할 dir
 [ ! -d "$PATH_CURRENT/.git" ] && { "$0 must be run at .git repository"; exit 1; }
 ## split dir를 clone하여 split dir생성
 PATH_SPLIT=${PATH_CURRENT}_split
