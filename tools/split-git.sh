@@ -54,7 +54,7 @@ if [ ! "$CMD" = "down" ] && [ -n "${REMOTE_NAME}" ]; then
 	# 실행할 명령어를 함수로 정의
 	push_to_remote() {
 		local dir="$1" cmd="$2"
-		set -e
+		set +e
 		case $cmd in
  			push)
 				pushd "$dir"
@@ -75,7 +75,7 @@ if [ ! "$CMD" = "down" ] && [ -n "${REMOTE_NAME}" ]; then
 				git remote rm $REMOTE_NAME
 				popd >/dev/null
 		esac
-		set +e
+		set -e
 	}
 
 	[ ! -d "${PATH_CURRENT}/.git/filter-repo" ] && { "Please check if this is split finished git :[${PATH_CURRENT}]"; exit 1; }
