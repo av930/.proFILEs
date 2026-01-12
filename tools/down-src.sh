@@ -97,8 +97,46 @@ for idx in "${!command_blocks[@]}"; do
     # 작업 디렉토리로 이동
     pushd "$job_dir" > /dev/null
     echo -e "${job_color}[START:${job_id}] $cmd_block${NC}"
-    # 실제 명령어 블록 실행
-    bash -ec "$cmd_block" &> "$log_file" &
+
+    # repo init 또는 git clone 라인에서 -m XXX.xml 패턴 찾기 (추후 manifest작업을 위해)
+    manifest_file=""
+    if [[ "$cmd_block" =~ (repo[[:space:]]+init|git[[:space:]]+clone) ]]; then
+        # -m 옵션이 있는 경우
+        if [[ "$cmd_block" =~ -m[[:space:]]+([^[:space:]]+\.xml) ]]; then
+            manifest_file="${BASH_REMATCH[1]}"
+        else
+            # -m 옵션이 없는 경우: repo init은 default.xml, git clone은 chipcode.xml
+            if [[ "$cmd_block" =~ repo[[:space:]]+init ]]; then
+                manifest_file="default.xml"
+            elif [[ "$cmd_block" =~ git[[:space:]]+clone ]]; then
+                manifest_file="chipcode.xml"
+            fi
+        fi
+    fi
+
+    # manifest_file이 설정된 경우 include 태그 생성
+    if [ -n "$manifest_file" ]; then
+        include_file="${INPUT_FILE}.xml"
+        # 파일이 없으면 XML 헤더 추가
+        if [ ! -f "$include_file" ]; then
+            echo '<?xml version="1.0" encoding="UTF-8"?>' > "$include_file"
+            echo '<manifest>' >> "$include_file"
+        fi
+        # include 태그 추가 (닫는 태그 전에)
+        sed -i '/<\/manifest>/d' "$include_file" 2>/dev/null || true
+        echo "  <include name=\"${job_dir}/${manifest_file}\"/>" >> "$include_file"
+        echo '</manifest>' >> "$include_file"
+        echo -e "${job_color}[MANIFEST] Added include: ${job_dir}/${manifest_file}${NC}"
+    fi
+
+    # git clone 재실행 처리: 기존 경로 존재시 git pull, 아니면 git clone
+    actual_cmd="$cmd_block"
+    if [[ "$cmd_block" =~ git[[:space:]]+clone ]]; then
+        clone_dir=$(find . -maxdepth 2 -type d -name .git -exec dirname {} \; 2>/dev/null | head -1)
+        [ -n "$clone_dir" ] && actual_cmd="cd $clone_dir && git pull" && echo -e "${job_color}[RE-RUN] Using git pull in $clone_dir${NC}"
+    fi
+
+    bash -ec "$actual_cmd" &> "$log_file" &
     popd > /dev/null
 
     # PID 저장 및 카운트 증가
