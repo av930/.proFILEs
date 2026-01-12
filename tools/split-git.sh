@@ -24,7 +24,8 @@ if (( "${#PATH_GIT[@]}" == 0 )); then
 	SA525M_aop SA525M_apps ~~
 
 	# ex) push
-	# CMD=down|verify|push|mani 중에 선택(down은 소스다운, verify는 push전 remote설정, push는 실제 push, mani는 manifest만 생성)
+	# CMD=down|verify|remoterm|push|mani 중에 선택
+	(down은 소스다운, verify는 push전 remote설정, remoterm은 등록된 remote삭제, push는 실제 push, mani는 manifest만 생성)
 	CMD=push PUSH_OPT="-o skip-validation --force" \
 	WORK_DIR=/data001/~/sa525m-le-3-1_amss_standard_oem \
 	REMOTE_NAME=devops REMOTE_ADDR=ssh://vgit.lge.com:29420/qct/sa525m REMOTE_BNCH=refs/heads/release_5.0.9 \
@@ -59,7 +60,7 @@ if [ ! "$CMD" = "down" ] && [ -n "${REMOTE_NAME}" ]; then
 				pushd "$dir"
 				git push $REMOTE_NAME HEAD:${REMOTE_BNCH} ${PUSH_OPT}
 				popd
-			;;verify|*)
+			;;verify)
 				pushd "$dir" >/dev/null
 				##존재하면 삭제하고 다시 등록, 존재하지 않으면 새로등록
 				git remote get-url $REMOTE_NAME && { git remote rm $REMOTE_NAME; git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}; } || git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}
@@ -68,6 +69,10 @@ if [ ! "$CMD" = "down" ] && [ -n "${REMOTE_NAME}" ]; then
 				printf "\e[0;33m check remote branch is existed \e[0m:" ##브랜치가 존재하는지 확인
 				git ls-remote --exit-code $REMOTE_NAME $REMOTE_BNCH > /dev/null && echo "[OKAY]" || echo "[WARN] not existed - remote branch"
 				echo "[CMD] git push $REMOTE_NAME HEAD:${REMOTE_BNCH} ${PUSH_OPT}"
+				popd >/dev/null
+			;;remoterm)
+				pushd "$dir" >/dev/null
+				git remote rm $REMOTE_NAME
 				popd >/dev/null
 		esac
 		set +e
