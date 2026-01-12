@@ -45,8 +45,6 @@ fi
 
 PATH_CURRENT="${WORK_DIR%/}" #split을 진행할 dir
 [ ! -d "$PATH_CURRENT/.git" ] && { "$0 must be run at .git repository"; exit 1; }
-## split dir를 clone하여 split dir생성
-PATH_SPLIT=${PATH_CURRENT}_split
 
 #################################### push logic ####################################
 ## remote 정보가 있으면 push작업을 진행한다. 이경우 split 작업은 skip한다.
@@ -64,8 +62,8 @@ if [ ! "$CMD" = "down" ] && [ -n "${REMOTE_NAME}" ]; then
 		set -e;
 	}
 
-	cd "${PATH_SPLIT}" #split을 진행할 dir
-	[ ! -d "${PATH_SPLIT}" ] && { "Please check input dir :[${PATH_SPLIT}]"; exit 1; }
+	[ ! -d "${PATH_CURRENT}/.git/filter-repo" ] && { "Please check if this is split finished git :[${PATH_CURRENT}]"; exit 1; }
+	cd "${PATH_CURRENT}" #split을 진행할 dir
 
 	# common도 dir로 진입해서 동일하게 작업처리
 	count=1
@@ -80,7 +78,7 @@ if [ ! "$CMD" = "down" ] && [ -n "${REMOTE_NAME}" ]; then
 		;;push)
 			    [ ! "$REPLY" = "g" ] && read -p "please confirm [to stop: ctrl+c| next: enter| go all: g] : "
 			    push_to_remote "$item"
-		;;echo|*)
+		;;epush|*)
 				printf "\e[0;35m [ $((count++)) push $item] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ \e[0m\n"
 				push_to_remote "$item" echo
 		esac
@@ -95,6 +93,8 @@ if [ ! "$CMD" = "down" ] && [ -n "${REMOTE_NAME}" ]; then
 
 #################################### split logic ####################################
 else
+	## split dir를 clone하여 split dir생성
+	PATH_SPLIT=${PATH_CURRENT}_split
 	rm -rf ${PATH_SPLIT} && mkdir -p ${PATH_SPLIT} && pushd ${PATH_SPLIT}
 
 	## 1st phase: root dir에서 common과 root dir를 합쳐 common으로 1개 git으로 구성
