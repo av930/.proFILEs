@@ -54,7 +54,6 @@ if [ ! "$CMD" = "down" ] && [ -n "${REMOTE_NAME}" ]; then
 	# 실행할 명령어를 함수로 정의
 	push_to_remote() {
 		local dir="$1" cmd="$2"
-		set +e
 		case $cmd in
  			push)
 				pushd "$dir"
@@ -75,7 +74,6 @@ if [ ! "$CMD" = "down" ] && [ -n "${REMOTE_NAME}" ]; then
 				git remote rm $REMOTE_NAME
 				popd >/dev/null
 		esac
-		set -e
 	}
 
 	[ ! -d "${PATH_CURRENT}/.git/filter-repo" ] && { "Please check if this is split finished git :[${PATH_CURRENT}]"; exit 1; }
@@ -83,6 +81,7 @@ if [ ! "$CMD" = "down" ] && [ -n "${REMOTE_NAME}" ]; then
 
 	# common도 dir로 진입해서 동일하게 작업처리
 	count=1
+	set +e
 	for item in "common" ${PATH_GIT[@]}; do
 		case $CMD in
 		mani)   if [[ ! -v url ]]; then
@@ -96,6 +95,7 @@ if [ ! "$CMD" = "down" ] && [ -n "${REMOTE_NAME}" ]; then
 				push_to_remote "$item" $CMD
 		esac
 	done
+	set -e
 
 	# mani 모드일 때 manifest 파일 닫기
 	if [ "$CMD" == "mani" ]; then
