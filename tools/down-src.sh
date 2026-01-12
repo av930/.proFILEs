@@ -96,7 +96,6 @@ for idx in "${!command_blocks[@]}"; do
 
     # 작업 디렉토리로 이동
     pushd "$job_dir" > /dev/null
-    echo -e "${job_color}[START:${job_id}] $cmd_block${NC}"
 
     # repo init 또는 git clone 라인에서 -m XXX.xml 패턴 찾기 (추후 manifest작업을 위해)
     manifest_file=""
@@ -130,10 +129,11 @@ for idx in "${!command_blocks[@]}"; do
     fi
 
     # git clone 재실행 처리: 기존 경로 존재시 git pull, 아니면 git clone
+    echo -e "${job_color}[START:${job_id}] $cmd_block${NC}"
     actual_cmd="$cmd_block"
     if [[ "$cmd_block" =~ git[[:space:]]+clone ]]; then
         clone_dir=$(find . -maxdepth 2 -type d -name .git -exec dirname {} \; 2>/dev/null | head -1)
-        [ -n "$clone_dir" ] && actual_cmd="cd $clone_dir && git pull" && echo -e "${job_color}[RE-RUN] Using git pull in $clone_dir${NC}"
+        [ -n "$clone_dir" ] && actual_cmd="cd $clone_dir && git pull" && echo -e "${job_color}[RE-RUN] Using git pull instead git clone in $clone_dir${NC}"
     fi
 
     bash -ec "$actual_cmd" &> "$log_file" &
