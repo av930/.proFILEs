@@ -63,7 +63,9 @@ if [ ! "$CMD" = "down" ] && [ -n "${REMOTE_NAME}" ]; then
 			printf "\e[0;33m check remote and add \e[0m\n"
 			git remote get-url $REMOTE_NAME && { git remote rm $REMOTE_NAME; git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}; } || git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}
 			printf "\e[0;33m check remote is working \e[0m\n"
-			git ls-remote --exit-code $REMOTE_NAME $REMOTE_BNCH > /dev/null || echo "[info] remote or remote branch is not existed"
+			git ls-remote --exit-code $REMOTE_NAME HEAD > /dev/null || echo "[err] not existed - remote"
+			printf "\e[0;33m check remote branch is existed \e[0m\n"
+			git ls-remote --exit-code $REMOTE_NAME $REMOTE_BNCH > /dev/null || echo "[warning] not existed - remote branch"
 			echo "[CMD] git push $REMOTE_NAME HEAD:${REMOTE_BNCH} ${PUSH_OPT}"
 			popd
 		esac
