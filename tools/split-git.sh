@@ -28,7 +28,7 @@ if (( "${#PATH_GIT[@]}" == 0 )); then
 	(down은 소스다운, verify는 push전 remote설정, remoterm은 등록된 remote삭제, push는 실제 push, mani는 manifest만 생성)
 	CMD=push PUSH_OPT="-o skip-validation --force" \
 	WORK_DIR=/data001/~/sa525m-le-3-1_amss_standard_oem \
-	REMOTE_NAME=devops REMOTE_ADDR=ssh://vgit.lge.com:29420/qct/sa525m REMOTE_BNCH=refs/heads/release_5.0.9 \
+	REMOTE_NAME=devops REMOTE_ADDR=ssh://vgit.lge.com:29999/qct/sa525m REMOTE_BNCH=refs/heads/release_5.0.9 \
 	${proFILEdir}/tools/split-git.sh \
 	SA525M_aop SA525M_apps ~~
 EOF
