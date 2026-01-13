@@ -87,20 +87,31 @@ XMLHEAD
 
 # 모든 include 파일에서 remote 정의 추출
 echo "  <!-- Merged remote definitions -->" >> "$OUTPUT_MANIFEST"
+names=""  # 이미 처리된 remote name들을 저장 (|name1|name2| 형태)
 while IFS= read -r line; do
-    if [[ "$line" =~ \<include.*name=\"([^\"]+)\" ]]; then
-        include_file="${BASH_REMATCH[1]}"
-        echo "Processing include: $include_file" >&2
+    # include 태그에서 파일 경로 추출하고, 실제 존재하지 않으면 error 발생
+    [[ "$line" =~ \<include.*name=\"([^\"]+)\" ]] || continue
+    file="${BASH_REMATCH[1]}"
+    echo "Processing include: $file" >&2
+    [ ! -f "$file" ] && echo "Warning: Include file not found: $file" >&2 && continue
 
-        # remote 태그만 추출 (중복 제거를 위해 sort -u)
-        if [ -f "$include_file" ]; then
-            grep -E '^ *<remote ' "$include_file" 2>/dev/null
+    # 각 파일에서 remote 태그 추출 및 처리
+    while IFS= read -r rline; do
+        # remote name 추출
+        [[ "$rline" =~ name=\"([^\"]+)\" ]] || continue
+        name="${BASH_REMATCH[1]}"
+
+        # 중복된 name이면 name.1, name.2 로 변경하여 추가
+        if [[ "$names" == *"|$name|"* ]]; then
+            i=1
+            while [[ "$names" == *"|$name.$i|"* ]]; do ((i++)); done  # 사용 가능한 번호 찾기
+            rline="${rline/name=\"$name\"/name=\"$name.$i\"}"  # name 속성 변경
+            names="$names$name.$i|"  # 변경된 이름 저장
         else
-            echo "Warning: Include file not found: $include_file" >&2
+            names="$names$name|"  # 새로운 이름 저장
         fi
-    fi
-done < "$INCLUDE_MANIFEST" | sort -u >> "$OUTPUT_MANIFEST"
-
+        echo "$rline" >> "$OUTPUT_MANIFEST"
+    done < <(grep -E '^ *<remote ' "$file" 2>/dev/null | sort -u)  # remote 태그만 추출 및 정렬
 # xml의 default 값은 첫 번째 include 파일것을 사용
 echo "" >> "$OUTPUT_MANIFEST"
 echo "  <!-- Default definition -->" >> "$OUTPUT_MANIFEST"
