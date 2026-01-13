@@ -127,8 +127,9 @@ while IFS= read -r line; do
         if [ -f "$include_file" ]; then
             echo "" >> "$OUTPUT_MANIFEST"
             echo "  <!-- ==================== Projects from: $include_file ==================== -->" >> "$OUTPUT_MANIFEST"
-            # 첫 번째 <project부터 </manifest> 전까지 모든 라인 추출
-            sed -n '/<project/,/<\/manifest>/{/<\/manifest>/d; p}' "$include_file" 2>/dev/null >> "$OUTPUT_MANIFEST" || true
+            # 첫 번째 <project부터 </manifest> 전까지 모든 라인 추출하고, upstream과 dest-branch 속성 제거
+            sed -n '/<project/,/<\/manifest>/{/<\/manifest>/d; p}' "$include_file" 2>/dev/null | \
+                sed 's/ upstream="[^"]*"//g; s/ dest-branch="[^"]*"//g' >> "$OUTPUT_MANIFEST" || true
         fi
     fi
 done < "$INCLUDE_MANIFEST"
