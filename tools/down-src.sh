@@ -97,37 +97,6 @@ for idx in "${!command_blocks[@]}"; do
     # 작업 디렉토리로 이동
     pushd "$job_dir" > /dev/null
 
-    # repo init 또는 git clone 라인에서 -m XXX.xml 패턴 찾기 (추후 manifest작업을 위해)
-    manifest_file=""
-    if [[ "$cmd_block" =~ (repo[[:space:]]+init|git[[:space:]]+clone) ]]; then
-        # -m 옵션이 있는 경우
-        if [[ "$cmd_block" =~ -m[[:space:]]+([^[:space:]]+\.xml) ]]; then
-            manifest_file="${BASH_REMATCH[1]}"
-        else
-            # -m 옵션이 없는 경우: repo init은 default.xml, git clone은 chipcode.xml
-            if [[ "$cmd_block" =~ repo[[:space:]]+init ]]; then
-                manifest_file="default.xml"
-            elif [[ "$cmd_block" =~ git[[:space:]]+clone ]]; then
-                manifest_file="chipcode.xml"
-            fi
-        fi
-    fi
-
-    # manifest_file이 설정된 경우 include 태그 생성
-    if [ -n "$manifest_file" ]; then
-        include_file="${INPUT_FILE}.xml"
-        # 파일이 없으면 XML 헤더 추가
-        if [ ! -f "$include_file" ]; then
-            echo '<?xml version="1.0" encoding="UTF-8"?>' > "$include_file"
-            echo '<manifest>' >> "$include_file"
-        fi
-        # include 태그 추가 (닫는 태그 전에)
-        sed -i '/<\/manifest>/d' "$include_file" 2>/dev/null || true
-        echo "  <include name=\"${job_dir}/${manifest_file}\"/>" >> "$include_file"
-        echo '</manifest>' >> "$include_file"
-        echo -e "${job_color}[MANIFEST] Added include: ${job_dir}/${manifest_file}${NC}"
-    fi
-
     # git clone 재실행 처리: 기존 경로 존재시 git pull, 아니면 git clone
     echo -e "${job_color}[START:${job_id}] $cmd_block${NC}"
     actual_cmd="$cmd_block"
