@@ -4,6 +4,7 @@
 
 INPUT_FILE="${1:-down.list}"
 OUTPUT_MANIFEST="${2:-merged-manifest.xml}"
+PREFIX_GITNAME="${3:-qct/sa5x5m}"
 INCLUDE_MANIFEST="${INPUT_FILE}.xml"
 JOB_DIR="result."
 
@@ -127,9 +128,21 @@ while IFS= read -r line; do
         if [ -f "$include_file" ]; then
             echo "" >> "$OUTPUT_MANIFEST"
             echo "  <!-- ==================== Projects from: $include_file ==================== -->" >> "$OUTPUT_MANIFEST"
-            # 첫 번째 <project부터 </manifest> 전까지 모든 라인 추출하고, upstream과 dest-branch 속성 제거
+            # 첫 번째 <project부터 </manifest> 전까지 모든 라인 추출
+            # 1. upstream과 dest-branch 속성 제거
+            # 2. PREFIX_GITNAME이 없는 project name에만 PREFIX_GITNAME 추가
             sed -n '/<project/,/<\/manifest>/{/<\/manifest>/d; p}' "$include_file" 2>/dev/null | \
-                sed 's/ upstream="[^"]*"//g; s/ dest-branch="[^"]*"//g' >> "$OUTPUT_MANIFEST" || true
+                sed 's/ upstream="[^"]*"//g; s/ dest-branch="[^"]*"//g' | \
+                awk -v prefix="$PREFIX_GITNAME" '{
+                    if (match($0, /name="([^"]+)"/, arr)) {
+                        name = arr[1]
+                        # PREFIX_GITNAME으로 시작하지 않으면 추가
+                        if (index(name, prefix "/") != 1) {
+                            gsub(/name="[^"]*"/, "name=\"" prefix "/" name "\"")
+                        }
+                    }
+                    print
+                }' >> "$OUTPUT_MANIFEST" || true
         fi
     fi
 done < "$INCLUDE_MANIFEST"
