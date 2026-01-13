@@ -118,8 +118,8 @@ while IFS= read -r line; do
         if [ -f "$include_file" ]; then
             echo "" >> "$OUTPUT_MANIFEST"
             echo "  <!-- ==================== Projects from: $include_file ==================== -->" >> "$OUTPUT_MANIFEST"
-            # project 태그만 추출
-            grep -E '^ *<project ' "$include_file" 2>/dev/null >> "$OUTPUT_MANIFEST" || true
+            # 첫 번째 <project부터 </manifest> 전까지 모든 라인 추출
+            sed -n '/<project/,/<\/manifest>/{/<\/manifest>/d; p}' "$include_file" 2>/dev/null >> "$OUTPUT_MANIFEST" || true
         fi
     fi
 done < "$INCLUDE_MANIFEST"
