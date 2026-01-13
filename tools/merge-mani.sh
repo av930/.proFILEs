@@ -112,6 +112,8 @@ while IFS= read -r line; do
         fi
         echo "$rline" >> "$OUTPUT_MANIFEST"
     done < <(grep -E '^ *<remote ' "$file" 2>/dev/null | sort -u)  # remote 태그만 추출 및 정렬
+done < "$INCLUDE_MANIFEST"
+
 # xml의 default 값은 첫 번째 include 파일것을 사용
 echo "" >> "$OUTPUT_MANIFEST"
 echo "  <!-- Default definition -->" >> "$OUTPUT_MANIFEST"
