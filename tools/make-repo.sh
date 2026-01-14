@@ -2,8 +2,9 @@
 # Initialize repo structure in down-src directory
 # Creates .repo/manifests/default.xml by merging manifests from down.list
 
-WORK_DIR="${1:-/data001/vc.integrator/mirror/down-src}"
-INPUT_FILE="${WORK_DIR}/down.list"
+
+INPUT_FILE="${1:-down.list}"
+WORK_DIR="$(dirname $INPUT_FILE)"
 REPO_DIR="${WORK_DIR}/.repo"
 MANIFEST_DIR="${REPO_DIR}/manifests"
 OUTPUT_MANIFEST="${MANIFEST_DIR}/default.xml"
