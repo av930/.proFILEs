@@ -129,10 +129,10 @@ while IFS= read -r line; do
             echo "" >> "$OUTPUT_MANIFEST"
             echo "  <!-- ==================== Projects from: $include_file ==================== -->" >> "$OUTPUT_MANIFEST"
             # 첫 번째 <project부터 </manifest> 전까지 모든 라인 추출
-            # 1. upstream과 dest-branch 속성 제거
+            # 1. upstream, dest-branch, remote 속성 제거
             # 2. PREFIX_GITNAME이 없는 project name에만 PREFIX_GITNAME 추가
             sed -n '/<project/,/<\/manifest>/{/<\/manifest>/d; p}' "$include_file" 2>/dev/null | \
-                sed 's/ upstream="[^"]*"//g; s/ dest-branch="[^"]*"//g' | \
+                sed 's/ upstream="[^"]*"//g; s/ dest-branch="[^"]*"//g; s/ remote="[^"]*"//g' | \
                 awk -v prefix="$PREFIX_GITNAME" '{
                     if (match($0, /name="([^"]+)"/, arr)) {
                         name = arr[1]

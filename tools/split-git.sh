@@ -18,14 +18,14 @@ if (( "${#PATH_GIT[@]}" == 0 )); then
 # 먼저 1) git을 split 하거나 2) remote로 push 하는 기능을 제공한다. (2개 동시에 진행 X)
 	cat <<- EOF
 	# ex) split
-	CMD=down \
+	CMD=split \
 	WORK_DIR=/data001/~/sa525m-le-3-1_amss_standard_oem \
 	${proFILEdir}/tools/split-git.sh \
 	SA525M_aop SA525M_apps ~~
 
 	# ex) push
-	# CMD=down|verify|remoterm|push|mani 중에 선택
-	(down은 소스다운, verify는 push전 remote설정, remoterm은 등록된 remote삭제, push는 실제 push, mani는 manifest만 생성)
+	# CMD=split|verify|remoterm|push|mani 중에 선택
+	(split은 소스분리, verify는 push전 remote설정, remoterm은 등록된 remote삭제, push는 실제 push, mani는 manifest만 생성)
 	CMD=push PUSH_OPT="-o skip-validation --force" \
 	WORK_DIR=/data001/~/sa525m-le-3-1_amss_standard_oem \
 	REMOTE_NAME=devops REMOTE_ADDR=ssh://vgit.lge.com:29999/qct/sa525m REMOTE_BNCH=refs/heads/release_5.0.9 \
@@ -49,7 +49,7 @@ PATH_CURRENT="${WORK_DIR%/}" #split을 진행할 dir
 
 #################################### push logic ####################################
 ## remote 정보가 있으면 push작업을 진행한다. 이경우 split 작업은 skip한다.
-if [ ! "$CMD" = "down" ] && [ -n "${REMOTE_NAME}" ]; then
+if [ ! "$CMD" = "split" ] && [ -n "${REMOTE_NAME}" ]; then
 
 	# 실행할 명령어를 함수로 정의
 	push_to_remote() {
