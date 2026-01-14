@@ -105,6 +105,18 @@ for idx in "${!command_blocks[@]}"; do
         [ -n "$clone_dir" ] && actual_cmd="cd $clone_dir && git pull" && echo -e "${job_color}[RE-RUN] Using git pull instead git clone in $clone_dir${NC}"
     fi
 
+    # repo sync 명령에 --no-clone-bundle --no-use-shared-repo 옵션 추가
+    if [[ "$actual_cmd" =~ repo[[:space:]]+sync ]]; then
+        # 이미 해당 옵션이 없으면 추가
+        if [[ ! "$actual_cmd" =~ --no-clone-bundle ]]; then
+            actual_cmd="${actual_cmd} --no-clone-bundle"
+        fi
+        if [[ ! "$actual_cmd" =~ --no-use-shared-repo|--no-use-superproject ]]; then
+            actual_cmd="${actual_cmd} --no-use-superproject"
+        fi
+        echo -e "${job_color}[REPO-SYNC] Options added: --no-clone-bundle --no-use-superproject${NC}"
+    fi
+
     bash -ec "$actual_cmd" &> "$log_file" &
     popd > /dev/null
 
