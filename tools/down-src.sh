@@ -102,14 +102,13 @@ for idx in "${!command_blocks[@]}"; do
     actual_cmd="$cmd_block"
     if [[ "$cmd_block" =~ git[[:space:]]+clone ]]; then
         clone_dir=$(find . -maxdepth 2 -type d -name .git -exec dirname {} \; 2>/dev/null | head -1)
-        [ -n "$clone_dir" ] && actual_cmd="cd $clone_dir && git pull"
+        [ -n "$clone_dir" ] && cd $clone_dir && actual_cmd="git pull"
     fi
 
     # git clone 또는 repo init 명령에서 --depth=NUM 옵션 제거
     if [[ "$actual_cmd" =~ (git[[:space:]]+clone|repo[[:space:]]+init) ]]; then
         if [[ "$actual_cmd" =~ --depth(=|[[:space:]]+)[0-9]+ ]]; then
             actual_cmd="$(echo "$actual_cmd" | sed -E 's/(^|[[:space:]])--depth(=[0-9]+|[[:space:]]+[0-9]+)([[:space:]]|$)/ /g' | sed -E 's/  +/ /g')"
-            echo -e "${job_color} Removed --depth option${NC}"
         fi
     fi
 
@@ -133,7 +132,10 @@ for idx in "${!command_blocks[@]}"; do
         if [[ ! "$actual_cmd" =~ --no-clone-bundle ]]; then
             actual_cmd="${actual_cmd} --no-clone-bundle"
         fi
-        if [[ ! "$actual_cmd" =~ --no-use-shared-repo|--no-use-superproject ]]; then
+        if [[ ! "$actual_cmd" =~ --no-use-shared-repo ]]; then
+            actual_cmd="${actual_cmd} --no-use-shared-repo"
+        fi
+        if [[ ! "$actual_cmd" =~ --no-use-superproject ]]; then
             actual_cmd="${actual_cmd} --no-use-superproject"
         fi
     fi
