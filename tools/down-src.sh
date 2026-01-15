@@ -126,19 +126,29 @@ for idx in "${!command_blocks[@]}"; do
         fi
     fi
 
-    # repo sync 명령에 --no-clone-bundle --no-use-shared-repo 옵션 추가
+: <<COMMENT
+    # repo sync 명령에 --no-clone-bundle --no-use-superproject 옵션 추가 및 독립 git 변환
     if [[ "$actual_cmd" =~ repo[[:space:]]+sync ]]; then
-        # 이미 해당 옵션이 없으면 추가
+        # 옵션 추가
         if [[ ! "$actual_cmd" =~ --no-clone-bundle ]]; then
             actual_cmd="${actual_cmd} --no-clone-bundle"
-        fi
-        if [[ ! "$actual_cmd" =~ --no-use-shared-repo ]]; then
-            actual_cmd="${actual_cmd} --no-use-shared-repo"
         fi
         if [[ ! "$actual_cmd" =~ --no-use-superproject ]]; then
             actual_cmd="${actual_cmd} --no-use-superproject"
         fi
+
+        # repo sync 후 각 프로젝트를 독립 git으로 변환
+        actual_cmd="${actual_cmd} && repo forall -c '
+        if [ -L .git ]; then GITDIR=\$(readlink -f .git);
+         rm .git;
+         cp -r \"\$GITDIR\" .git;
+         git config core.worktree \".\";
+         git config core.bare false;
+         git repack -a -d && git prune
+        fi'
+        echo -e "${job_color}[REPO-SYNC] Added standalone git conversion${NC}"
     fi
+COMMENT
 
     ##최종 실행되는 실제 command를 출력한다.
     echo -e "${job_color}[FINAL_CMD] $actual_cmd"
