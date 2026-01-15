@@ -102,7 +102,29 @@ for idx in "${!command_blocks[@]}"; do
     actual_cmd="$cmd_block"
     if [[ "$cmd_block" =~ git[[:space:]]+clone ]]; then
         clone_dir=$(find . -maxdepth 2 -type d -name .git -exec dirname {} \; 2>/dev/null | head -1)
-        [ -n "$clone_dir" ] && actual_cmd="cd $clone_dir && git pull" && echo -e "${job_color}[RE-RUN] Using git pull instead git clone in $clone_dir${NC}"
+        [ -n "$clone_dir" ] && actual_cmd="cd $clone_dir && git pull"
+    fi
+
+    # git clone 또는 repo init 명령에서 --depth=NUM 옵션 제거
+    if [[ "$actual_cmd" =~ (git[[:space:]]+clone|repo[[:space:]]+init) ]]; then
+        if [[ "$actual_cmd" =~ --depth(=|[[:space:]]+)[0-9]+ ]]; then
+            actual_cmd="$(echo "$actual_cmd" | sed -E 's/(^|[[:space:]])--depth(=[0-9]+|[[:space:]]+[0-9]+)([[:space:]]|$)/ /g' | sed -E 's/  +/ /g')"
+            echo -e "${job_color} Removed --depth option${NC}"
+        fi
+    fi
+
+    # repo init 명령의 -m manifest 파일에서 clone-depth 제거
+    if [[ "$actual_cmd" =~ repo[[:space:]]+init ]]; then
+        if [[ "$actual_cmd" =~ -m[[:space:]]+([^[:space:]]+) ]]; then
+            manifest_file="${BASH_REMATCH[1]}"
+            if [ -f "$manifest_file" ]; then
+                # 백업 생성
+                cp "$manifest_file" "${manifest_file}.ori"
+                # clone-depth="숫자" 패턴 제거
+                sed -i -E 's/[[:space:]]*clone-depth="[0-9]+"//g' "$manifest_file"
+                echo -e "${job_color}[REPO-INIT] Removed clone-depth from $manifest_file (backup: ${manifest_file}.ori)${NC}"
+            fi
+        fi
     fi
 
     # repo sync 명령에 --no-clone-bundle --no-use-shared-repo 옵션 추가
@@ -114,9 +136,10 @@ for idx in "${!command_blocks[@]}"; do
         if [[ ! "$actual_cmd" =~ --no-use-shared-repo|--no-use-superproject ]]; then
             actual_cmd="${actual_cmd} --no-use-superproject"
         fi
-        echo -e "${job_color}[REPO-SYNC] Options added: --no-clone-bundle --no-use-superproject${NC}"
     fi
 
+    ##최종 실행되는 실제 command를 출력한다.
+    echo -e "${job_color}[FINAL_CMD] $actual_cmd"
     bash -ec "$actual_cmd" &> "$log_file" &
     popd > /dev/null
 
