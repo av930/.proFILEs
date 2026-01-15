@@ -4,12 +4,12 @@
 
 
 INPUT_FILE="${1:-down.list}"
-WORK_DIR="$(dirname $INPUT_FILE)"
+WORK_DIR="$(cd "$(dirname "$INPUT_FILE")" && pwd)"
 REPO_DIR="${WORK_DIR}/.repo"
 MANIFEST_DIR="${REPO_DIR}/manifests"
 OUTPUT_MANIFEST="${MANIFEST_DIR}/default.xml"
 INCLUDE_MANIFEST="${WORK_DIR}/down.list.xml"
-PREFIX_GITNAME="${2:-qct/sa525m}"
+PREFIX_GITNAME="$2"
 JOB_DIR="result."
 
 echo "Initializing repo structure in: $WORK_DIR" >&2
@@ -160,6 +160,13 @@ while IFS= read -r line; do
             echo "" >> "$OUTPUT_MANIFEST"
             echo "  <!-- ==================== Projects from: $include_file ==================== -->" >> "$OUTPUT_MANIFEST"
 
+            # include_file 경로에서 result.* 디렉토리 추출
+            result_prefix=""
+            if [[ "$include_file" =~ (result\.[^/]+)/ ]]; then
+                result_prefix="${BASH_REMATCH[1]}/"
+                echo "Detected result prefix: $result_prefix" >&2
+            fi
+
             # git 매핑 정보를 임시 파일로 전달
             GIT_MAP_FILE=$(mktemp)
             for key in "${!git_basename_map[@]}"; do
@@ -169,7 +176,7 @@ while IFS= read -r line; do
             # project 태그와 하위 태그(linkfile 등) 모두 추출
             # upstream, dest-branch, remote 속성 제거
             # PREFIX_GITNAME 추가 및 path를 실제 git 경로로 변경
-            awk -v prefix="$PREFIX_GITNAME" -v workdir="$WORK_DIR" -v mapfile="$GIT_MAP_FILE" '
+            awk -v prefix="$PREFIX_GITNAME" -v workdir="$WORK_DIR" -v mapfile="$GIT_MAP_FILE" -v result_prefix="$result_prefix" '
                 BEGIN {
                     # git 매핑 정보 로드
                     while ((getline < mapfile) > 0) {
@@ -177,6 +184,9 @@ while IFS= read -r line; do
                         git_map[arr[1]] = arr[2]
                     }
                     close(mapfile)
+
+                    # prefix가 있으면 뒤에 / 추가
+                    prefix_sep = (prefix != "") ? prefix "/" : ""
                 }
                 /<project/ {
                     # upstream, dest-branch, remote 속성 제거
@@ -187,24 +197,51 @@ while IFS= read -r line; do
                     # project name에 PREFIX 추가
                     if (match($0, /name="([^"]+)"/, name_arr)) {
                         name = name_arr[1]
-                        # PREFIX_GITNAME으로 시작하지 않으면 추가
-                        if (index(name, prefix "/") != 1) {
-                            gsub(/name="[^"]*"/, "name=\"" prefix "/" name "\"")
+                        # PREFIX_GITNAME이 있고, 이미 prefix로 시작하지 않으면 추가
+                        if (prefix != "") {
+                            name_lower = tolower(name)
+                            prefix_lower = tolower(prefix)
+                            if (index(name_lower, "qct/") != 1 && index(name, prefix_sep) != 1) {
+                                gsub(/name="[^"]*"/, "name=\"" prefix_sep name "\"")
+                            }
                         }
                     }
 
-                    # path 속성에서 basename 추출하여 실제 git 경로로 매핑
+                    # path 속성 처리
                     if (match($0, /path="([^"]+)"/, path_arr)) {
                         original_path = path_arr[1]
                         # basename 추출 (마지막 / 이후)
                         n = split(original_path, parts, "/")
                         basename = parts[n]
 
-                        # basename으로 실제 git 경로 찾기
+                        # basename으로 실제 git 경로 찾기 (result.1의 split 프로젝트용)
                         if (basename in git_map) {
                             real_path = git_map[basename]
                             gsub(/path="[^"]*"/, "path=\"" real_path "\"")
                         }
+                        # result_prefix가 있으면 경로 앞에 추가 (result.2, result.3 프로젝트용)
+                        else if (result_prefix != "" && index(original_path, result_prefix) != 1) {
+                            gsub(/path="[^"]*"/, "path=\"" result_prefix original_path "\"")
+                        }
+                    }
+                    # path 속성이 없으면 name을 path로 사용 (repo 기본 동작)
+                    else if (match($0, /name="([^"]+)"/, name_arr)) {
+                        name_value = name_arr[1]
+                        # PREFIX가 있는 경우 제거하여 실제 경로 추출
+                        if (prefix != "" && index(name_value, prefix_sep) == 1) {
+                            # prefix와 / 를 제거한 나머지 부분
+                            path_from_name = substr(name_value, length(prefix_sep) + 1)
+                        } else {
+                            path_from_name = name_value
+                        }
+
+                        # result_prefix 추가
+                        if (result_prefix != "") {
+                            path_from_name = result_prefix path_from_name
+                        }
+
+                        # revision 속성 앞에 path 삽입
+                        gsub(/ revision=/, " path=\"" path_from_name "\" revision=")
                     }
 
                     in_project = 1
