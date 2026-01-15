@@ -152,6 +152,11 @@ done < <(find result.* -name ".git" -type d 2>/dev/null)
 
 echo "Found ${#git_basename_map[@]} git repositories" >&2
 
+# 통계 카운터 초기화
+linked_count=0
+missing_count=0
+skipped_count=0
+
 while IFS= read -r line; do
     if [[ "$line" =~ \<include.*name=\"([^\"]+)\" ]]; then
         include_file="${BASH_REMATCH[1]}"
@@ -173,9 +178,10 @@ while IFS= read -r line; do
                 echo "$key=${git_basename_map[$key]}" >> "$GIT_MAP_FILE"
             done
 
-            # project 태그와 하위 태그(linkfile 등) 모두 추출
-            # upstream, dest-branch, remote 속성 제거
-            # PREFIX_GITNAME 추가 및 path를 실제 git 경로로 변경
+            # project 태그 처리와 동시에 심볼릭 링크 생성
+            # 임시 manifest 파일 생성
+            TEMP_MANIFEST=$(mktemp)
+
             awk -v prefix="$PREFIX_GITNAME" -v workdir="$WORK_DIR" -v mapfile="$GIT_MAP_FILE" -v result_prefix="$result_prefix" '
                 BEGIN {
                     # git 매핑 정보 로드
@@ -255,10 +261,65 @@ while IFS= read -r line; do
                     if (/<\/project>/) in_project = 0
                     next
                 }
-            ' "$include_file" >> "$OUTPUT_MANIFEST" || true
+            ' "$include_file" > "$TEMP_MANIFEST"
+
+            # manifest에 추가하고 동시에 심볼릭 링크 생성
+            while IFS= read -r project_line; do
+                echo "$project_line" >> "$OUTPUT_MANIFEST"
+
+                # project path 추출하여 심볼릭 링크 생성
+                if [[ "$project_line" =~ \<project.*path=\"([^\"]+)\" ]]; then
+                    project_path="${BASH_REMATCH[1]}"
+
+                    # 대상 디렉토리가 이미 존재하면 스킵
+                    if [ -e "$project_path" ]; then
+                        ((skipped_count++))
+                        continue
+                    fi
+
+                    # result.*/ 디렉토리에서 해당 경로 찾기
+                    source_found=false
+                    for result_dir in result.*; do
+                        [ ! -d "$result_dir" ] && continue
+
+                        source_path="$result_dir/$project_path"
+                        if [ -d "$source_path" ] || [ -L "$source_path" ]; then
+                            # 실제 소스가 있을 때만 부모 디렉토리 생성
+                            mkdir -p "$(dirname "$project_path")"
+
+                            # 심볼릭 링크 생성 (절대 경로 사용)
+                            if ln -sf "$(cd "$result_dir" && pwd)/$project_path" "$project_path" 2>/dev/null; then
+                                source_found=true
+                                ((linked_count++))
+
+                                # git 저장소인 경우 .repo/projects/에 등록
+                                if [ -d "$source_path/.git" ]; then
+                                    project_git_dir=".repo/projects/$project_path.git"
+                                    mkdir -p "$(dirname "$project_git_dir")"
+
+                                    # .git을 .repo/projects/로 복사
+                                    if [ ! -e "$project_git_dir" ]; then
+                                        if [ -d "$source_path/.git" ]; then
+                                            cp -r "$source_path/.git" "$project_git_dir" 2>/dev/null || true
+                                        fi
+                                    fi
+                                fi
+
+                                break
+                            fi
+                        fi
+                    done
+
+                    # 소스를 찾지 못했을 때 경고만 출력 (빈 디렉토리 생성 안 함)
+                    if [ "$source_found" = false ]; then
+                        echo "Warning: Source not found for $project_path" >&2
+                        ((missing_count++))
+                    fi
+                fi
+            done < "$TEMP_MANIFEST"
 
             # 임시 파일 삭제
-            rm -f "$GIT_MAP_FILE"
+            rm -f "$GIT_MAP_FILE" "$TEMP_MANIFEST"
         fi
     fi
 done < "$INCLUDE_MANIFEST"
@@ -303,54 +364,9 @@ ln -sf manifests/default.xml manifest.xml 2>/dev/null || true
 # 필요한 디렉토리 구조 생성
 mkdir -p projects project-objects
 
-# 5단계: 기존 다운로드된 소스를 repo 구조에 연결
+# 5단계: 소스 연결은 manifest 생성 시 이미 완료됨 (위의 통합 루프에서 처리)
 echo "" >&2
-echo "Linking existing downloaded sources..." >&2
-
-cd "$WORK_DIR" || exit 1
-
-# manifest에서 project path 추출하여 기존 소스와 연결
-while IFS= read -r line; do
-    if [[ "$line" =~ \<project.*path=\"([^\"]+)\" ]]; then
-        project_path="${BASH_REMATCH[1]}"
-
-        # 대상 디렉토리가 이미 존재하면 스킵
-        [ -e "$project_path" ] && continue
-
-        # result.*/ 디렉토리에서 해당 경로 찾기
-        for result_dir in result.*; do
-            [ ! -d "$result_dir" ] && continue
-
-            source_path="$result_dir/$project_path"
-            if [ -d "$source_path" ] || [ -L "$source_path" ]; then
-                # 프로젝트 디렉토리의 부모 디렉토리 생성
-                mkdir -p "$(dirname "$project_path")"
-
-                # 심볼릭 링크 생성 (절대 경로 사용)
-                ln -sf "$(cd "$result_dir" && pwd)/$project_path" "$project_path" 2>/dev/null
-
-                # git 저장소인 경우 .repo/projects/에 등록
-                if [ -d "$source_path/.git" ]; then
-                    project_git_dir=".repo/projects/$project_path.git"
-                    mkdir -p "$(dirname "$project_git_dir")"
-
-                    # .git을 .repo/projects/로 이동 (또는 링크)
-                    if [ ! -e "$project_git_dir" ]; then
-                        if [ -d "$source_path/.git" ]; then
-                            cp -r "$source_path/.git" "$project_git_dir" 2>/dev/null || true
-                        fi
-                    fi
-                fi
-
-                break
-            fi
-        done
-    fi
-done < "$OUTPUT_MANIFEST"
-
-# 연결된 프로젝트 수 계산
-linked_count=$(find . -maxdepth 3 -type l 2>/dev/null | wc -l)
-echo "Linked $linked_count projects from downloaded sources" >&2
+echo "Source linking completed during manifest generation." >&2
 
 # 결과 출력
 cd "$WORK_DIR" || exit 1
@@ -360,7 +376,10 @@ echo "Repo initialization completed!" >&2
 echo "Repo directory: $REPO_DIR" >&2
 echo "Manifest file: $OUTPUT_MANIFEST" >&2
 echo "Total lines: $(wc -l < "$OUTPUT_MANIFEST")" >&2
+echo "-----------------------------------" >&2
 echo "Linked projects: $linked_count" >&2
+echo "Skipped (exists): $skipped_count" >&2
+echo "Missing sources: $missing_count" >&2
 echo "===================================" >&2
 echo "" >&2
 echo "Directory structure created. Manifest available at:" >&2
