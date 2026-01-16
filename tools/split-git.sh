@@ -89,7 +89,9 @@ if [ ! "$CMD" = "split" ] && [ -n "${REMOTE_NAME}" ]; then
 				printf "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<manifest>\n" > ${MANI}
 				printf "  <remote name=\"${REMOTE_NAME}\" fetch=\"${url}\" review=\"${url/ssh/http}\"/>\n" >> ${MANI}
 				fi
-			    printf "  <project name=\"${prefix:+"${prefix}/"}${item}\" path=\"${prefix/qct/nad}/${item}\" revision=\"${REMOTE_BNCH#refs/heads/}\"/>\n" >> ${MANI}
+			    # common은 path="./", 나머지는 path="${item}" (상대 경로)
+			    if [ "$item" = "common" ]; then project_path="./" ;else project_path="${item}"; fi
+			    printf "  <project name=\"${prefix:+"${prefix}/"}${item}\" path=\"${project_path}\" revision=\"${REMOTE_BNCH#refs/heads/}\"/>\n" >> ${MANI}
 		;;*)
 				printf "\e[0;35m [ $((count++)) $CMD $item] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ \e[0m\n"
 				push_to_remote "$item" $CMD

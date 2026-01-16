@@ -5,9 +5,13 @@
 # 설정 및 초기화
 # ==============================================================================
 INPUT_FILE="$1"
+MIRROR_PATH="$2"
 MAX_JOBS=3
 LOG_DIR="log"
 JOB_DIR="result."
+MIRROR_DIR="$MIRROR_PATH"
+[ -n "$MIRROR_PATH" ] && [ ! -e "$MIRROR_DIR" ] && mkdir -p "$MIRROR_DIR"
+
 
 # 색상 코드 (가독성용)
 declare -A JOB_COLORS
@@ -22,15 +26,18 @@ NC='\033[0m' # No Color
 # 유효성 검사
 # ==============================================================================
 if [ -z "$INPUT_FILE" ] || [ ! -f "$INPUT_FILE" ]; then
-    echo "  Usage: $0 <input_file>"
+    echo "  Usage: $0 <input_file> [mirror_path]"
 
 	cat << EOF
-	ex) down_src.sh down.list
+	ex) down_src.sh down.list .mirror
+	ex) down_src.sh down.list /path/to/mirror
 	1. down.list에는 빈줄로 구분된 download 명령을 기록한다.
 	2. download 명령은 여러줄도 가능하지만 동시 실행은 최대 3개까지 가능하다.
     3. 실행후 [RUNNING] 상태에 있으면 정상동작이다.
     4. 모든 다운로드가 완료되면 [FINISH]가 출력되고 그렇지 않으면 [ERROR]가 출력된다.
     * 기존 다운로드 결과를 재사용하지 않으려면, 먼저 rm -rf result.* 로 지워야함.
+    * mirror_path를 지정하면 해당 경로에 bare repository mirror를 생성하고 이를 참조하여 다운로드한다.
+    * mirror_path를 생략하면 mirror를 사용하지 않고 직접 다운로드한다.
 EOF
     exit 1
 fi
@@ -100,9 +107,38 @@ for idx in "${!command_blocks[@]}"; do
     # git clone 재실행 처리: 기존 경로 존재시 git pull, 아니면 git clone
     echo -e "${job_color}[START:${job_id}] $cmd_block${NC}"
     actual_cmd="$cmd_block"
-    if [[ "$cmd_block" =~ git[[:space:]]+clone ]]; then
+
+    # Mirror 모드에서 git clone 처리
+    if [[ "$cmd_block" =~ git[[:space:]]+clone ]] && [ -n "$MIRROR_PATH" ]; then
+        # 기존 clone된 디렉토리가 있으면 git pull
         clone_dir=$(find . -maxdepth 2 -type d -name .git -exec dirname {} \; 2>/dev/null | head -1)
-        [ -n "$clone_dir" ] && cd $clone_dir && actual_cmd="git pull"
+        if [ -n "$clone_dir" ]; then
+            cd "$clone_dir" && actual_cmd="git pull"
+        else
+            # git clone 명령에서 URL 추출
+            if [[ "$cmd_block" =~ git[[:space:]]+clone[[:space:]]+([^[:space:]]+) ]]; then
+                repo_url="${BASH_REMATCH[1]}"
+                # URL에서 repository 이름 추출
+                repo_name=$(basename "$repo_url" .git)
+                mirror_path="$MIRROR_DIR/${repo_name}.git"
+
+                # Mirror가 없으면 mirror 생성 후 실제 clone 실행
+                if [ ! -d "$mirror_path" ]; then
+                    echo -e "${job_color}[MIRROR] Creating mirror at $mirror_path${NC}"
+                    # mirror 생성 후 그 mirror를 사용하여 실제 clone
+                    clone_cmd="$(echo "$cmd_block" | sed -E "s|git[[:space:]]+clone[[:space:]]+([^[:space:]]+)|git clone --reference $mirror_path \1|")"
+                    actual_cmd="git clone --mirror \"$repo_url\" \"$mirror_path\" && $clone_cmd"
+                else
+                    # Mirror가 있으면 --reference를 사용하여 clone
+                    echo -e "${job_color}[MIRROR] Using existing mirror: $mirror_path${NC}"
+                    actual_cmd="$(echo "$cmd_block" | sed -E "s|git[[:space:]]+clone[[:space:]]+([^[:space:]]+)|git clone --reference $mirror_path \1|")"
+                fi
+            fi
+        fi
+    elif [[ "$cmd_block" =~ git[[:space:]]+clone ]]; then
+        # Mirror 모드가 아닐 때의 기존 로직
+        clone_dir=$(find . -maxdepth 2 -type d -name .git -exec dirname {} \; 2>/dev/null | head -1)
+        [ -n "$clone_dir" ] && cd "$clone_dir" && actual_cmd="git pull"
     fi
 
     # git clone 또는 repo init 명령에서 --depth=NUM 옵션 제거
@@ -114,6 +150,17 @@ for idx in "${!command_blocks[@]}"; do
 
     # repo init 명령의 -m manifest 파일에서 clone-depth 제거
     if [[ "$actual_cmd" =~ repo[[:space:]]+init ]]; then
+        # Mirror 모드에서 --reference-dir 추가
+        if [ -n "$MIRROR_PATH" ]; then
+            repo_mirror_dir="$MIRROR_DIR/repo_mirror"
+            mkdir -p "$repo_mirror_dir"
+            # --reference-dir 옵션이 없으면 추가
+            if [[ ! "$actual_cmd" =~ --reference-dir ]]; then
+                actual_cmd="$actual_cmd --reference-dir=$repo_mirror_dir"
+                echo -e "${job_color}[MIRROR] Using repo mirror: $repo_mirror_dir${NC}"
+            fi
+        fi
+
         if [[ "$actual_cmd" =~ -m[[:space:]]+([^[:space:]]+) ]]; then
             manifest_file="${BASH_REMATCH[1]}"
             if [ -f "$manifest_file" ]; then
@@ -126,29 +173,6 @@ for idx in "${!command_blocks[@]}"; do
         fi
     fi
 
-: <<COMMENT
-    # repo sync 명령에 --no-clone-bundle --no-use-superproject 옵션 추가 및 독립 git 변환
-    if [[ "$actual_cmd" =~ repo[[:space:]]+sync ]]; then
-        # 옵션 추가
-        if [[ ! "$actual_cmd" =~ --no-clone-bundle ]]; then
-            actual_cmd="${actual_cmd} --no-clone-bundle"
-        fi
-        if [[ ! "$actual_cmd" =~ --no-use-superproject ]]; then
-            actual_cmd="${actual_cmd} --no-use-superproject"
-        fi
-
-        # repo sync 후 각 프로젝트를 독립 git으로 변환
-        actual_cmd="${actual_cmd} && repo forall -c '
-        if [ -L .git ]; then GITDIR=\$(readlink -f .git);
-         rm .git;
-         cp -r \"\$GITDIR\" .git;
-         git config core.worktree \".\";
-         git config core.bare false;
-         git repack -a -d && git prune
-        fi'
-        echo -e "${job_color}[REPO-SYNC] Added standalone git conversion${NC}"
-    fi
-COMMENT
 
     ##최종 실행되는 실제 command를 출력한다.
     echo -e "${job_color}[FINAL_CMD] $actual_cmd"
