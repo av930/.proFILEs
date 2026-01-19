@@ -1,6 +1,15 @@
 #!/bin/bash
 # filepath: /data001/vc.integrator/.proFILEs/tools/down_src.sh
 
+# 색상 코드 (가독성용)
+declare -A JOB_COLORS
+JOB_COLORS[0]='\033[1;36m'  # 빨간색 (END용)
+JOB_COLORS[1]='\033[0;32m'  # 녹색
+JOB_COLORS[2]='\033[0;34m'  # 파랑
+JOB_COLORS[3]='\033[0;33m'  # 노랑
+JOB_COLORS[4]='\033[0;35m'  # 마젠타
+NC='\033[0m' # No Color
+
 # ==============================================================================
 # 설정 및 초기화
 # ==============================================================================
@@ -9,18 +18,12 @@ MIRROR_PATH="$2"
 MAX_JOBS=3
 LOG_DIR="log"
 JOB_DIR="result."
-MIRROR_DIR="$MIRROR_PATH"
-[ -n "$MIRROR_PATH" ] && [ ! -e "$MIRROR_DIR" ] && mkdir -p "$MIRROR_DIR"
 
-
-# 색상 코드 (가독성용)
-declare -A JOB_COLORS
-JOB_COLORS[0]='\033[0;31m'  # 빨간색 (END용)
-JOB_COLORS[1]='\033[0;32m'  # 녹색
-JOB_COLORS[2]='\033[0;34m'  # 파랑
-JOB_COLORS[3]='\033[0;33m'  # 노랑
-JOB_COLORS[4]='\033[0;35m'  # 마젠타
-NC='\033[0m' # No Color
+# MIRROR_PATH를 절대 경로로 변환
+if [ -n "$MIRROR_PATH" ]; then
+    MIRROR_PATH=$(readlink -f "$MIRROR_PATH")
+    mkdir -p "$MIRROR_PATH"
+fi
 
 # ==============================================================================
 # 유효성 검사
@@ -36,7 +39,7 @@ if [ -z "$INPUT_FILE" ] || [ ! -f "$INPUT_FILE" ]; then
     3. 실행후 [RUNNING] 상태에 있으면 정상동작이다.
     4. 모든 다운로드가 완료되면 [FINISH]가 출력되고 그렇지 않으면 [ERROR]가 출력된다.
     * 기존 다운로드 결과를 재사용하지 않으려면, 먼저 rm -rf result.* 로 지워야함.
-    * mirror_path를 지정하면 해당 경로에 bare repository mirror를 생성하고 이를 참조하여 다운로드한다.
+    * mirror_path를 지정하면 지정한 dir에 bare repository mirror를 생성하고 이를 참조하여 다운로드한다.
     * mirror_path를 생략하면 mirror를 사용하지 않고 직접 다운로드한다.
 EOF
     exit 1
@@ -97,85 +100,94 @@ for idx in "${!command_blocks[@]}"; do
     log_file="$(pwd)/${LOG_DIR}/downcmd_${job_id}.log"
     job_color="${JOB_COLORS[$job_id]:-\033[0m}"
 
-    # 작업 디렉토리 생성
-    mkdir -p "$job_dir"
+    # 작업 디렉토리 생성/이동
+    mkdir -p "$job_dir" && pushd "$job_dir" > /dev/null
 
-
-    # 작업 디렉토리로 이동
-    pushd "$job_dir" > /dev/null
-
-    # git clone 재실행 처리: 기존 경로 존재시 git pull, 아니면 git clone
-    echo -e "${job_color}[START:${job_id}] $cmd_block${NC}"
+    # 원래 명령 출력
+    echo -e "${job_color}[${job_id}.CMD-ORI] ${cmd_block// && / && \\n}${NC}" | sed 's/ ; / ;\n/g'
     actual_cmd="$cmd_block"
 
-    # Mirror 모드에서 git clone 처리
-    if [[ "$cmd_block" =~ git[[:space:]]+clone ]] && [ -n "$MIRROR_PATH" ]; then
-        # 기존 clone된 디렉토리가 있으면 git pull
-        clone_dir=$(find . -maxdepth 2 -type d -name .git -exec dirname {} \; 2>/dev/null | head -1)
-        if [ -n "$clone_dir" ]; then
-            cd "$clone_dir" && actual_cmd="git pull"
-        else
-            # git clone 명령에서 URL 추출
-            if [[ "$cmd_block" =~ git[[:space:]]+clone[[:space:]]+([^[:space:]]+) ]]; then
-                repo_url="${BASH_REMATCH[1]}"
-                # URL에서 repository 이름 추출
-                repo_name=$(basename "$repo_url" .git)
-                mirror_path="$MIRROR_DIR/${repo_name}.git"
+    # 명령어 타입 결정
+    cmd_type=""
+    [[ "$cmd_block" =~ git[[:space:]]+clone ]] && cmd_type="git_clone"
+    [[ "$cmd_block" =~ repo[[:space:]]+init ]] && cmd_type="repo_init"
 
-                # Mirror가 없으면 mirror 생성 후 실제 clone 실행
-                if [ ! -d "$mirror_path" ]; then
-                    echo -e "${job_color}[MIRROR] Creating mirror at $mirror_path${NC}"
-                    # mirror 생성 후 그 mirror를 사용하여 실제 clone
-                    clone_cmd="$(echo "$cmd_block" | sed -E "s|git[[:space:]]+clone[[:space:]]+([^[:space:]]+)|git clone --reference $mirror_path \1|")"
-                    actual_cmd="git clone --mirror \"$repo_url\" \"$mirror_path\" && $clone_cmd"
-                else
-                    # Mirror가 있으면 --reference를 사용하여 clone
-                    echo -e "${job_color}[MIRROR] Using existing mirror: $mirror_path${NC}"
-                    actual_cmd="$(echo "$cmd_block" | sed -E "s|git[[:space:]]+clone[[:space:]]+([^[:space:]]+)|git clone --reference $mirror_path \1|")"
-                fi
+    # MIRROR_PATH 및 명령어 타입에 따른 처리
+    case "${MIRROR_PATH:+mirror}~${cmd_type}" in
+        # MIRROR_PATH가 없고 git clone 명령인 경우 - 재실행시 git pull로 처리
+        ~git_clone)
+            clone_dir=$(find . -maxdepth 2 -type d -name .git -exec dirname {} \; 2>/dev/null | head -1)
+            [ -n "$clone_dir" ] && cd "$clone_dir" && actual_cmd="git pull"
+
+        # MIRROR_PATH가 설정되고 git clone 명령인 경우
+        ;; mirror~git_clone)
+            mirror_git_dir="$MIRROR_PATH/result.${job_id}"
+            git_clone_with_ref="${actual_cmd/git clone /git clone --reference \"$mirror_git_dir\" }"
+
+            # 미러 생성 또는 업데이트를 actual_cmd에 포함
+            if [ ! -d "$mirror_git_dir/refs" ]; then
+                # 미러 미존재시 git clone --mirror로 실행
+                echo -e "${job_color}[${job_id}.MIRROR-USE] Creating mirror at $mirror_git_dir${NC}"
+                rm -rf "$mirror_git_dir" 2>/dev/null || true
+                mirror_cmd="${actual_cmd/git clone /git clone --mirror }"
+                actual_cmd="$mirror_cmd \"$mirror_git_dir\" && $git_clone_with_ref"
+            else
+                # 미러 존재시, git remote update로 실행 후 --reference 옵션 추가
+                echo -e "${job_color}[${job_id}.MIRROR-USE] Updating mirror at $mirror_git_dir${NC}"
+                actual_cmd="(cd \"$mirror_git_dir\" && git remote update) || true && $git_clone_with_ref"
             fi
-        fi
-    elif [[ "$cmd_block" =~ git[[:space:]]+clone ]]; then
-        # Mirror 모드가 아닐 때의 기존 로직
-        clone_dir=$(find . -maxdepth 2 -type d -name .git -exec dirname {} \; 2>/dev/null | head -1)
-        [ -n "$clone_dir" ] && cd "$clone_dir" && actual_cmd="git pull"
-    fi
 
-    # git clone 또는 repo init 명령에서 --depth=NUM 옵션 제거
-    if [[ "$actual_cmd" =~ (git[[:space:]]+clone|repo[[:space:]]+init) ]]; then
-        if [[ "$actual_cmd" =~ --depth(=|[[:space:]]+)[0-9]+ ]]; then
+
+        # MIRROR_PATH가 설정되고 repo init 명령인 경우
+        ;; mirror~repo_init)
+            repo_mirror_base="$MIRROR_PATH/result.${job_id}"
+
+            # Mirror 디렉토리 초기화/업데이트
+            if [ ! -d "$repo_mirror_base/.repo" ]; then #미러 미존재시
+                echo -e "${job_color}[${job_id}.MIRROR-USE] Creating repo mirror at $repo_mirror_base/.repo${NC}"
+                mkdir -p "$repo_mirror_base"
+                # rep init --mirror로 실행
+                mirror_cmd="${actual_cmd//repo init /repo init --mirror }"
+                # --depth 옵션 제거
+                mirror_cmd="$(echo "$mirror_cmd" | sed -E 's/(^|[[:space:]])--depth(=[0-9]+|[[:space:]]+[0-9]+)([[:space:]]|$)/ /g' | sed -E 's/  +/ /g')"
+                actual_cmd="cd \"$repo_mirror_base\" && $mirror_cmd && cd - > /dev/null && $actual_cmd"
+            else #미러 존재시, repo sync --network only로 실행
+                echo -e "${job_color}[${job_id}.MIRROR-USE] Updating repo mirror at $repo_mirror_base/.repo${NC}"
+                # mirror 업데이트를 actual_cmd 앞에 추가
+                actual_cmd="cd \"$repo_mirror_base\" && repo sync --network-only 2>/dev/null || true && cd - > /dev/null && $actual_cmd"
+            fi
+
+            # 미러존재시만 --reference 옵션 추가
+            if [[ -d "$repo_mirror_base/.repo" && ! "$actual_cmd" =~ --reference ]]; then
+                actual_cmd="${actual_cmd//repo init /repo init --reference=$repo_mirror_base/.repo }"
+            fi
+    esac
+
+    # --depth 옵션이 있는 경우는 무조건 제거
+    if [[ "$actual_cmd" =~ --depth(=|[[:space:]]+)[0-9]+ ]]; then
+        # git clone 또는 repo init 명령인 경우만 처리
+        if [[ "$actual_cmd" =~ (git[[:space:]]+clone|repo[[:space:]]+init) ]]; then
             actual_cmd="$(echo "$actual_cmd" | sed -E 's/(^|[[:space:]])--depth(=[0-9]+|[[:space:]]+[0-9]+)([[:space:]]|$)/ /g' | sed -E 's/  +/ /g')"
         fi
     fi
 
     # repo init 명령의 -m manifest 파일에서 clone-depth 제거
-    if [[ "$actual_cmd" =~ repo[[:space:]]+init ]]; then
-        # Mirror 모드에서 --reference-dir 추가
-        if [ -n "$MIRROR_PATH" ]; then
-            repo_mirror_dir="$MIRROR_DIR/repo_mirror"
-            mkdir -p "$repo_mirror_dir"
-            # --reference-dir 옵션이 없으면 추가
-            if [[ ! "$actual_cmd" =~ --reference-dir ]]; then
-                actual_cmd="$actual_cmd --reference-dir=$repo_mirror_dir"
-                echo -e "${job_color}[MIRROR] Using repo mirror: $repo_mirror_dir${NC}"
-            fi
-        fi
-
-        if [[ "$actual_cmd" =~ -m[[:space:]]+([^[:space:]]+) ]]; then
-            manifest_file="${BASH_REMATCH[1]}"
-            if [ -f "$manifest_file" ]; then
-                # 백업 생성
-                cp "$manifest_file" "${manifest_file}.ori"
-                # clone-depth="숫자" 패턴 제거
-                sed -i -E 's/[[:space:]]*clone-depth="[0-9]+"//g' "$manifest_file"
-                echo -e "${job_color}[REPO-INIT] Removed clone-depth from $manifest_file (backup: ${manifest_file}.ori)${NC}"
-            fi
+    #if [[ "$actual_cmd" =~ repo[[:space:]]+init ]]; then
+    if [[ "$actual_cmd" =~ -m[[:space:]]+([^[:space:]]+) ]]; then
+        manifest_file="${BASH_REMATCH[1]}"
+        if [ -f "$manifest_file" ]; then
+            # 백업 생성
+            cp "$manifest_file" "${manifest_file}.ori"
+            # clone-depth="숫자" 패턴 제거
+            sed -i -E 's/[[:space:]]*clone-depth="[0-9]+"//g' "$manifest_file"
+            echo -e "${job_color}[${job_id}.REPO-INIT] Removed clone-depth from $manifest_file (backup: ${manifest_file}.ori)${NC}"
         fi
     fi
+    #fi
 
 
     ##최종 실행되는 실제 command를 출력한다.
-    echo -e "${job_color}[FINAL_CMD] $actual_cmd"
+    echo -e "${job_color}[${job_id}.CMD-FINAL] ${actual_cmd// && / && \\n}${NC}" | sed 's/ ; / ;\n/g'
     bash -ec "$actual_cmd" &> "$log_file" &
     popd > /dev/null
 
@@ -186,7 +198,7 @@ for idx in "${!command_blocks[@]}"; do
     sleep 2
     # 프로세스가 아직 실행 중인 경우에만 출력
     if kill -0 "$pid" 2>/dev/null; then
-        echo -e "${job_color}[RUNNING]: ${job_id} in ${job_dir}/ (PID: $pid, Log: ${LOG_DIR}/downcmd_${job_id}.log)${NC}"
+        echo -e "${job_color}[${job_id}.RUNNING]: ${job_id} in ${job_dir}/ (PID: $pid, Log: ${LOG_DIR}/downcmd_${job_id}.log)${NC}"
     fi
     ((active_jobs++))
 
@@ -199,22 +211,19 @@ for idx in "${!command_blocks[@]}"; do
         exit_code=$?
 
         # exit code가 0이 아니면 error 발생
-        if [ $exit_code -ne 0 ]; then
-            has_error=1
-        fi
+        if [ $exit_code -ne 0 ]; then has_error=1; fi
 
         # 종료된 작업 찾기 (실행 중이지 않은 PID 찾기)
         for p in "${!job_logs[@]}"; do
             if ! kill -0 "$p" 2>/dev/null; then
                 job_id_end=${job_pids[$p]}
                 job_color_end="${JOB_COLORS[0]}"
-                echo -e "${job_color_end}[END:${job_id_end}] Check log: ${LOG_DIR}/downcmd_${job_id_end}.log${NC}"
+                echo -e "${job_color_end}[${job_id_end}.END] Check log: ${LOG_DIR}/downcmd_${job_id_end}.log${NC}"
                 unset "job_logs[$p]"
                 unset "job_pids[$p]"
                 break
             fi
         done
-
         ((active_jobs--)) # 하나가 끝났으므로 카운트 감소 (논리적 처리)
     fi
 done
@@ -226,18 +235,15 @@ done
 for pid in "${!job_logs[@]}"; do
     wait "$pid"
     exit_code=$?
-    if [ $exit_code -ne 0 ]; then
-        has_error=1
-    fi
+    if [ $exit_code -ne 0 ]; then has_error=1; fi
 
     job_id_final=${job_pids[$pid]}
     job_color_final="${JOB_COLORS[0]}"
-    echo -e "${job_color_final}[END:${job_id_final}] Check log: ${LOG_DIR}/downcmd_${job_id_final}.log${NC}"
+    echo -e "${job_color_final}[${job_id}.END:${job_id_final}] Check log: ${LOG_DIR}/downcmd_${job_id_final}.log${NC}"
 done
 
 # error 발생 여부에 따라 메시지 출력
-if [ $has_error -eq 1 ]; then
-    echo -e "${JOB_COLORS[0]}[ERROR] Some jobs failed. Check logs for details.${NC}"
-else
-    echo -e "${JOB_COLORS[4]}[FINISH] All download jobs completed.${NC}"
+if [ $has_error -eq 1 ];
+then echo -e "${JOB_COLORS[0]}[${job_id}.ERROR] Some jobs failed. Check logs for details.${NC}" ; exit 1
+else echo -e "${JOB_COLORS[4]}[${job_id}.FINISH] All download jobs completed.${NC}"; exit 0
 fi
