@@ -31,6 +31,14 @@ if (( "${#PATH_GIT[@]}" == 0 )); then
 	REMOTE_NAME=devops REMOTE_ADDR=ssh://vgit.lge.com:29999/qct/sa525m REMOTE_BNCH=refs/heads/release_5.0.9 \
 	${proFILEdir}/tools/split-git.sh \
 	SA525M_aop SA525M_apps ~~
+
+	#remote에 push를 하지 않을 경우 (mani로 현재 dir를 remote로 하여 생성만 하는경우), REMOTE_ADDR 생략가능
+	CMD=mani \
+	WORK_DIR=/data001/vc.integrator/mirror/down-down/result.1/sa525m-le-3-1_amss_standard_oem_split \
+	REMOTE_NAME=devops_test \
+	REMOTE_BNCH=refs/heads/master \
+	/data001/vc.integrator/.proFILEs/tools/split-git.sh \
+	SA525M_aop SA525M_apps SA525M_apps_kernel SA525M_boot SA525M_btfm_hmt SA525M_btfm_hsp SA525M_btfm_rome SA525M_cpucp SA525M_modem SA525M_tz SA525M_tz_apps SA525M_wlan_hmt SA525M_wlan_hsp SA525M_wlan_rome
 EOF
 fi
 
@@ -45,7 +53,7 @@ fi
 
 
 PATH_CURRENT="${WORK_DIR%/}" #split을 진행할 dir
-[ ! -d "$PATH_CURRENT/.git" ] && { "$0 must be run at .git repository"; exit 1; }
+[ ! -d "$PATH_CURRENT/.git" ] && { echo "$0 must be run at .git repository"; exit 1; }
 
 #################################### push logic ####################################
 ## remote 정보가 있으면 push작업을 진행한다. 이경우 split 작업은 skip한다.
@@ -62,7 +70,7 @@ if [ ! "$CMD" = "split" ] && [ -n "${REMOTE_NAME}" ]; then
 			;;verify)
 				pushd "$dir" >/dev/null
 				##존재하면 삭제하고 다시 등록, 존재하지 않으면 새로등록
-				git remote get-url $REMOTE_NAME && { git remote rm $REMOTE_NAME; git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}; } || git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}
+				git remote get-url $REMOTE_NAME > /dev/null && { git remote rm $REMOTE_NAME; git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}; } || git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}
 				printf "\e[0;33m check remote is working \e[0m:" ##리모트가 동작하는지 확인
 				git ls-remote --exit-code $REMOTE_NAME HEAD > /dev/null && echo "[OKAY]" || echo "[ERR ] not existed - remote"
 				printf "\e[0;33m check remote branch is existed \e[0m:" ##브랜치가 존재하는지 확인
@@ -82,16 +90,52 @@ if [ ! "$CMD" = "split" ] && [ -n "${REMOTE_NAME}" ]; then
 	# common도 dir로 진입해서 동일하게 작업처리
 	count=1
 	set +e
+
+	# mani 모드일 때 헤더 생성을 먼저 처리
+	if [ "$CMD" == "mani" ]; then
+		# REMOTE_ADDR이 비어있으면 WORK_DIR 사용
+		[[ -z "$REMOTE_ADDR" ]] && REMOTE_ADDR="$WORK_DIR"
+		# Local path인지 remote URL인지 구분
+		if [[ "$REMOTE_ADDR" =~ ^(file://|/) ]]; then
+			# Local path인 경우
+			fetch_path="${REMOTE_ADDR#file://}"  # file:// 제거
+			fetch_path="${fetch_path%/}"  # trailing slash 제거
+			parent_path=$(dirname "$fetch_path")
+			dir_name=$(basename "$fetch_path")
+			printf "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<manifest>\n" > ${MANI}
+			printf "  <remote name=\"${REMOTE_NAME}\" fetch=\"${parent_path}\"/>\n" >> ${MANI}
+			printf "  <default remote=\"${REMOTE_NAME}\" revision=\"${REMOTE_BNCH#refs/heads/}\"/>\n" >> ${MANI}
+		else
+			# Remote URL인 경우 (기존 로직)
+			url=$(echo "$REMOTE_ADDR" | cut -d'/' -f1-3); prefix=$(echo "$REMOTE_ADDR" | cut -d'/' -f4-);
+			printf "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<manifest>\n" > ${MANI}
+			printf "  <remote name=\"${REMOTE_NAME}\" fetch=\"${url}\" review=\"${url/ssh/http}\"/>\n" >> ${MANI}
+			printf "  <default remote=\"${REMOTE_NAME}\" revision=\"${REMOTE_BNCH#refs/heads/}\"/>\n" >> ${MANI}
+			dir_name=""  # remote URL 경우 prefix 사용
+		fi
+	fi
+
 	for item in "common" ${PATH_GIT[@]}; do
 		case $CMD in
-		mani)   if [[ ! -v url ]]; then
-				url=$(echo "$REMOTE_ADDR" | cut -d'/' -f1-3); prefix=$(echo "$REMOTE_ADDR" | cut -d'/' -f4-);
-				printf "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<manifest>\n" > ${MANI}
-				printf "  <remote name=\"${REMOTE_NAME}\" fetch=\"${url}\" review=\"${url/ssh/http}\"/>\n" >> ${MANI}
-				fi
-			    # common은 path="./", 나머지는 path="${item}" (상대 경로)
-			    if [ "$item" = "common" ]; then project_path="./" ;else project_path="${item}"; fi
-			    printf "  <project name=\"${prefix:+"${prefix}/"}${item}\" path=\"${project_path}\" revision=\"${REMOTE_BNCH#refs/heads/}\"/>\n" >> ${MANI}
+		mani)
+			    # common은 path="." (root), 나머지는 path="${item}" (서브디렉토리)
+			    if [ "$item" = "common" ]; then
+			        project_path="."
+			        # common인 경우 프로젝트 이름은 dir_name만
+			        if [[ -n "$dir_name" ]]; then
+			            printf "  <project name=\"${dir_name}\" path=\"${project_path}\"/>\n" >> ${MANI}
+			        else
+			            printf "  <project name=\"${prefix:+"${prefix}/"}${item}\" path=\"${project_path}\"/>\n" >> ${MANI}
+			        fi
+			    else
+			        project_path="${item}"
+			        # 일반 항목인 경우 dir_name/item 또는 prefix/item 형식
+			        if [[ -n "$dir_name" ]]; then
+			            printf "  <project name=\"${dir_name}/${item}\" path=\"${project_path}\"/>\n" >> ${MANI}
+			        else
+			            printf "  <project name=\"${prefix:+"${prefix}/"}${item}\" path=\"${project_path}\"/>\n" >> ${MANI}
+			        fi
+			    fi
 		;;*)
 				printf "\e[0;35m [ $((count++)) $CMD $item] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ \e[0m\n"
 				push_to_remote "$item" $CMD
