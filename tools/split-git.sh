@@ -24,7 +24,7 @@ if (( "${#PATH_GIT[@]}" == 0 )); then
 	SA525M_aop SA525M_apps ~~
 
 	# ex) push
-	# CMD=split|verify|remoterm|push|mani 중에 선택
+	# CMD=split|verify|push|custom|mani| 중에 선택
 	(split은 소스분리, verify는 push전 remote설정, remoterm은 등록된 remote삭제, push는 실제 push, mani는 manifest만 생성)
 	CMD=push PUSH_OPT="-o skip-validation --force" \
 	WORK_DIR=/data001/~/sa525m-le-3-1_amss_standard_oem \
@@ -32,9 +32,17 @@ if (( "${#PATH_GIT[@]}" == 0 )); then
 	${proFILEdir}/tools/split-git.sh \
 	SA525M_aop SA525M_apps ~~
 
+	#custom 명령은 PUSH_OPT에 들어온 명령을 분리된 모든 git을 돌아다니며 실행해준다.
+	#이경우 $REMOTE_NAME $REMOTE_ADDR $REMOTE_BNCH 변수사용은 가능하지만, 직접입력하는것이 좋다.
+	(ex: git remote rm devops_test, ex: git pull devops_test ~~ )
+	CMD=custom \
+	PUSH_OPT="git remote -v" \
+	/data001/vc.integrator/.proFILEs/tools/split-git.sh \
+	SA525M_aop SA525M_apps SA525M_apps_kernel SA525M_boot SA525M_btfm_hmt SA525M_btfm_hsp SA525M_btfm_rome SA525M_cpucp SA525M_modem SA525M_tz SA525M_tz_apps SA525M_wlan_hmt SA525M_wlan_hsp SA525M_wlan_rome
+
 	#remote에 push를 하지 않을 경우 (mani로 현재 dir를 remote로 하여 생성만 하는경우), REMOTE_ADDR 생략가능
 	CMD=mani \
-	WORK_DIR=/data001/vc.integrator/mirror/down-down/result.1/sa525m-le-3-1_amss_standard_oem_split \
+	WORK_DIR=/data001/vc.integrator/mirror/down-down/down.git.1/sa525m-le-3-1_amss_standard_oem_split \
 	REMOTE_NAME=devops_test \
 	REMOTE_BNCH=refs/heads/master \
 	/data001/vc.integrator/.proFILEs/tools/split-git.sh \
@@ -65,21 +73,23 @@ if [ ! "$CMD" = "split" ] && [ -n "${REMOTE_NAME}" ]; then
 		case $cmd in
  			push)
 				pushd "$dir"
+				echo "git push $REMOTE_NAME HEAD:${REMOTE_BNCH} ${PUSH_OPT}"
 				git push $REMOTE_NAME HEAD:${REMOTE_BNCH} ${PUSH_OPT}
 				popd
 			;;verify)
 				pushd "$dir" >/dev/null
 				##존재하면 삭제하고 다시 등록, 존재하지 않으면 새로등록
-				git remote get-url $REMOTE_NAME > /dev/null && { git remote rm $REMOTE_NAME; git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}; } || git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}
+				git remote get-url $REMOTE_NAME &> /dev/null && { git remote rm $REMOTE_NAME; git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}; } || git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}
 				printf "\e[0;33m check remote is working \e[0m:" ##리모트가 동작하는지 확인
 				git ls-remote --exit-code $REMOTE_NAME HEAD > /dev/null && echo "[OKAY]" || echo "[ERR ] not existed - remote"
 				printf "\e[0;33m check remote branch is existed \e[0m:" ##브랜치가 존재하는지 확인
 				git ls-remote --exit-code $REMOTE_NAME $REMOTE_BNCH > /dev/null && echo "[OKAY]" || echo "[WARN] not existed - remote branch"
 				echo "[CMD] git push $REMOTE_NAME HEAD:${REMOTE_BNCH} ${PUSH_OPT}"
 				popd >/dev/null
-			;;remoterm)
+			;;custom)
 				pushd "$dir" >/dev/null
-				git remote rm $REMOTE_NAME
+				echo ${PUSH_OPT}
+				eval ${PUSH_OPT}
 				popd >/dev/null
 		esac
 	}
@@ -89,7 +99,6 @@ if [ ! "$CMD" = "split" ] && [ -n "${REMOTE_NAME}" ]; then
 
 	# common도 dir로 진입해서 동일하게 작업처리
 	count=1
-	set +e
 
 	# mani 모드일 때 헤더 생성을 먼저 처리
 	if [ "$CMD" == "mani" ]; then
@@ -141,7 +150,6 @@ if [ ! "$CMD" = "split" ] && [ -n "${REMOTE_NAME}" ]; then
 				push_to_remote "$item" $CMD
 		esac
 	done
-	set -e
 
 	# mani 모드일 때 manifest 파일 닫기
 	if [ "$CMD" == "mani" ]; then
