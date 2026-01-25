@@ -4,13 +4,23 @@
 
 INPUT_FILE="${1:-down.list}"
 OUTPUT_MANIFEST="${2:-merged-manifest.xml}"
-PREFIX_GITNAME="${3:-qct/sa5x5m}"
 INCLUDE_MANIFEST="${INPUT_FILE}.xml"
-JOB_DIR="result."
+
+# INPUT_FILE 값이 절대경로일때와 상대경로일때, WORK_DIR계산
+[[ "$INPUT_FILE" = /* ]] && WORK_DIR=$(dirname "$INPUT_FILE") || WORK_DIR=$(cd "$(dirname "$INPUT_FILE")" && pwd)
+
+# mirror/merged 디렉토리 찾기
+MIRROR_MERGED_DIR="${WORK_DIR}/mirror/merged"
+if [ ! -d "$MIRROR_MERGED_DIR" ]; then
+    echo "Warning: mirror/merged directory not found at $MIRROR_MERGED_DIR" >&2
+    MIRROR_MERGED_DIR="${WORK_DIR}/mirror/merged"  # 존재하지 않아도 경로 설정
+fi
 
 echo "Analyzing: $INPUT_FILE" >&2
 echo "Include manifest: $INCLUDE_MANIFEST" >&2
 echo "Output manifest: $OUTPUT_MANIFEST" >&2
+echo "Work directory: $WORK_DIR" >&2
+echo "Mirror directory: $MIRROR_MERGED_DIR" >&2
 
 # 1단계: down.list 파일 분석하여 include manifest 생성
 if [ ! -f "$INPUT_FILE" ]; then
@@ -24,50 +34,58 @@ echo '<manifest>' >> "$INCLUDE_MANIFEST"
 
 # down.list에서 블록별로 manifest xml 파일 추출
 echo "Scanning for manifest files in $INPUT_FILE..." >&2
-job_id=0
+git_job_id=0
+repo_job_id=1  # repo는 1부터 시작 (down.repo.2가 첫번째)
 while IFS= read -r line || [ -n "$line" ]; do
     # 빈 줄이면 블록 구분
     if [[ -z "$line" || "$line" =~ ^[[:space:]]*$ ]]; then
         continue
     fi
 
-    # repo init 또는 git clone 명령 감지
-    if [[ "$line" =~ (repo[[:space:]]+init|git[[:space:]]+clone) ]]; then
-        ((job_id++))
-        job_dir="${JOB_DIR}${job_id}"
-        manifest_file=""
-        manifest_path=""
+    # repo init 또는 git clone 명령 감지 (repo sync는 제외)
+    if [[ "$line" =~ git[[:space:]]+clone ]]; then
+        ((git_job_id++))
+        job_dir="down.git.${git_job_id}"
+    elif [[ "$line" =~ repo[[:space:]]+init ]]; then
+        ((repo_job_id++))
+        job_dir="down.repo.${repo_job_id}"
+    else
+        # repo sync나 다른 명령은 건너뜀
+        continue
+    fi
 
-        # -m 옵션이 있는 경우
-        if [[ "$line" =~ -m[[:space:]]+([^[:space:]]+\.xml) ]]; then
-            manifest_file="${BASH_REMATCH[1]}"
-        else
-            # -m 옵션이 없는 경우: repo init은 default.xml, git clone은 chipcode.xml
-            if [[ "$line" =~ repo[[:space:]]+init ]]; then
-                manifest_file="default.xml"
-            elif [[ "$line" =~ git[[:space:]]+clone ]]; then
-                manifest_file="chipcode.xml"
+    manifest_file=""
+    manifest_path=""
+
+    # -m 옵션이 있는 경우
+    if [[ "$line" =~ -m[[:space:]]+([^[:space:]]+\.xml) ]]; then
+        manifest_file="${BASH_REMATCH[1]}"
+    else
+        # -m 옵션이 없는 경우: repo init은 default.xml, git clone은 chipcode.xml
+        if [[ "$line" =~ repo[[:space:]]+init ]]; then
+            manifest_file="default.xml"
+        elif [[ "$line" =~ git[[:space:]]+clone ]]; then
+            manifest_file="chipcode.xml"
+        fi
+    fi
+
+    if [ -n "$manifest_file" ]; then
+        # 실제 파일 경로 찾기
+        if [[ "$line" =~ repo[[:space:]]+init ]]; then
+            # repo init: .repo/manifests/ 안에 있음
+            manifest_path="${job_dir}/.repo/manifests/${manifest_file}"
+        elif [[ "$line" =~ git[[:space:]]+clone ]]; then
+            # git clone: clone된 디렉토리 안에서 찾기
+            if [ -d "$job_dir" ]; then
+                found_path=$(find "$job_dir" -maxdepth 2 -name "$manifest_file" -type f 2>/dev/null | head -1)
+                [ -n "$found_path" ] && manifest_path="$found_path"
             fi
+            # 못찾으면 기본 경로 사용
+            [ -z "$manifest_path" ] && manifest_path="${job_dir}/${manifest_file}"
         fi
 
-        if [ -n "$manifest_file" ]; then
-            # 실제 파일 경로 찾기
-            if [[ "$line" =~ repo[[:space:]]+init ]]; then
-                # repo init: .repo/manifests/ 안에 있음
-                manifest_path="${job_dir}/.repo/manifests/${manifest_file}"
-            elif [[ "$line" =~ git[[:space:]]+clone ]]; then
-                # git clone: clone된 디렉토리 안에서 찾기
-                if [ -d "$job_dir" ]; then
-                    found_path=$(find "$job_dir" -maxdepth 2 -name "$manifest_file" -type f 2>/dev/null | head -1)
-                    [ -n "$found_path" ] && manifest_path="$found_path"
-                fi
-                # 못찾으면 기본 경로 사용
-                [ -z "$manifest_path" ] && manifest_path="${job_dir}/${manifest_file}"
-            fi
-
-            echo "  <include name=\"${manifest_path}\"/>" >> "$INCLUDE_MANIFEST"
-            [ -f "$manifest_path" ] && echo "Found: ${manifest_path}" >&2 || echo "Expected: ${manifest_path} (not exists)" >&2
-        fi
+        echo "  <include name=\"${manifest_path}\"/>" >> "$INCLUDE_MANIFEST"
+        [ -f "$manifest_path" ] && echo "Found: ${manifest_path}" >&2 || echo "Expected: ${manifest_path} (not exists)" >&2
     fi
 done < "$INPUT_FILE"
 
@@ -86,17 +104,17 @@ cat > "$OUTPUT_MANIFEST" << 'XMLHEAD'
 <manifest>
 XMLHEAD
 
-# 모든 include 파일에서 remote 정의 추출
-echo "  <!-- Merged remote definitions -->" >> "$OUTPUT_MANIFEST"
+# 모든 include 파일에서 remote 정의 추출 (참고용으로만 추가, 실제로는 사용 안함)
+echo "  <!-- Merged remote definitions (for reference only) -->" >> "$OUTPUT_MANIFEST"
 names=""  # 이미 처리된 remote name들을 저장 (|name1|name2| 형태)
 while IFS= read -r line; do
     # include 태그에서 파일 경로 추출하고, 실제 존재하지 않으면 error 발생
     [[ "$line" =~ \<include.*name=\"([^\"]+)\" ]] || continue
     file="${BASH_REMATCH[1]}"
     echo "Processing include: $file" >&2
-    [ ! -f "$file" ] && echo "Warning: Include file not found: $file" >&2 && continue
+    [ ! -f "$file" ] && echo "Warning: Include file not found: $file" >&2 && exit 1
 
-    # 각 파일에서 remote 태그 추출 및 처리
+    # 각 파일에서 remote 태그 추출 및 처리 (주석 처리)
     while IFS= read -r rline; do
         # remote name 추출
         [[ "$rline" =~ name=\"([^\"]+)\" ]] || continue
@@ -111,13 +129,17 @@ while IFS= read -r line; do
         else
             names="$names$name|"  # 새로운 이름 저장
         fi
-        echo "$rline" >> "$OUTPUT_MANIFEST"
+        echo "  <!-- $rline -->" >> "$OUTPUT_MANIFEST"
     done < <(grep -E '^ *<remote ' "$file" 2>/dev/null | sort -u)  # remote 태그만 추출 및 정렬
 done < "$INCLUDE_MANIFEST"
 
-# xml의 default 값은 고정된 devops remote 사용
+# devops_test remote 정의 (mirror/merged를 가리킴)
 echo "" >> "$OUTPUT_MANIFEST"
-echo '  <default remote="devops" revision="master"/>' >> "$OUTPUT_MANIFEST"
+echo "  <remote name=\"devops_test\" fetch=\"${MIRROR_MERGED_DIR}\"/>" >> "$OUTPUT_MANIFEST"
+
+# xml의 default 값은 devops_test remote 사용
+echo "" >> "$OUTPUT_MANIFEST"
+echo '  <default remote="devops_test" revision="master"/>' >> "$OUTPUT_MANIFEST"
 
 # 각 include 파일의 모든 project list 추가
 echo "" >> "$OUTPUT_MANIFEST"
@@ -129,20 +151,9 @@ while IFS= read -r line; do
             echo "" >> "$OUTPUT_MANIFEST"
             echo "  <!-- ==================== Projects from: $include_file ==================== -->" >> "$OUTPUT_MANIFEST"
             # 첫 번째 <project부터 </manifest> 전까지 모든 라인 추출
-            # 1. upstream, dest-branch, remote 속성 제거
-            # 2. PREFIX_GITNAME이 없는 project name에만 PREFIX_GITNAME 추가
+            # upstream, dest-branch, remote 속성 제거
             sed -n '/<project/,/<\/manifest>/{/<\/manifest>/d; p}' "$include_file" 2>/dev/null | \
-                sed 's/ upstream="[^"]*"//g; s/ dest-branch="[^"]*"//g; s/ remote="[^"]*"//g' | \
-                awk -v prefix="$PREFIX_GITNAME" '{
-                    if (match($0, /name="([^"]+)"/, arr)) {
-                        name = arr[1]
-                        # PREFIX_GITNAME으로 시작하지 않으면 추가
-                        if (index(name, prefix "/") != 1) {
-                            gsub(/name="[^"]*"/, "name=\"" prefix "/" name "\"")
-                        }
-                    }
-                    print
-                }' >> "$OUTPUT_MANIFEST" || true
+            sed 's/ upstream="[^"]*"//g; s/ dest-branch="[^"]*"//g; s/ remote="[^"]*"//g' >> "$OUTPUT_MANIFEST" || true
         fi
     fi
 done < "$INCLUDE_MANIFEST"

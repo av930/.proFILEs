@@ -92,6 +92,7 @@ active_jobs=0
 has_error=0  # error 발생 여부 추적
 declare -A job_logs  # PID와 로그 파일을 매핑할 연관 배열
 declare -A job_pids  # PID와 job_id를 매핑할 연관 배열
+START_DIR="$(pwd)"  # 시작 디렉토리 저장
 
 for idx in "${!command_blocks[@]}"; do
     JOB_ID=$((idx + 1))
@@ -160,16 +161,19 @@ for idx in "${!command_blocks[@]}"; do
             if [ ! -d "$repo_mirror_base/.repo" ]; then #미러 미존재시
                 echo -e "${JOB_COLOR}[${JOB_ID}.MIRROR-USE] Creating repo mirror at $repo_mirror_base/${NC}"
                 mkdir -p "$repo_mirror_base"
-                # rep init --mirror로 실행
-                mirror_cmd="${actual_cmd//repo init /repo init --mirror }"
-                # --depth 옵션 제거
-                mirror_cmd="$(echo "$mirror_cmd" | sed -E 's/(^|[[:space:]])--depth(=[0-9]+|[[:space:]]+[0-9]+)([[:space:]]|$)/ /g' | sed -E 's/  +/ /g')"
-                actual_cmd="cd \"$repo_mirror_base\" && $mirror_cmd && cd - > /dev/null && $actual_cmd"
+                # repo init --mirror로 실행
+                mirror_init_cmd="${actual_cmd//repo init /repo init --mirror }"
+                # --depth 옵션 제거 (첫 번째 repo init만)
+                mirror_init_cmd="$(echo "$mirror_init_cmd" | sed -E '0,/repo init/s/(^|[[:space:]])--depth(=[0-9]+|[[:space:]]+[0-9]+)([[:space:]]|$)/ /g' | sed -E 's/  +/ /g')"
+                # mirror에서 repo sync까지 실행 (첫 번째 repo sync까지만)
+                mirror_sync_cmd="$(echo "$mirror_init_cmd" | sed -n '1{s/\(.*repo sync[^;]*\).*/\1/p}')"
+                actual_cmd="(cd \"$repo_mirror_base\" && $mirror_sync_cmd) && $actual_cmd"
             fi
 
-            # 미러존재시만 --reference 옵션 추가
+            # 미러존재시만 --reference 옵션 추가 (작업 디렉토리의 첫 번째 repo init에만)
             if [[ -d "$repo_mirror_base/.repo" && ! "$actual_cmd" =~ --reference ]]; then
-                actual_cmd="${actual_cmd//repo init /repo init --reference=$repo_mirror_base }"
+                # 첫 번째 repo init에만 --reference 추가
+                actual_cmd="$(echo "$actual_cmd" | sed '0,/repo init /s/repo init /repo init --reference='"$repo_mirror_base"' /')"
             fi
     esac
 
@@ -198,8 +202,9 @@ MANIFEST_FIX_EOF
 
         # repo init과 repo sync 사이에 fix_manifest.sh 삽입
         # "repo init ... ; repo sync ..." → "repo init ... ; ./fix_manifest.sh ... && repo sync ..."
-        fix_cmd="./fix_manifest.sh '${manifest_file}'"
-        actual_cmd=$(echo "$actual_cmd" | sed "s~repo sync~${fix_cmd} ; repo sync~")
+        # START_DIR 기준 절대 경로
+        fix_script_path="${START_DIR}/${JOB_DIR}/fix_manifest.sh"
+        actual_cmd=$(echo "$actual_cmd" | sed "s~repo sync~${fix_script_path} '${manifest_file}' ; repo sync~g")
     fi
 
 
@@ -256,7 +261,7 @@ for pid in "${!job_logs[@]}"; do
 
     job_id_final=${job_pids[$pid]}
     JOB_COLOR_final="${JOB_COLORS[0]}"
-    echo -e "${JOB_COLOR_final}[${job_id_final}.END}] Check log: ${LOG_DIR}/downcmd_${job_id_final}.log${NC}"
+    echo -e "${JOB_COLOR_final}[${job_id_final}.END] Check log: ${LOG_DIR}/downcmd_${job_id_final}.log${NC}"
 done
 
 # error 발생 여부에 따라 메시지 출력
