@@ -130,20 +130,12 @@ if [ ! "$CMD" = "split" ] && [ -n "${REMOTE_NAME}" ]; then
 			    # common은 path="." (root), 나머지는 path="${item}" (서브디렉토리)
 			    if [ "$item" = "common" ]; then
 			        project_path="."
-			        # common인 경우 프로젝트 이름은 dir_name만
-			        if [[ -n "$dir_name" ]]; then
-			            printf "  <project name=\"${dir_name}\" path=\"${project_path}\"/>\n" >> ${MANI}
-			        else
-			            printf "  <project name=\"${prefix:+"${prefix}/"}${item}\" path=\"${project_path}\"/>\n" >> ${MANI}
-			        fi
+			        # common인 경우 프로젝트 이름은 item만 (prefix 제거)
+			        printf "  <project name=\"${item}\" path=\"${project_path}\"/>\n" >> ${MANI}
 			    else
 			        project_path="${item}"
-			        # 일반 항목인 경우 dir_name/item 또는 prefix/item 형식
-			        if [[ -n "$dir_name" ]]; then
-			            printf "  <project name=\"${dir_name}/${item}\" path=\"${project_path}\"/>\n" >> ${MANI}
-			        else
-			            printf "  <project name=\"${prefix:+"${prefix}/"}${item}\" path=\"${project_path}\"/>\n" >> ${MANI}
-			        fi
+			        # 일반 항목인 경우 item만 사용 (prefix 제거)
+			        printf "  <project name=\"${item}\" path=\"${project_path}\"/>\n" >> ${MANI}
 			    fi
 		;;*)
 				printf "\e[0;35m [ $((count++)) $CMD $item] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ \e[0m\n"
