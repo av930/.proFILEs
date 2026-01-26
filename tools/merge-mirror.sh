@@ -2,121 +2,94 @@
 # merge-mirror.sh - Mirror 통합 스크립트
 # manifest 파일 기반으로 mirror/merged 디렉토리에 링크 생성
 
-set -e
-
+# ==================== 설정 ====================
 MANIFEST="${1:-merged-manifest.xml}"
 WORK_DIR="${2}"
+MARKER_FILE="${MARKER_FILE:-down.list}"
+MIRROR_SUBDIR="${MIRROR_SUBDIR:-mirror/merged}"
+REPO_OBJECTS_PATH="${REPO_OBJECTS_PATH:-.repo/project-objects}"
 
-# WORK_DIR이 비어있으면 MANIFEST 경로에서 down.list가 있는 디렉토리 찾기
+# ==================== 작업 디렉토리 찾기 ====================
 if [ -z "$WORK_DIR" ]; then
-    # MANIFEST의 절대 경로 구하기
     [[ "$MANIFEST" = /* ]] && manifest_abs="$MANIFEST" || manifest_abs="$(pwd)/$MANIFEST"
-
-    # manifest 파일의 디렉토리부터 시작
     search_dir="$(dirname "$manifest_abs")"
-
-    # 상위로 올라가면서 down.list 찾기
     while [ "$search_dir" != "/" ]; do
-        if [ -f "$search_dir/down.list" ]; then
-            WORK_DIR="$search_dir"
-            echo "Found down.list in: $WORK_DIR"
-            break
-        fi
+        [ -f "$search_dir/$MARKER_FILE" ] && WORK_DIR="$search_dir" && echo "Found $MARKER_FILE in: $WORK_DIR" && break
         search_dir="$(dirname "$search_dir")"
     done
-
-    # 못 찾으면 현재 디렉토리 사용
-    [ -z "$WORK_DIR" ] && WORK_DIR="." && echo "Warning: down.list not found, using current directory"
+    [ -z "$WORK_DIR" ] && WORK_DIR="." && echo "Warning: $MARKER_FILE not found, using current directory"
 fi
 
-# 작업 디렉토리를 절대 경로로 변환
 WORK_DIR=$(cd "$WORK_DIR" && pwd)
-
-# MANIFEST 경로 설정 (절대 경로면 그대로, 상대 경로면 WORK_DIR 기준)
 [[ "$MANIFEST" = /* ]] && MANIFEST_PATH="$MANIFEST" || MANIFEST_PATH="${WORK_DIR}/${MANIFEST}"
-
-# MERGED_DIR 설정
-MERGED_DIR="$WORK_DIR/mirror/merged"
+MERGED_DIR="$WORK_DIR/$MIRROR_SUBDIR"
 
 echo "Creating mirror links..."
 echo "  Work directory: $WORK_DIR"
 echo "  Manifest: $MANIFEST_PATH"
 echo "  Merged directory: $MERGED_DIR"
 
-# manifest 파일 확인
-if [ ! -f "$MANIFEST_PATH" ]; then
-    echo "Error: Manifest file not found: $MANIFEST_PATH" >&2
-    exit 1
-fi
-
-# merged 디렉토리 생성
+[ ! -f "$MANIFEST_PATH" ] && { echo "Error: Manifest file not found: $MANIFEST_PATH" >&2; exit 1; }
 mkdir -p "$MERGED_DIR"
 
-# 통계
-total=0
-skip=0
-git1=0
-repo2=0
-repo3=0
-notfound=0
+# ==================== 소스 디렉토리 구축 ====================
+declare -A source_paths split_bases
 
-# manifest에서 모든 프로젝트 추출 및 링크 생성
-grep -oP '<project name="\K[^"]+' "$MANIFEST_PATH" | while read -r project_name; do
-    target_path="$MERGED_DIR/${project_name}.git"
-
-    # 이미 존재하면 스킵
-    if [ -L "$target_path" ] || [ -e "$target_path" ]; then
-        skip=$((skip + 1))
-        continue
-    fi
-
-    # 디렉토리 구조 생성
-    target_dir=$(dirname "$target_path")
-    mkdir -p "$target_dir"
-
-    # 소스 .git 디렉토리 찾기
-    found=0
-
-    # 1. down.git.1에서 검색
-    # 1-1. 전체 경로로 검색 (서브프로젝트용)
-    src="$WORK_DIR/down.git.1/sa525m-le-3-1_amss_standard_oem_split/${project_name##*/}/.git"
-    [ "$project_name" != "${project_name##*/}" ] && [ -d "$src" ] && ln -s "$src" "$target_path" && echo "  Link: $project_name -> down.git.1" && git1=$((git1 + 1)) && total=$((total + 1)) && continue
-    
-    # 1-2. 루트 프로젝트로 검색
-    src="$WORK_DIR/down.git.1/${project_name}/.git"
-    [ -d "$src" ] && ln -s "$src" "$target_path" && echo "  Link: $project_name -> down.git.1" && git1=$((git1 + 1)) && total=$((total + 1)) && continue
-
-    # 2. down.repo.2 project-objects에서 검색
-    src="$WORK_DIR/down.repo.2/.repo/project-objects/${project_name}.git"
-    if [ -d "$src" ]; then
-        ln -s "$src" "$target_path"
-        echo "  Link: $project_name -> down.repo.2"
-        repo2=$((repo2 + 1))
-        total=$((total + 1))
-        continue
-    fi
-
-    # 3. down.repo.3 project-objects에서 검색
-    src="$WORK_DIR/down.repo.3/.repo/project-objects/${project_name}.git"
-    if [ -d "$src" ]; then
-        ln -s "$src" "$target_path"
-        echo "  Link: $project_name -> down.repo.3"
-        repo3=$((repo3 + 1))
-        total=$((total + 1))
-        continue
-    fi
-
-    echo "  WARN: Not found: $project_name"
-    notfound=$((notfound + 1))
+# 1. split 구조 찾기
+for dir in "$WORK_DIR"/down.git.*/*_split; do
+    [ -d "$dir" ] && split_bases["${dir%_split}"]=1 && source_paths["split:$(basename $(dirname $dir)):$(basename $dir)"]="$dir"
 done
 
+# 2. 일반 git 디렉토리 찾기 (split 버전 제외)
+for dir in "$WORK_DIR"/down.git.*; do
+    [ -d "$dir" ] && [[ ! "$dir" =~ _split$ ]] && [[ ! -v split_bases["${dir}_split"] ]] && source_paths["git:$(basename $dir)"]="$dir"
+done
+
+# 3. repo 구조 찾기
+for dir in "$WORK_DIR"/down.repo.*; do
+    [ -d "$dir/$REPO_OBJECTS_PATH" ] && source_paths["repo:$(basename $dir)"]="$dir/$REPO_OBJECTS_PATH"
+done
+##소스가 들어있는 모든 path list 나열
+echo "Found ${#source_paths[@]} source directories"
+
+
+# ==================== .git path에 대한 mirror 링크 생성 ====================
+total=0 skip=0 notfound=0
+
+while read -r project_name; do
+    target_path="$MERGED_DIR/${project_name}.git"
+
+    if [ -L "$target_path" ] || [ -e "$target_path" ]; then
+        ((skip++))
+        continue
+    fi
+
+    mkdir -p "$(dirname "$target_path")"
+    found=0
+
+    for source_key in "${!source_paths[@]}"; do
+        source_path="${source_paths[$source_key]}"
+        source_type="${source_key%%:*}"
+
+        case "$source_type" in
+            split) [ "$project_name" = "common" ] && src="$source_path/.git" || src="$source_path/${project_name}/.git" ;;
+            git) src="$source_path/${project_name}/.git" ;;
+            repo) src="$source_path/${project_name}.git" ;;
+        esac
+
+        if [ -d "$src" ]; then
+            ln -s "$src" "$target_path"
+            echo "  Link: $project_name -> ${source_key#*:}"
+            ((total++))
+            found=1
+            break
+        fi
+    done
+
+    [ $found -eq 0 ] && echo "  WARN: Not found: $project_name" && ((notfound++))
+done < <(grep -oP '<project name="\K[^"]+' "$MANIFEST_PATH")
+
 echo ""
-echo "Done!"
-echo "  Total created: $total"
-echo "  From down.git.1: $git1"
-echo "  From down.repo.2: $repo2"
-echo "  From down.repo.3: $repo3"
-echo "  Skipped (exists): $skip"
-echo "  Not found: $notfound"
+echo "Done! Created: $total, Skipped: $skip, Not found: $notfound"
 
 
