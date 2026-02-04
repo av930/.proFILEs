@@ -174,7 +174,9 @@ fi
 
 
 # Jenkins 빌드 정보 업데이트 (API key 있을 경우)
-[ -n "${JENKINS_API_KEY}" ] && curl -sX POST -u $USER:$API_KEY ${JOB_URL}/$BUILD_NUMBER/configSubmit \
+set -ex
+if [ -n "${JENKINS_API_KEY}" ]; then
+curl -sX POST -u $USER:$JENKINS_API_KEY ${JOB_URL}/$BUILD_NUMBER/configSubmit \
     -F "json={\"displayName\":\"${BUILD_NUMBER}.${DOWN_DIR}\", \"description\":\"${script} ${PARAM1}\"}" > /dev/null
-
+fi
 #rm -f "${LOG_FILE}"
