@@ -1,5 +1,32 @@
 #!/bin/bash -e
 
+: ' #구조설명
+호출방법 AnalyzeGit <jenkins buildlog url>
+exit 0:분석완료, 1:분석불가, 2:분석필요없음, 3:분석필요하나 분석못함
+
+먼저, 빌드로그 다운로드 (타임스탬프 포함)
+Step 0: 빌드 최종 상태 출력 (SUCCESS/FAILURE/ABORTED/UNSTABLE)
+  SUCCESS면 분석 종료
+  ABORTED인 경우 중단 원인 추가 확인
+Step 1: 에러명령에 대한 카테고리 분류
+  Python(sc-infra/script/)경우 (세부 error 카테고리 분류):
+    GERRIT_ABANDONED, GERRIT_WIP, GERRIT_NEGATIVE_REVIEW, GERRIT_CONFLICT, GERRIT_OUTDATED, GERRIT_PATCHSET_NOT_FOUND
+    SSH_CONNECTION_FAILED, SSH_PERMISSION, INCORRECT_GIT_ADDRESS, GIT_REPO_ERROR, TIMEOUT, UNKNOWN
+  Non-Python 경우:
+    GIT_REPO_ERROR, SSH_PERMISSION, TIMEOUT, UNKNOWN
+Step 2: Commit 정보 추출
+  Gerrit change URL 추출 (http://vgit.lge.com/.../+/[번호])
+  Commit Status(ABANDONED 여부), Project, Branch 정보획득
+Step 3: 실제 error가 난 line 출력
+  에러 메시지 상세 내용 표시 (최대 15줄)
+Step 4: 주변 error log 출력
+  ERROR발생주변 컨텍스트 표시 (전 5줄, 후 10줄)
+  실패 지점을 빨간색으로 하이라이트
+후처리
+  미검출 에러는 별도 로그 파일에 기록
+  빌드로그 파일 삭제
+'
+
 # 터미널 색상 정의, URL 파라미터 정리 (공백제거, 마지막 / 제거)
 RED='\033[0;31m' GREEN='\033[0;32m' YELLOW='\033[1;33m' BLUE='\033[0;34m' NC='\033[0m'
 line="------------------------------------------------------------------------------------------------------"
@@ -9,20 +36,11 @@ log() { echo -e "${!1}$2${NC}"; }
 PARAM1="${1}"
 PARAM1="${PARAM1%/}"
 
-# Jenkins 서버 번호 추출 (jenkins03, jenkins06 등)
-[[ ${PARAM1} =~ jenkins([0-9]+) ]] || { echo "Invalid job URL"; exit 1; }
-JEN_NUM="KEY_JENKINS${BASH_REMATCH[1]}"
-JENKINS_API_KEYS="${!JEN_NUM}"
 
-# Jenkins 서버 URL 검증 및 서버명 추출
+# Jenkins 서버 URL 검증
 [ -z "${PARAM1}" ] && { log RED "Error: URL required"; exit 1; }
-if [[ "${PARAM1}" =~ ^https?://[^/]+/(jenkins[0-9]+)/.*job/.*/[0-9]+$ ]]; then
-    JENKINS_SERVER="${BASH_REMATCH[1]}"
-else
-    log RED "Invalid URL format"; exit 1
-fi
-JENKINS_API_KEY="${JENKINS_API_KEYS[${JENKINS_SERVER}]}"
-[ -z "${JENKINS_API_KEY}" ] && bar YELLOW "No API key for ${JENKINS_SERVER}"
+[[ "${PARAM1}" =~ ^https?://[^/]+/(jenkins[0-9]+)/.*job/.*/[0-9]+$ ]] || log RED "Invalid URL format"
+
 
 # 빌드 번호 추출
 [[ ${PARAM1} =~ /([0-9]+)/?$ ]] && BUILD_NUMBER="${BASH_REMATCH[1]}" || { log RED "Cannot extract build number"; exit 1; }
@@ -36,18 +54,25 @@ log GREEN "Downloaded $(wc -l < "${LOG_FILE}" | tr -d ' ') lines"
 
 log BLUE "========================================\nGit/Gerrit/Repo Build Error Analysis\n========================================"
 
+
 ## Step 0: 빌드 결과 출력 (SUCCESS면 분석 불필요)
 bar YELLOW "Step 0: Build result"
-BUILD_RESULT=$(grep -E "Finished: (SUCCESS|FAILURE|ABORTED|UNSTABLE)" "${LOG_FILE}" | tail -1)
+# Jenkins API를 통해 빌드 결과 가져오기
+BUILD_RESULT=$(curl -s -k "${PARAM1}/api/json" | grep -oP '"result":\s*"\K[^"]+' || echo "UNKNOWN")
 echo "Status: ${BUILD_RESULT}"
 
-# ABORTED 원인 확인
+# SUCCESS면 분석 종료
+[[ "${BUILD_RESULT}" =~ SUCCESS ]] && { bar GREEN "Success - no analysis"; rm -f "${LOG_FILE}"; exit 2; }
+
+# ABORTED 원인 확인 및 조기 종료
 if [[ "${BUILD_RESULT}" =~ ABORTED ]]; then
     ABORT_REASON=$(grep -E "(timed out|Aborted by user|Terminated|Killed)" "${LOG_FILE}" | tail -1)
-    [ -n "${ABORT_REASON}" ] && log RED "Abort reason: ${ABORT_REASON}"
+    [ -n "${ABORT_REASON}" ] && log YELLOW "Abort reason: ${ABORT_REASON}"
+    bar YELLOW "Build was aborted - no error analysis needed"
+    rm -f "${LOG_FILE}"
+    exit 2
 fi
 
-[[ "${BUILD_RESULT}" =~ SUCCESS ]] && { bar GREEN "Success - no analysis"; rm -f "${LOG_FILE}"; exit 0; }
 log RED "Failed"
 
 
@@ -73,8 +98,18 @@ if [ -n "${PYTHON_SCRIPT}" ]; then
         ERROR_CATEGORY="GERRIT_NEGATIVE_REVIEW"
     elif grep -q "Conflict.*commit" "${LOG_FILE}"; then
         ERROR_CATEGORY="GERRIT_CONFLICT"
+    elif grep -iq "outdated.*rebase\|rebase.*outdated" "${LOG_FILE}"; then
+        ERROR_CATEGORY="GERRIT_OUTDATED"
+    elif grep -q -iE "no such patch set|patch set.*not found" "${LOG_FILE}"; then
+        ERROR_CATEGORY="GERRIT_PATCHSET_NOT_FOUND"
+    elif grep -q -iE "Could not read from remote repository" "${LOG_FILE}"; then
+        ERROR_CATEGORY="SSH_CONNECTION_FAILED"
     elif grep -q "Permission denied\|Host key verification" "${LOG_FILE}"; then
         ERROR_CATEGORY="SSH_PERMISSION"
+    elif grep -q -iE "unable to access.*git.*(503|504|404|500)" "${LOG_FILE}"; then
+        ERROR_CATEGORY="INCORRECT_GIT_ADDRESS"
+    elif grep -q -iE "(git clone|git fetch|repo init|repo sync).*(error|fatal)" "${LOG_FILE}"; then
+        ERROR_CATEGORY="GIT_REPO_ERROR"
     elif grep -iq "timeout" "${LOG_FILE}"; then
         ERROR_CATEGORY="TIMEOUT"
     fi
@@ -85,9 +120,9 @@ else
     # Python 스크립트 실패가 아닌 경우 기존 분류
     log YELLOW "Root Cause: Non-Python Error"
 
-    if grep -q -iE "(git clone|git fetch|repo sync).*(error|fatal|failed)" "${LOG_FILE}"; then
+    if grep -q -iE "(git clone|git fetch|repo sync|repo init).*(error|fatal|failed)" "${LOG_FILE}"; then
         ERROR_CATEGORY="GIT_REPO_ERROR"
-    elif grep -q -iE "(Permission denied|Host key verification|Connection refused)" "${LOG_FILE}"; then
+    elif grep -q -iE "(Could not read from remote repository|Permission denied|Host key verification|Connection refused)" "${LOG_FILE}"; then
         ERROR_CATEGORY="SSH_PERMISSION"
     elif grep -q -iE "(timed out|timeout|TIMEOUT)" "${LOG_FILE}"; then
         ERROR_CATEGORY="TIMEOUT"
@@ -194,37 +229,25 @@ if [ "$UNDETECTED_FLAG" -eq 1 ]; then
     } >> "${UNDETECTED_LOG}"
 
     log YELLOW "Undetected error logged to: ${UNDETECTED_LOG}"
+    exit 3
 fi
 
 ## Step 4: 실패 지점 컨텍스트
 bar YELLOW "Step 4: Failure context"
 
 # exception_handler 호출 지점 찾기
-EXCEPTION_LINE=$(grep -n "exception_handler" "${LOG_FILE}" | grep -v "trap" | tail -1)
-if [ -n "${EXCEPTION_LINE}" ]; then
-    line_num=$(echo "${EXCEPTION_LINE}" | cut -d: -f1)
-    log YELLOW "=== Exception at line ${line_num} ==="
-    start=$((line_num-10))
-    end=$((line_num+5))
+# ERROR 또는 FATAL 키워드 주변 컨텍스트
+ERROR_LINE=$(grep -n -Ei "(ERROR|FATAL)" "${LOG_FILE}" | tail -1)
+if [ -n "${ERROR_LINE}" ]; then
+    line_num=$(echo "${ERROR_LINE}" | cut -d: -f1)
+    log YELLOW "=== Error at line ${line_num} ==="
+    start=$((line_num-5))
+    end=$((line_num+10))
     sed -n "${start},${end}p" "${LOG_FILE}" | awk -v target=$((line_num-start+1)) -v red="${RED}" -v nc="${NC}" 'NR==target {print red $0 nc} NR!=target {print}'
     echo ""
-else
-    # ERROR 또는 FATAL 키워드 주변 컨텍스트
-    ERROR_LINE=$(grep -n -E "(ERROR:|FATAL:| error | fatal )" "${LOG_FILE}" | grep -v "libgpg-error" | tail -1)
-    if [ -n "${ERROR_LINE}" ]; then
-        line_num=$(echo "${ERROR_LINE}" | cut -d: -f1)
-        log YELLOW "=== Error at line ${line_num} ==="
-        start=$((line_num-5))
-        end=$((line_num+10))
-        sed -n "${start},${end}p" "${LOG_FILE}" | awk -v target=$((line_num-start+1)) -v red="${RED}" -v nc="${NC}" 'NR==target {print red $0 nc} NR!=target {print}'
-        echo ""
-    fi
 fi
 
 
-# Jenkins 빌드 정보 업데이트 (API key 있을 경우)
-[ -n "${JENKINS_API_KEY}" ] && curl -sX POST -u $USER:$API_KEY ${JOB_URL}/$BUILD_NUMBER/configSubmit \
-    -F "json={\"displayName\":\"${BUILD_NUMBER}.${DOWN_DIR}\", \"description\":\"${script} ${PARAM1}\"}" > /dev/null
-
 rm -f "${LOG_FILE}"
 log BLUE "Analysis complete!"
+exit 0

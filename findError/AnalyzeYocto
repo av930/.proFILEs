@@ -9,20 +9,9 @@ log() { echo -e "${!1}$2${NC}"; }
 PARAM1=${PARAM1:=$1}
 PARAM1="${PARAM1%/}"
 
-# Jenkins 서버 번호 추출 (jenkins03, jenkins06 등)
-[[ ${PARAM1} =~ jenkins([0-9]+) ]] || { echo "Invalid job URL"; exit 1; }
-JEN_NUM="KEY_JENKINS${BASH_REMATCH[1]}"
-JENKINS_API_KEYS="${!JEN_NUM}"
-
 # Jenkins 서버 URL 검증 및 서버명 추출
 [ -z "${PARAM1}" ] && { log RED "Error: URL required"; exit 1; }
-if [[ "${PARAM1}" =~ ^https?://[^/]+/(jenkins[0-9]+)/.*job/.*/[0-9]+$ ]]; then
-    JENKINS_SERVER="${BASH_REMATCH[1]}"
-else
-    log RED "Invalid URL format"; exit 1
-fi
-JENKINS_API_KEY="${JENKINS_API_KEYS[${JENKINS_SERVER}]}"
-[ -z "${JENKINS_API_KEY}" ] && bar YELLOW "No API key for ${JENKINS_SERVER}"
+[[ "${PARAM1}" =~ ^https?://[^/]+/(jenkins[0-9]+)/.*job/.*/[0-9]+$ ]] || { log RED "Invalid URL format"; exit 1; }
 
 
 ## 빌드 로그 다운로드 (타임스탬프 포함)
@@ -140,7 +129,7 @@ else
     fi
 fi
 
-set -x
+
 ## Step 4: 핵심 실패 지점 (ERROR 발생 라인의 앞5줄, 뒤 10줄 컨텍스트 출력)
 bar YELLOW "Step 4: Failure points"
 FAILURE_POINT=$(grep -nE "(ERROR: Task.*failed|ERROR: Function failed|returned non-zero exit status|Build timed out|Aborted by)" "${LOG_FILE}" | grep -v "\[PostBuildScript\]" | tail -5)
@@ -167,16 +156,38 @@ ERROR_LOG_FILES=$(grep -oP 'ERROR: Logfile of failure stored in: \K/.+' "${LOG_F
 if [ -n "$ERROR_LOG_FILES" ]; then
     for filepath in ${ERROR_LOG_FILES}; do
         if [ -f "$filepath" ]; then
+           log YELLOW "Log file: ${filepath}"
            tail -n 10  $filepath
+           echo ""
         fi
     done
+else
+    # timeout으로 인해 ABORTED된 경우, Step 3에서 찾은 recipe의 로그 확인
+    if [ -n "${FETCH_RECIPE}" ] && grep -q "Build timed out.*Marking the build as aborted" "${LOG_FILE}"; then
+        log YELLOW "Build timed out - checking do_fetch log for ${FETCH_RECIPE}"
+
+        # FETCH_RECIPE는 "libsync-4.1-r0" 형태, 로그에서는 "libsync_4.1.bb" 형태로 검색
+        PKG_NAME=$(echo "${FETCH_RECIPE}" | sed 's/-r[0-9]$//' | sed 's/-/_/')
+
+        # Recipe의 .bb 파일 경로를 로그에서 찾기
+        RECIPE_BB_PATH=$(grep "${PKG_NAME}\.bb:do_fetch" "${LOG_FILE}" | grep -oE '/data001/[^[:space:]]+\.bb' | head -1)
+
+        if [ -n "${RECIPE_BB_PATH}" ]; then
+            # Yocto 로그 파일 경로 찾기: build/tmp*/work/.../temp/log.do_fetch
+            BUILD_DIR=${RECIPE_BB_PATH%/poky/*}/build
+            LOG_PATH=$(find "${BUILD_DIR}/tmp"*/work -path "*/${PKG_NAME_ONLY}*/temp/log.do_fetch*" 2>/dev/null | head -1)
+
+            if [ -f "${LOG_PATH}" ];
+            then log YELLOW "Log: ${LOG_PATH}";  tail -n 10 "${LOG_PATH}" | sed 's/^/  /';  echo ""
+            else echo "  Log file not found (build may be already removed)"
+            fi
+        else
+            echo "  Recipe path not found in log"
+        fi
+    else
+        echo "Maybe aborted by System or User"
+    fi
 fi
 
 
-# Jenkins 빌드 정보 업데이트 (API key 있을 경우)
-set -ex
-if [ -n "${JENKINS_API_KEY}" ]; then
-curl -sX POST -u $USER:$JENKINS_API_KEY ${JOB_URL}/$BUILD_NUMBER/configSubmit \
-    -F "json={\"displayName\":\"${BUILD_NUMBER}.${DOWN_DIR}\", \"description\":\"${script} ${PARAM1}\"}" > /dev/null
-fi
-#rm -f "${LOG_FILE}"
+rm -f "${LOG_FILE}"
