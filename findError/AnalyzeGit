@@ -92,6 +92,8 @@ if [ -n "${PYTHON_SCRIPT}" ]; then
     ERROR_CATEGORY="UNKNOWN"
     if grep -q "status.*abandoned" "${LOG_FILE}"; then
         ERROR_CATEGORY="GERRIT_ABANDONED"
+    elif grep -q "It does not need to verify" "${LOG_FILE}"; then
+        ERROR_CATEGORY="GERRIT_MERGED"
     elif grep -q "work in progress" "${LOG_FILE}"; then
         ERROR_CATEGORY="GERRIT_WIP"
     elif grep -q "negative reviews" "${LOG_FILE}"; then
@@ -139,21 +141,21 @@ fi
 ## Step 2: Gerrit Change 정보
 bar YELLOW "Step 2: Gerrit change information"
 
-# Gerrit change URL 추출
-GERRIT_URL=$(grep -oE "http://vgit.lge.com/[^/]+/c/[^/]+/\+/[0-9]+" "${LOG_FILE}" | head -1)
+# Gerrit change URL 추출 (http://vgit.lge.com/.../.../+/[번호] 형태)
+GERRIT_URL=$(grep -oE "http://vgit.lge.com/[^/]+/c/.+/\+/[0-9]+" "${LOG_FILE}" | head -1)
 if [ -n "${GERRIT_URL}" ]; then
     echo "Change URL: ${GERRIT_URL}"
 
     # Abandoned 상태 확인
-    ABANDONED_MSG=$(grep -A 2 "\[Error\].*Permalink" "${LOG_FILE}" | grep "status.*abandoned")
+    ABANDONED_MSG=$(grep -A 2 "\[Error\].*Permalink" "${LOG_FILE}" | grep "status.*abandoned" || true)
     if [ -n "${ABANDONED_MSG}" ]; then
         log RED "  Status: ABANDONED (verify build does not operate)"
         echo ""
     fi
 
     # Project, Branch 정보
-    PROJECT=$(grep -oP 'git project: \K[^\s]+' "${LOG_FILE}" | head -1)
-    BRANCH=$(grep -oP 'git branch: \K[^\s]+' "${LOG_FILE}" | head -1)
+    PROJECT=$(grep -oP 'git project: \K[^\s]+' "${LOG_FILE}" | head -1 || true)
+    BRANCH=$(grep -oP 'git branch: \K[^\s]+' "${LOG_FILE}" | head -1 || true)
     [ -n "${PROJECT}" ] && echo "  Project: ${PROJECT}"
     [ -n "${BRANCH}" ] && echo "  Branch: ${BRANCH}"
     echo ""
@@ -172,12 +174,18 @@ if [ -n "${PYTHON_SCRIPT}" ]; then
 
     # Gerrit 관련 에러인 경우 Change URL 출력
     if [[ "${ERROR_CATEGORY}" =~ ^GERRIT ]]; then
-        GERRIT_CHANGE=$(grep -oE "http://vgit.lge.com/[^/]+/c/[^/]+/\+/[0-9]+" "${LOG_FILE}" | head -1)
+        GERRIT_CHANGE=$(grep -oE "http://vgit.lge.com/.*/\+/[0-9]+" "${LOG_FILE}" | head -1)
         [ -n "${GERRIT_CHANGE}" ] && echo "Gerrit Change: ${GERRIT_CHANGE}"
     fi
 
-    # 에러 메시지 출력
-    if ERROR_MSG=$(grep -A 5 "\[Error\]" "${LOG_FILE}" | head -15); [ -n "${ERROR_MSG}" ]; then
+    # 에러 메시지 출력 (GERRIT 관련 에러는 항상 표시)
+    if [[ "${ERROR_CATEGORY}" =~ ^GERRIT ]]; then
+        ERROR_MSG=$(grep -A 3 "\[Error\]" "${LOG_FILE}" | head -10)
+        if [ -n "${ERROR_MSG}" ]; then
+            echo -e "\n${RED}Error Message:${NC}"
+            echo "${ERROR_MSG}"
+        fi
+    elif ERROR_MSG=$(grep -A 5 "\[Error\]" "${LOG_FILE}" | head -15); [ -n "${ERROR_MSG}" ]; then
         echo -e "\n${RED}Error Message:${NC}"
         echo "${ERROR_MSG}"
     fi
@@ -236,14 +244,63 @@ fi
 bar YELLOW "Step 4: Failure context"
 
 # exception_handler 호출 지점 찾기
-# ERROR 또는 FATAL 키워드 주변 컨텍스트
-ERROR_LINE=$(grep -n -Ei "(ERROR|FATAL)" "${LOG_FILE}" | tail -1)
+# 우선순위: [Error] in python 메시지 > ERROR/FATAL 키워드 in git/repo
+ERROR_LINE=$(grep -n "\[Error\]" "${LOG_FILE}" | tail -1)
+[ -z "${ERROR_LINE}" ] && ERROR_LINE=$(grep -n -Ei "ERROR|FATAL" "${LOG_FILE}" | grep -v "jenkins" | tail -1)
+
 if [ -n "${ERROR_LINE}" ]; then
     line_num=$(echo "${ERROR_LINE}" | cut -d: -f1)
     log YELLOW "=== Error at line ${line_num} ==="
     start=$((line_num-5))
     end=$((line_num+10))
-    sed -n "${start},${end}p" "${LOG_FILE}" | awk -v target=$((line_num-start+1)) -v red="${RED}" -v nc="${NC}" 'NR==target {print red $0 nc} NR!=target {print}'
+
+    # 각 라인을 순회하면서 JSON이면 jq로 포맷팅, 아니면 그대로 출력
+    line_count=0
+    while IFS= read -r line; do
+        line_count=$((line_count+1))
+
+        # 타임스탬프 제거 후 JSON 데이터 추출
+        json_content=$(echo "$line" | grep -oP '^\d{2}:\d{2}:\d{2}\s+\K\{.*' || true)
+
+        # JSON 데이터 포맷팅
+        if [ -z "$json_content" ] || echo "$json_content" | grep -q '"type":"stats"'; then
+            echo "$line"
+        else
+            # Gerrit change JSON 포맷팅
+            printf "owner:\n"
+            echo "$json_content" | jq -cC '.owner'
+
+            echo "commitMessage:"
+            commit_msg=$(echo "$json_content" | jq -r '.commitMessage // ""')
+            echo -e "${GREEN}${commit_msg}${NC}"
+
+            echo "$json_content" | jq -C '{
+              project, branch, id, number, subject, url, open, status,
+              createdOn: (.createdOn | strftime("%Y-%m-%d %H:%M:%S")),
+              lastUpdated: (.lastUpdated | strftime("%Y-%m-%d %H:%M:%S"))
+            }'
+
+           # 2. 상세 정보 (각 항목을 1줄씩 출력)
+            printf "currentPatchSet:\n"
+            echo "$json_content" | jq -cC '.currentPatchSet | {number, revision, ref, createdOn, kind}'
+            echo "$json_content" | jq -cC '.currentPatchSet.uploader'
+            echo "$json_content" | jq -cC '.currentPatchSet.author'
+            printf "currentPatchSet> approvals[]:\n"
+            echo "$json_content" | jq -cC '.currentPatchSet.approvals[]?'
+
+            printf "dependsOn:\n"
+            echo "$json_content" | jq -cC '.dependsOn[]?'
+
+            printf "submitRecords> status: "
+            echo "$json_content" | jq -cC '.submitRecords[].status'
+            printf "submitRecords> labels[]:\n"
+            echo "$json_content" | jq -cC '.submitRecords[].labels[]?'
+
+            printf "allReviewers:\n"
+            echo "$json_content" | jq -cC '.allReviewers[]?'
+        fi
+    done < <(sed -n "${start},${end}p" "${LOG_FILE}")
+
     echo ""
 fi
 
