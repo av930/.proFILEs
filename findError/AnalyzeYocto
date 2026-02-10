@@ -4,7 +4,7 @@
 RED='\033[0;31m' GREEN='\033[0;32m' YELLOW='\033[1;33m' BLUE='\033[0;34m' NC='\033[0m'
 line="------------------------------------------------------------------------------------------------------"
 bar() { printf "\n\n${!1}%s%s ${NC}\n" "${2:+[$2] }" "${line:(${2:+3}+${#2})}" ;}
-log() { echo -e "${!1}$2${NC}"; }
+log() { echo -e "${!1} $2 ${NC}"; }
 
 PARAM1=${PARAM1:=$1}
 PARAM1="${PARAM1%/}"
@@ -16,7 +16,7 @@ PARAM1="${PARAM1%/}"
 
 ## 빌드 로그 다운로드 (타임스탬프 포함)
 LOG_FILE="/tmp/console_${BUILD_NUMBER}.txt"
-log BLUE "Processing: ${PARAM1}"
+log BLUE "Processing: ${PARAM1}/console"
 wget --no-check-certificate -q -O "${LOG_FILE}" "${PARAM1}/timestamps/?time=HH:mm:ss&timeZone=GMT+9&appendLog" || { bar RED "Download failed"; exit 1; }
 [ -s "${LOG_FILE}" ] || { bar RED "Empty log"; exit 1; }
 log GREEN "Downloaded $(wc -l < "${LOG_FILE}" | tr -d ' ') lines"
