@@ -107,7 +107,17 @@ for idx in "${!command_blocks[@]}"; do
 
     JOB_DIR="${JOBDIR_PREFIX}.${JOB_ID}"
     LOG_FILE="$(pwd)/${LOG_DIR}/downcmd_${JOB_ID}.log"
-    JOB_COLOR="${JOB_COLORS[$JOB_ID]:-\033[0m]}"
+    # JOB_COLOR="${JOB_COLORS[$JOB_ID]:-\033[0m}"
+    # Color rotation (1~4)
+    color_idx=$(( (JOB_ID - 1) % 4 + 1 ))
+
+    case $color_idx in
+        1) JOB_COLOR='\033[0;32m' ;;
+        2) JOB_COLOR='\033[0;34m' ;;
+        3) JOB_COLOR='\033[0;33m' ;;
+        4) JOB_COLOR='\033[0;35m' ;;
+        *) JOB_COLOR='\033[0m' ;;
+    esac
 
     # 작업 디렉토리 생성/이동
     mkdir -p "$JOB_DIR" && pushd "$JOB_DIR" > /dev/null
@@ -163,17 +173,21 @@ for idx in "${!command_blocks[@]}"; do
                 mkdir -p "$repo_mirror_base"
                 # repo init --mirror로 실행
                 mirror_init_cmd="${actual_cmd//repo init /repo init --mirror }"
-                # --depth 옵션 제거 (첫 번째 repo init만)
-                mirror_init_cmd="$(echo "$mirror_init_cmd" | sed -E '0,/repo init/s/(^|[[:space:]])--depth(=[0-9]+|[[:space:]]+[0-9]+)([[:space:]]|$)/ /g' | sed -E 's/  +/ /g')"
+                # --depth 옵션 제거 (sed delimiter |)
+                mirror_init_cmd="$(echo "$mirror_init_cmd" | sed -E '0,/repo init/s|(^|[[:space:]])--depth(=[0-9]+|[[:space:]]+[0-9]+)([[:space:]]|$)| |g' | sed -E 's|  +| |g')"
                 # mirror에서 repo sync까지 실행 (첫 번째 repo sync까지만)
-                mirror_sync_cmd="$(echo "$mirror_init_cmd" | sed -n '1{s/\(.*repo sync[^;]*\).*/\1/p}')"
+                mirror_sync_cmd="$(echo "$mirror_init_cmd" | sed -n '1{s|\(.*repo sync[^;]*\).*|\1|p}')"
+                # mirror_sync_cmd가 공백일 경우 (repo sync가 없는 경우), repo init --mirror 후 repo sync -cj8 실행
+                if [ -z "$mirror_sync_cmd" ]; then
+                    mirror_sync_cmd="${mirror_init_cmd} && repo sync -cj8"
+                fi
                 actual_cmd="(cd \"$repo_mirror_base\" && $mirror_sync_cmd) && $actual_cmd"
             fi
 
             # 미러존재시만 --reference 옵션 추가 (작업 디렉토리의 첫 번째 repo init에만)
             if [[ -d "$repo_mirror_base/.repo" && ! "$actual_cmd" =~ --reference ]]; then
-                # 첫 번째 repo init에만 --reference 추가
-                actual_cmd="$(echo "$actual_cmd" | sed '0,/repo init /s/repo init /repo init --reference='"$repo_mirror_base"' /')"
+                # 첫 번째 repo init에만 --reference 추가 (경로 내 / 충돌 방지를 위해 구분자 | 사용)
+                actual_cmd="$(echo "$actual_cmd" | sed '0,/repo init /s|repo init |repo init --reference='"$repo_mirror_base"' |')"
             fi
     esac
 
@@ -204,7 +218,7 @@ MANIFEST_FIX_EOF
         # "repo init ... ; repo sync ..." → "repo init ... ; ./fix_manifest.sh ... && repo sync ..."
         # START_DIR 기준 절대 경로
         fix_script_path="${START_DIR}/${JOB_DIR}/fix_manifest.sh"
-        actual_cmd=$(echo "$actual_cmd" | sed "s~repo sync~${fix_script_path} '${manifest_file}' ; repo sync~g")
+        actual_cmd=$(echo "$actual_cmd" | sed "s|repo sync|${fix_script_path} '${manifest_file}' ; repo sync|g")
     fi
 
 
