@@ -126,15 +126,26 @@ for idx in "${!command_blocks[@]}"; do
     echo -e "${JOB_COLOR}[${JOB_ID}.CMD-ORI] ${cmd_block// && / && \\n}${NC}" | sed 's/ ; / ;\n/g'
     actual_cmd="$cmd_block"
 
+    # git clone 정보 추출 (branch)
+    git_branch=""
+    if [ "$cmd_type" == "git_clone" ]; then
+        if [[ "$cmd_block" =~ -b[[:space:]]+([^[:space:]]+) ]]; then
+            git_branch="${BASH_REMATCH[1]}"
+        fi
+    fi
+
     # MIRROR_PATH 및 명령어 타입에 따른 처리
     case "${MIRROR_PATH:+mirror}~${cmd_type}" in
         # MIRROR_PATH가 없고 git clone 명령인 경우 - 재실행시 git pull로 처리
         ~git_clone)
             clone_dir=$(find . -maxdepth 2 -type d -name .git -exec dirname {} \; 2>/dev/null | head -1)
-            [ -n "$clone_dir" ] && cd "$clone_dir" && actual_cmd="git pull"
+            if [ -n "$clone_dir" ]; then
+                actual_cmd="cd \"$clone_dir\" && git pull origin \"$git_branch\""
+            fi
+            ;;
 
         # MIRROR_PATH가 설정되고 git clone 명령인 경우
-        ;; mirror~git_clone)
+        mirror~git_clone)
             mirror_git_dir="$MIRROR_PATH/down.git.${JOB_ID}"
 
             # 이미 clone된 디렉토리가 있는지 확인
@@ -143,7 +154,7 @@ for idx in "${!command_blocks[@]}"; do
             if [ -n "$clone_dir" ]; then
                 # 이미 clone되어 있으면 git pull로 업데이트
                 echo -e "${JOB_COLOR}[${JOB_ID}.MIRROR-USE] Repository already exists. Updating with git pull${NC}"
-                actual_cmd="cd \"$clone_dir\" && git pull"
+                actual_cmd="cd \"$clone_dir\" && git pull origin \"$git_branch\""
             else
                 # clone이 안되어 있으면 mirror 사용
                 git_clone_with_ref="${actual_cmd/git clone /git clone --reference \"$mirror_git_dir\" }"
