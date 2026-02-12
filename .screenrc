@@ -203,8 +203,8 @@ bind r eval "source $HOME/.screenrc" "echo '.screenrc reloaded!'"
 #bind , stuff "screen^M" #send command 'screen' to current screen session
 #bind , eval "chdir $(pwd)" "screen" #send command 'screen' to current screen session
 #bind , 'screen' #send command 'screen' to current screen session
-bind , exec /data001/vc.integrator/.proFILEs/_screen_insert.sh
-#bind , eval "stuff 'cd . ; /data001/vc.integrator/.proFILEs/_screen_insert.sh^M'" #실제 terminal에 명령을 입력하는 방식
+bind , exec /data001/vc.integrator/.proFILEs/screen/_screen_insert.sh
+#bind , eval "stuff 'cd . ; /data001/vc.integrator/.proFILEs/screen/_screen_insert.sh^M'" #실제 terminal에 명령을 입력하는 방식
 bind . eval 'kill' 'remove'
 
 ## window split horizontal
