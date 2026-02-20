@@ -32,6 +32,11 @@ if [ -z "$INPUT_FILE" ] || [ ! -f "$INPUT_FILE" ]; then
 
 	cat << EOF
 	ex) down_src.sh down.list .mirror
+        git clone -b tsu_26my_cpl2_migration_260211 ssh://vc.integrator@vgit.lge.com:29448/honda/linux/build_tsu
+
+        repo init -u ssh://vc.integrator@vgit.lge.com:29448/manifest_honda_tsu -b tsu_26my_cpl2_migration_260211 -m default.xml
+        repo sync -j4
+
 	ex) down_src.sh down.list /path/to/mirror
 	1. down.list에는 빈줄로 구분된 download 명령을 기록한다.
 	2. download 명령은 여러줄도 가능하지만 동시 실행은 최대 3개까지 가능하다.
@@ -126,11 +131,24 @@ for idx in "${!command_blocks[@]}"; do
     echo -e "${JOB_COLOR}[${JOB_ID}.CMD-ORI] ${cmd_block// && / && \\n}${NC}" | sed 's/ ; / ;\n/g'
     actual_cmd="$cmd_block"
 
-    # git clone 정보 추출 (branch)
+    # git clone 정보 추출 (branch, expected_dir, clone_dir)
     git_branch=""
+    expected_dir=""
+    clone_dir=""
+    git_pull_cmd=""
+
     if [ "$cmd_type" == "git_clone" ]; then
         if [[ "$cmd_block" =~ -b[[:space:]]+([^[:space:]]+) ]]; then
             git_branch="${BASH_REMATCH[1]}"
+        fi
+        # Extract directory name from git URL
+        # Example: https://.../sa525m-le-3-1_amss_standard_oem.git -> sa525m-le-3-1_amss_standard_oem
+        [[ "$cmd_block" =~ /([^/[:space:]]+)(\.git)?([[:space:]]|$) ]] && expected_dir="${BASH_REMATCH[1]}"
+
+        # Check if directory already exists and prepare git pull command
+        if [ -n "$expected_dir" ] && [ -d "./$expected_dir/.git" ]; then
+            clone_dir="./$expected_dir"
+            git_pull_cmd="cd \"$clone_dir\" && git pull origin \"$git_branch\""
         fi
     fi
 
@@ -138,9 +156,8 @@ for idx in "${!command_blocks[@]}"; do
     case "${MIRROR_PATH:+mirror}~${cmd_type}" in
         # MIRROR_PATH가 없고 git clone 명령인 경우 - 재실행시 git pull로 처리
         ~git_clone)
-            clone_dir=$(find . -maxdepth 2 -type d -name .git -exec dirname {} \; 2>/dev/null | head -1)
-            if [ -n "$clone_dir" ]; then
-                actual_cmd="cd \"$clone_dir\" && git pull origin \"$git_branch\""
+            if [ -n "$git_pull_cmd" ]; then
+                actual_cmd="$git_pull_cmd"
             fi
             ;;
 
@@ -148,13 +165,10 @@ for idx in "${!command_blocks[@]}"; do
         mirror~git_clone)
             mirror_git_dir="$MIRROR_PATH/down.git.${JOB_ID}"
 
-            # 이미 clone된 디렉토리가 있는지 확인
-            clone_dir=$(find . -maxdepth 2 -type d -name .git -exec dirname {} \; 2>/dev/null | head -1)
-
-            if [ -n "$clone_dir" ]; then
+            if [ -n "$git_pull_cmd" ]; then
                 # 이미 clone되어 있으면 git pull로 업데이트
                 echo -e "${JOB_COLOR}[${JOB_ID}.MIRROR-USE] Repository already exists. Updating with git pull${NC}"
-                actual_cmd="cd \"$clone_dir\" && git pull origin \"$git_branch\""
+                actual_cmd="$git_pull_cmd"
             else
                 # clone이 안되어 있으면 mirror 사용
                 git_clone_with_ref="${actual_cmd/git clone /git clone --reference \"$mirror_git_dir\" }"
