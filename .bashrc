@@ -121,13 +121,13 @@ function _hisall(){
 # alias byobu='byobu -U $*'
 alias sc$ECHO='_bar "Usage"; printf "
     screen -U -c ${proFILEdir}/.screenrc -RR
-    screen -U -dR -c ${proFILEdir}/.screenrc
     screen -ls | tail -n +2 | head -n -2 | awk {print $1} | xargs -I {} screen -S {} -X quit
     screen -U -R -c ${proFILEdir}/.screenrc_spilt
 "'
 alias scfile='_bar "log save to $HOME/screen.file.log"; screen -X hardcopy -h ~/screen.file.log'
 alias sc${TAG}='screen -ls'
-alias sc="screen -U -RR -c ~/.proFILEs/.screenrc"
+alias sc="screen -U -RR -c ${proFILEdir}/.screenrc"
+alias scr="screen -U -dR -c ${proFILEdir}/.screenrc"
 alias scx='_bar "kill all screen session"; _killscreen'
 function _killscreen(){
     if [ "$1" != "" ]; then  #kill only one
