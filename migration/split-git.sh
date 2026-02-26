@@ -38,7 +38,7 @@ if (( "${#PATH_GIT[@]}" == 0 )); then
 	SA525M_aop SA525M_apps SA525M_apps_kernel SA525M_boot SA525M_btfm_hmt SA525M_btfm_hsp SA525M_btfm_rome SA525M_cpucp SA525M_modem SA525M_tz SA525M_tz_apps SA525M_wlan_hmt SA525M_wlan_hsp SA525M_wlan_rome
 
 	#remote에 push를 하지 않을 경우 (mani로 현재 dir를 remote로 하여 생성만 하는경우), REMOTE_ADDR 생략가능
-	CMD=mani \
+	CMD=mani CMD_GO=true\
 	WORK_DIR=/data001/vc.integrator/mirror/down-down/down.git.1/sa525m-le-3-1_amss_standard_oem_split \
 	REMOTE_NAME=devops_test \
 	REMOTE_BNCH=refs/heads/master \
@@ -55,26 +55,29 @@ if ! command -v git-filter-repo &> /dev/null; then
 fi
 
 
-
-
 PATH_CURRENT="${WORK_DIR%/}" #split을 진행할 dir
 [ ! -d "$PATH_CURRENT/.git" ] && { echo "$0 must be run at .git repository"; exit 1; }
 
 #################################### push logic ####################################
 ## remote 정보가 있으면 push작업을 진행한다. 이경우 split 작업은 skip한다.
+case ${CMD::1} in
+K)   CMD=${CMD:1}; go_flag=true
+;;*) go_flag=false
+esac
+
+
 if [ ! "$CMD" = "split" ] && [ -n "${REMOTE_NAME}" ]; then
 
 	# 실행할 명령어를 함수로 정의
 	push_to_remote() {
 		local dir="$1" cmd="$2"
+		pushd "${dir:-.}" >/dev/null
+		if ${go_flag} ; then set +e; fi
 		case $cmd in
  			push)
-				pushd "$dir"
 				echo "git push $REMOTE_NAME HEAD:${REMOTE_BNCH} ${PUSH_OPT}"
 				git push $REMOTE_NAME HEAD:${REMOTE_BNCH} ${PUSH_OPT}
-				popd
 			;;verify)
-				pushd "$dir" >/dev/null
 				##존재하면 삭제하고 다시 등록, 존재하지 않으면 새로등록
 				git remote get-url $REMOTE_NAME &> /dev/null && { git remote rm $REMOTE_NAME; git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}; } || git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}
 				printf "\e[0;33m check remote is working \e[0m:" ##리모트가 동작하는지 확인
@@ -82,43 +85,43 @@ if [ ! "$CMD" = "split" ] && [ -n "${REMOTE_NAME}" ]; then
 				printf "\e[0;33m check remote branch is existed \e[0m:" ##브랜치가 존재하는지 확인
 				git ls-remote --exit-code $REMOTE_NAME $REMOTE_BNCH > /dev/null && echo "[OKAY]" || echo "[WARN] not existed - remote branch"
 				echo "[CMD] git push $REMOTE_NAME HEAD:${REMOTE_BNCH} ${PUSH_OPT}"
-				popd >/dev/null
 			;;custom)
-				pushd "$dir" >/dev/null
 				echo ${PUSH_OPT}
 				eval ${PUSH_OPT}
-				popd >/dev/null
 		esac
+		if ${go_flag}; then set -e; fi
+		popd >/dev/null
 	}
 
 	[ ! -d "${PATH_CURRENT}/.git/filter-repo" ] && { "Please check if this is split finished git :[${PATH_CURRENT}]"; exit 1; }
 	cd "${PATH_CURRENT}" #split을 진행할 dir
 
 	count=1
-	# mani 모드일 때 헤더 생성을 먼저 처리
+	# pre처리: mani 모드일 때 헤더 생성을 먼저 처리
 	if [ "$CMD" == "mani" ]; then
 		# REMOTE_ADDR이 비어있으면 WORK_DIR 사용
 		[[ -z "$REMOTE_ADDR" ]] && REMOTE_ADDR="$WORK_DIR"
 		# Local path인지 remote URL인지 구분
+		printf "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<manifest>\n" > ${MANI}
 		if [[ "$REMOTE_ADDR" =~ ^(file://|/) ]]; then
 			# Local path인 경우
 			fetch_path="${REMOTE_ADDR#file://}"  # file:// 제거
 			fetch_path="${fetch_path%/}"  # trailing slash 제거
 			parent_path=$(dirname "$fetch_path")
-			dir_name=$(basename "$fetch_path")
-			printf "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<manifest>\n" > ${MANI}
 			printf "  <remote name=\"${REMOTE_NAME}\" fetch=\"${parent_path}\"/>\n" >> ${MANI}
-			printf "  <default remote=\"${REMOTE_NAME}\" revision=\"${REMOTE_BNCH#refs/heads/}\"/>\n" >> ${MANI}
 		else
 			# Remote URL인 경우 (기존 로직)
 			url=$(echo "$REMOTE_ADDR" | cut -d'/' -f1-3); prefix=$(echo "$REMOTE_ADDR" | cut -d'/' -f4-);
-			printf "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<manifest>\n" > ${MANI}
 			printf "  <remote name=\"${REMOTE_NAME}\" fetch=\"${url}\" review=\"${url/ssh/http}\"/>\n" >> ${MANI}
-			printf "  <default remote=\"${REMOTE_NAME}\" revision=\"${REMOTE_BNCH#refs/heads/}\"/>\n" >> ${MANI}
-			dir_name=""  # remote URL 경우 prefix 사용
 		fi
+		printf "  <default remote=\"${REMOTE_NAME}\" revision=\"${REMOTE_BNCH#refs/heads/}\"/>\n" >> ${MANI}
+		printf "  <project name=\".\" path=\".\"/>\n" >> ${MANI}
+	else
+	    printf "\e[0;35m [ $((count++)) $CMD root] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ \e[0m\n"
+	    push_to_remote "" "$CMD"
 	fi
 
+	# body 처리
 	for item in ${PATH_GIT[@]}; do
 		case $CMD in
 		mani)
@@ -127,11 +130,11 @@ if [ ! "$CMD" = "split" ] && [ -n "${REMOTE_NAME}" ]; then
 			    printf "  <project name=\"${item}\" path=\"${project_path}\"/>\n" >> ${MANI}
 		;;*)
 				printf "\e[0;35m [ $((count++)) $CMD $item] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ \e[0m\n"
-				push_to_remote "$item" $CMD
+				push_to_remote "$item" "$CMD"
 		esac
 	done
 
-	# mani 모드일 때 manifest 파일 닫기
+	# post처리: mani 모드일 때 manifest 파일 닫기
 	if [ "$CMD" == "mani" ]; then
 		printf "\e[0;35m [ mani $(realpath ${MANI})] ~~~~~~~~~~~~~~~~~~~~ \e[0m\n"
 		printf "</manifest>\n" >> ${MANI}
