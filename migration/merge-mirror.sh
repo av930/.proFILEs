@@ -72,7 +72,7 @@ while read -r project_name; do
         source_type="${source_key%%:*}"
 
         case "$source_type" in
-            split) [ "$project_name" = "common" ] && src="$source_path/.git" || src="$source_path/${project_name}/.git" ;;
+            split) src="$source_path/${project_name}/.git" ;;
             git) src="$source_path/${project_name}/.git" ;;
             repo) src="$source_path/${project_name}.git" ;;
         esac
