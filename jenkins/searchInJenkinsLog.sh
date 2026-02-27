@@ -12,8 +12,7 @@ JOB_URL="${JOB_URL/https:\/\/vjenkins/http:\/\/vjenkins}"
 SEARCH_STRING="$2"
 
 JOB_NAME=$(echo "$JOB_URL" | grep -oP 'job/\K[^/]+$' | head -1)
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-OUTPUT_DIR="/tmp/jenkins_logs_${JOB_NAME}_${TIMESTAMP}"
+OUTPUT_DIR="~/workspace/searchJobLog/${JOB_NAME}"
 
 # ==================== 함수 ====================
 download_build_log() {
@@ -35,7 +34,10 @@ download_build_log() {
 
 # ==================== 메인 로직 ====================
 
-# 출력 디렉토리 생성
+# 3일 지난 디렉토리 삭제
+find /tmp/searchJobLog -maxdepth 1 -type d -mtime +3 ! -path /tmp/searchJobLog -exec rm -rf {} \; 2>/dev/null
+
+# 출력 디렉토리 생성 (기존 파일은 유지)
 mkdir -p "$OUTPUT_DIR"
 
 # 현재존재하는 빌드번호 가져오기 (Jenkins 환경변수 or API)
@@ -51,9 +53,16 @@ TOTAL_BUILDS=$(echo "$BUILD_NUMBERS" | wc -l)
 printf "Found $TOTAL_BUILDS builds\n"
 
 # 각 빌드 로그 다운로드
-success=0 failed=0
+success=0 failed=0 skipped=0
 while read -r build_num; do
     output_file="$OUTPUT_DIR/build_${build_num}.log"
+    # 이미 다운로드된 빌드는 건너뛰기
+    if [ -s "$output_file" ]; then
+        echo "  Build #${build_num}: ⊙ Skip (already exists)"
+        ((success++))
+        ((skipped++))
+        continue
+    fi
     download_build_log "$build_num" "$output_file" && ((success++)) || ((failed++))
 done <<< "$BUILD_NUMBERS"
 
@@ -62,15 +71,19 @@ if [ -n "$SEARCH_STRING" ] && [ "$success" -gt 0 ]; then
     echo ""
     echo "Searching for '$SEARCH_STRING' in downloaded logs..."
     SEARCH_RESULT="$OUTPUT_DIR/search_results.txt"
-    grep -n "$SEARCH_STRING" "$OUTPUT_DIR"/*.log > "$SEARCH_RESULT" 2>/dev/null
-
-    if [ -s "$SEARCH_RESULT" ]; then
-        MATCH_COUNT=$(wc -l < "$SEARCH_RESULT")
-        echo "  ✓ Found $MATCH_COUNT matches"
+    # 먼저 고정 문자열로 검색 (특수문자 그대로)
+    grep -F -n "$SEARCH_STRING" "$OUTPUT_DIR"/*.log > "$SEARCH_RESULT" 2>/dev/null
+    MATCH_COUNT=$(wc -l < "$SEARCH_RESULT")
+    if (( $MATCH_COUNT > 10 )); then
+        echo "  ✓ Found $MATCH_COUNT matches (fixed string)"
         echo "  Results saved: $SEARCH_RESULT"
     else
-        echo "  ✗ No matches found"
-        rm -f "$SEARCH_RESULT"
+        echo "  ✗ Matches is under 10 ($MATCH_COUNT found), retry with REGEXP"
+        echo "---------------------------- retry with REGEXP -----------------------" >> $SEARCH_RESULT
+        # 정규식으로 재검색 (결과 추가)
+        grep -n "$SEARCH_STRING" "$OUTPUT_DIR"/*.log >> "$SEARCH_RESULT" 2>/dev/null
+        MATCH_COUNT=$(wc -l < "$SEARCH_RESULT")
+        echo "  ✓ Total $MATCH_COUNT matches (with regex)"
     fi
 fi
 
@@ -78,7 +91,7 @@ echo "=== Jenkins Build Log Downloader ==="
 echo "  Job: $JOB_NAME"
 echo "  URL: $JOB_URL"
 echo "  Search: '$SEARCH_STRING'"
-echo "  Total builds: $TOTAL_BUILDS, Downloaded: $success, Failed: $failed"
+echo "  Total builds: $TOTAL_BUILDS, Downloaded: $success, reused: $skipped, Failed: $failed"
 echo "  Logs saved in: $OUTPUT_DIR"
 echo ""
 echo "=== search result ==="
