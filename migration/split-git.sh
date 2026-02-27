@@ -81,7 +81,7 @@ if [ ! "$CMD" = "split" ] && [ -n "${REMOTE_NAME}" ]; then
 				##존재하면 삭제하고 다시 등록, 존재하지 않으면 새로등록
 				git remote get-url $REMOTE_NAME &> /dev/null && { git remote rm $REMOTE_NAME; git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}; } || git remote add $REMOTE_NAME ${REMOTE_ADDR}/${dir}
 				printf "\e[0;33m check remote is working \e[0m:" ##리모트가 동작하는지 확인
-				git ls-remote --exit-code $REMOTE_NAME HEAD > /dev/null && echo "[OKAY]" || echo "[ERR ] not existed - remote"
+				git ls-remote --exit-code $REMOTE_NAME HEAD > /dev/null && echo "[OKAY]" || { echo "[ERR ] not existed - remote"; ${go_flag} || exit 1; }
 				printf "\e[0;33m check remote branch is existed \e[0m:" ##브랜치가 존재하는지 확인
 				git ls-remote --exit-code $REMOTE_NAME $REMOTE_BNCH > /dev/null && echo "[OKAY]" || echo "[WARN] not existed - remote branch"
 				echo "[CMD] git push $REMOTE_NAME HEAD:${REMOTE_BNCH} ${PUSH_OPT}"
@@ -99,23 +99,28 @@ if [ ! "$CMD" = "split" ] && [ -n "${REMOTE_NAME}" ]; then
 	count=1
 	# pre처리: mani 모드일 때 헤더 생성을 먼저 처리
 	if [ "$CMD" == "mani" ]; then
+		# WORK_DIR의 basename 추출 (path prefix로 사용)
+		WORK_DIR_BASENAME=$(basename "$PATH_CURRENT")
+		# manifest 파일을 부모 디렉토리에 생성
+		MANI_PATH="../${MANI}"
+
 		# REMOTE_ADDR이 비어있으면 WORK_DIR 사용
 		[[ -z "$REMOTE_ADDR" ]] && REMOTE_ADDR="$WORK_DIR"
 		# Local path인지 remote URL인지 구분
-		printf "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<manifest>\n" > ${MANI}
+		printf "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<manifest>\n" > ${MANI_PATH}
 		if [[ "$REMOTE_ADDR" =~ ^(file://|/) ]]; then
 			# Local path인 경우
 			fetch_path="${REMOTE_ADDR#file://}"  # file:// 제거
 			fetch_path="${fetch_path%/}"  # trailing slash 제거
 			parent_path=$(dirname "$fetch_path")
-			printf "  <remote name=\"${REMOTE_NAME}\" fetch=\"${parent_path}\"/>\n" >> ${MANI}
+			printf "  <remote name=\"${REMOTE_NAME}\" fetch=\"${parent_path}\"/>\n" >> ${MANI_PATH}
 		else
 			# Remote URL인 경우 (기존 로직)
 			url=$(echo "$REMOTE_ADDR" | cut -d'/' -f1-3); prefix=$(echo "$REMOTE_ADDR" | cut -d'/' -f4-);
-			printf "  <remote name=\"${REMOTE_NAME}\" fetch=\"${url}\" review=\"${url/ssh/http}\"/>\n" >> ${MANI}
+			printf "  <remote name=\"${REMOTE_NAME}\" fetch=\"${url}\" review=\"${url/ssh/http}\"/>\n" >> ${MANI_PATH}
 		fi
-		printf "  <default remote=\"${REMOTE_NAME}\" revision=\"${REMOTE_BNCH#refs/heads/}\"/>\n" >> ${MANI}
-		printf "  <project name=\".\" path=\".\"/>\n" >> ${MANI}
+		printf "  <default remote=\"${REMOTE_NAME}\" revision=\"${REMOTE_BNCH#refs/heads/}\"/>\n" >> ${MANI_PATH}
+		printf "  <project name=\"${WORK_DIR_BASENAME}\" path=\"${WORK_DIR_BASENAME}\"/>\n" >> ${MANI_PATH}
 	else
 	    printf "\e[0;35m [ $((count++)) $CMD root] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ \e[0m\n"
 	    push_to_remote "" "$CMD"
@@ -125,9 +130,10 @@ if [ ! "$CMD" = "split" ] && [ -n "${REMOTE_NAME}" ]; then
 	for item in ${PATH_GIT[@]}; do
 		case $CMD in
 		mani)
-				project_path="${item}"
-			    # 일반 항목인 경우 item만 사용 (prefix 제거)
-			    printf "  <project name=\"${item}\" path=\"${project_path}\"/>\n" >> ${MANI}
+				# path에 WORK_DIR basename을 prefix로 추가
+				project_path="${WORK_DIR_BASENAME}/${item}"
+			    # name과 path 모두 full path 사용
+			    printf "  <project name=\"${project_path}\" path=\"${project_path}\"/>\n" >> ${MANI_PATH}
 		;;*)
 				printf "\e[0;35m [ $((count++)) $CMD $item] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ \e[0m\n"
 				push_to_remote "$item" "$CMD"
@@ -136,9 +142,9 @@ if [ ! "$CMD" = "split" ] && [ -n "${REMOTE_NAME}" ]; then
 
 	# post처리: mani 모드일 때 manifest 파일 닫기
 	if [ "$CMD" == "mani" ]; then
-		printf "\e[0;35m [ mani $(realpath ${MANI})] ~~~~~~~~~~~~~~~~~~~~ \e[0m\n"
-		printf "</manifest>\n" >> ${MANI}
-		cat ${MANI}
+		printf "\e[0;35m [ mani $(realpath ${MANI_PATH})] ~~~~~~~~~~~~~~~~~~~~ \e[0m\n"
+		printf "</manifest>\n" >> ${MANI_PATH}
+		cat ${MANI_PATH}
 	fi
 
 #################################### split logic ####################################

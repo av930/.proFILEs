@@ -1,6 +1,36 @@
 #!/bin/bash
 # merge-mirror.sh - Mirror 통합 스크립트
-# manifest 파일 기반으로 mirror/merged 디렉토리에 링크 생성
+#
+# Purpose:
+#   Manifest 파일의 모든 project를 분석하여 mirror/merged 디렉토리에 심볼릭 링크를 생성합니다.
+#   여러 소스(git clone, repo sync, split)에서 생성된 .git 디렉토리들을 하나의 통합 mirror로 구성합니다.
+#
+# Features:
+#   - 다중 소스 지원: down.git.*, down.repo.*, *_split 디렉토리 자동 감지
+#   - Split 우선순위: split 버전이 있으면 우선적으로 사용
+#   - 자동 링크 생성: manifest의 모든 project에 대해 .git 심볼릭 링크 생성
+#   - 중복 방지: 이미 존재하는 링크는 건너뛰기
+#   - 작업 디렉토리 자동 탐색: down.list 파일을 기준으로 작업 디렉토리 자동 탐지
+#
+# Usage:
+#   merge-mirror.sh [MANIFEST] [WORK_DIR]
+#
+# Arguments:
+#   MANIFEST   - 병합된 manifest 파일 경로 (default: merged-manifest.xml)
+#   WORK_DIR   - 작업 디렉토리 (default: down.list가 있는 디렉토리)
+#
+# Environment Variables:
+#   MARKER_FILE        - 작업 디렉토리 탐색 기준 파일 (default: down.list)
+#   MIRROR_SUBDIR      - Mirror 생성 경로 (default: mirror/merged)
+#   REPO_OBJECTS_PATH  - Repo project-objects 경로 (default: .repo/project-objects)
+#
+# Output:
+#   ${WORK_DIR}/mirror/merged/*.git - 각 project의 .git 심볼릭 링크
+#
+# Example:
+#   merge-mirror.sh merged-manifest.xml /path/to/work/dir
+#   MIRROR_SUBDIR="mirror/custom" merge-mirror.sh manifest.xml
+#
 
 # ==================== 설정 ====================
 MANIFEST="${1:-merged-manifest.xml}"
@@ -35,9 +65,13 @@ mkdir -p "$MERGED_DIR"
 # ==================== 소스 디렉토리 구축 ====================
 declare -A source_paths split_bases
 
-# 1. split 구조 찾기
+# 1. split 구조 찾기 (부모 디렉토리를 source_path로 설정)
 for dir in "$WORK_DIR"/down.git.*/*_split; do
-    [ -d "$dir" ] && split_bases["${dir%_split}"]=1 && source_paths["split:$(basename $(dirname $dir)):$(basename $dir)"]="$dir"
+    if [ -d "$dir" ]; then
+        parent_dir=$(dirname "$dir")
+        split_bases["${dir%_split}"]=1
+        source_paths["split:$(basename $parent_dir):$(basename $dir)"]="$parent_dir"
+    fi
 done
 
 # 2. 일반 git 디렉토리 찾기 (split 버전 제외)
