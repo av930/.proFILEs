@@ -1,6 +1,32 @@
 #!/bin/bash
-# Merge multiple manifest files into one
-# Automatically detects manifest files from down.list and merges them
+#
+# merge-mani.sh - Manifest Merger for Repo Tool
+#
+# Purpose:
+#   down.list 파일을 분석하여 git clone과 repo init 명령에서 사용된 manifest XML 파일들을 하나의 통합 manifest로 병합합니다.
+#
+# Features:
+#   - down.list 자동 분석: git clone과 repo init 명령에서 manifest 파일 자동 추출
+#   - Include manifest 생성: 모든 manifest 파일을 포함하는 중간 manifest (down.list.xml) 생성
+#   - 최종 병합: 모든 project를 하나의 manifest로 통합
+#   - Remote 중복 처리: 동일 이름의 remote는 자동으로 번호 부여 (name.1, name.2)
+#   - 속성 정리: upstream, dest-branch, remote 속성 제거하여 간결화
+#   - Mirror 경로 설정: devops_test remote로 mirror/merged 디렉토리 참조
+#
+# Usage:
+#   merge-mani.sh [INPUT_FILE] [OUTPUT_MANIFEST]
+#
+# Arguments:
+#   INPUT_FILE       - down.list 파일 경로 (default: down.list)
+#   OUTPUT_MANIFEST  - 출력될 병합 manifest 파일 (default: merged-manifest.xml)
+#
+# Output Files:
+#   - ${INPUT_FILE}.xml    : Include manifest (중간 산출물)
+#   - ${OUTPUT_MANIFEST}   : 최종 병합된 manifest
+#
+# Example:
+#   merge-mani.sh down.list merged-manifest.xml
+#
 
 INPUT_FILE="${1:-down.list}"
 OUTPUT_MANIFEST="${2:-merged-manifest.xml}"
