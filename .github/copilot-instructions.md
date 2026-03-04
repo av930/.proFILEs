@@ -1,4 +1,5 @@
 # GitHub Copilot 커스텀 인스트럭션
+사고(thinking)하는 과정을 chat창에 fold하여 숨기지 말고 보여줘.
 
 ## 인증 정보
 
@@ -34,6 +35,30 @@
      aaa) echo "aaa"
   ;; bbb) echo "bbb"
   esac
+  ```
+
+- **권장**: then/else 블록의 마지막 줄이 단순 `return <값>` 또는 `exit <값>` 만 존재하는 경우, 앞 줄과 `;`로 합치고 `return`/`exit` 키워드를 3 space이상을 띄워서 align 맞춰 작성
+  ```bash
+  # 변경 전
+  then some_command
+       return 0
+  else other_command
+       return 1
+
+  # 변경 후
+  then some_command;   return 0
+  else other_command;  return 1
+  ```
+### 반복문 작성 규칙
+- for, while 구문이후 do keyword는 같은 line에 넣어줘.
+  ```bash
+  for item in "${arr[@]}"; do
+      echo "$item"
+  done
+
+  while [ "$count" -lt 10 ]; do
+      count=$((count + 1))
+  done
   ```
 
 ### Bash 일반 모범 사례
@@ -114,12 +139,26 @@ check_file_exists() {
   - 에러 메시지: `echo "error" >&2`
 - 명령어 출력 저장: `output=$(command)`
 - 리다이렉션 적절히 활용: `>`, `>>`, `2>&1`
+- **상태 표시 문자**: terminal encoding에 따라 깨질 수 있는 Unicode 기호(✓, ✗, ⚠) 대신 4글자 ASCII 문자열 사용, 색상 적용
+  - `✓` 대신 `[OKAY]` — 녹색 (`\033[92m\033[1m`)
+  - `✗` 대신 `[FAIL]` — 빨간색 (`\033[91m\033[1m`)
+  - `⚠` 대신 `[WARN]` — 노란색 (`\033[93m\033[1m`)
+  - 라벨(`[OKAY]` 등)에만 색상을 적용하고, 이후 메시지는 흰색(`COLOR_RESET`)으로 출력
+  ```bash
+  COLOR_GREEN="\033[92m\033[1m"
+  COLOR_RED="\033[91m\033[1m"
+  COLOR_YELLOW="\033[93m\033[1m"
+  COLOR_RESET="\033[0m"
+
+  echo -e "${COLOR_GREEN}[OKAY]${COLOR_RESET} 연결 성공"
+  echo -e "${COLOR_RED}[FAIL]${COLOR_RESET} 연결 실패"
+  echo -e "${COLOR_YELLOW}[WARN]${COLOR_RESET} 인증서 경고"
+  ```
 
 ### 성능 최적화
 - 불필요한 파이프 체인 지양
 - `cat file | grep pattern` 대신 `grep pattern file` 사용
 - 부분 문자열 추출 시 외부 명령 대신 내장 기능 사용: `"${var:start:length}"`
-- 여러줄의 echo 대신 printf "multi-line" 구문을 사용을 먼저 검토
 
 ### 스크립트 종료
 - 성공: `exit 0`
