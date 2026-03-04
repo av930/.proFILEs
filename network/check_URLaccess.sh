@@ -193,6 +193,7 @@ main() {
 
     local total_urls=$#
     local current=0
+    local fail_count=0
 
     for url in "$@"; do
         current=$((current + 1))
@@ -202,10 +203,11 @@ main() {
                   "${current}" "${total_urls}"
         fi
 
-        test_single_url "${url}" || true
+        test_single_url "${url}" || fail_count=$((fail_count + 1))
     done
 
     printf "\n"
+    exit ${fail_count}
 }
 
 main "$@"
