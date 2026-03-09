@@ -66,6 +66,9 @@
   - 예외: 의도적으로 word splitting이 필요한 경우 (매우 드묾)
 - 고급 조건문은 `[ ]` 대신 `[[ ]]` 사용
 - 명령어 치환은 백틱 대신 `$(command)` 사용
+- **개행 문자**:
+  - 기본적으로 Linux/Cygwin 방식인 LF(`\n`) 사용
+  - Windows CMD/PowerShell에서만 필요 시 CRLF(`\r\n`) 사용
 
 ### 스크립트 헤더
 - 항상 shebang으로 시작: `#!/bin/bash`
