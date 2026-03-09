@@ -29,3 +29,13 @@ if (( 8 < $(grep \/docker /proc/1/cgroup 2>/dev/null |wc -l)  )); then
     eval $(cat ~/.bash_aliases | grep PS1SC)
     [ -n "${PS1SC}" ] && PS1="${PS1SC}"
 fi
+
+# VS Code shell integration - VS Code 터미널에서만 활성화
+if [[ "$TERM_PROGRAM" == "vscode" ]]; then
+    if [[ -n "${VSCODE_SHELL_INTEGRATION}" ]]; then
+        . "${VSCODE_SHELL_INTEGRATION}"
+    elif command -v code >/dev/null 2>&1; then
+        shell_integration_path="$(code --locate-shell-integration-path bash 2>/dev/null)"
+        [[ -f "$shell_integration_path" ]] && . "$shell_integration_path"
+    fi
+fi
