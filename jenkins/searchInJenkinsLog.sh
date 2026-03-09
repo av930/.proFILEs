@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 # searchInJenkinsLog.sh - Download Jenkins build logs and optionally search for patterns
 # Usage: MATCH_COUNT=0 RANGE="1-24" searchInJenkinsLog.sh [job_url] [search_string]
 
@@ -12,7 +12,7 @@ JOB_URL="${JOB_URL/https:\/\/vjenkins/http:\/\/vjenkins}"
 SEARCH_STRING="$2"
 
 JOB_NAME=$(echo "$JOB_URL" | grep -oP 'job/\K[^/]+$' | head -1)
-OUTPUT_DIR="~/workspace/searchJobLog/${JOB_NAME}"
+OUTPUT_DIR="/tmp/searchJobLog/${JOB_NAME}"
 
 # ==================== 함수 ====================
 download_build_log() {
@@ -57,12 +57,12 @@ if [[ -n "$RANGE" ]]; then
         exit 1
     fi
 else
-    # RANGE가 없으면 API에서 가져오기
+    # RANGE가 없으면 API에서 가져오기 (모든 빌드)
     echo "Fetching build list from API..."
-    BUILD_LIST=$(wget --no-check-certificate -q -O - "${JOB_URL%/}/api/json")
+    BUILD_LIST=$(wget --no-check-certificate -q -O - "${JOB_URL%/}/api/json?tree=allBuilds[number]")
     [[ -z "$BUILD_LIST" ]] && { echo "Error: Failed to fetch build list. Check URL." >&2; exit 1; }
 
-    # 빌드 번호들을 추출 (builds 배열에서 number 필드만 추출, 중복 제거)
+    # 빌드 번호들을 추출 (allBuilds 배열에서 number 필드만 추출, 중복 제거)
     BUILD_NUMBERS=$(echo "$BUILD_LIST" | grep -oP '"number":\s*\K[0-9]+' | sort -n | uniq)
     [[ -z "$BUILD_NUMBERS" ]] && { echo "Error: No builds found" >&2; exit 1; }
 
@@ -85,11 +85,11 @@ while read -r build_num; do
     # 이미 다운로드된 빌드는 건너뛰기
     if [ -s "$output_file" ]; then
         echo "  Build #${build_num}: ⊙ Skip (already exists)"
-        ((success++))
-        ((skipped++))
+        success=$((success + 1))
+        skipped=$((skipped + 1))
         continue
     fi
-    download_build_log "$build_num" "$output_file" && ((success++)) || ((failed++))
+    download_build_log "$build_num" "$output_file" && success=$((success + 1)) || failed=$((failed + 1))
 done <<< "$BUILD_NUMBERS"
 
 # 검색 기능
@@ -112,7 +112,7 @@ if [ -n "$SEARCH_STRING" ] && [ "$success" -gt 0 ]; then
     # 먼저 고정 문자열로 검색 (특수문자 그대로)
     grep -F -n --color=always "$SEARCH_STRING" $SEARCH_FILES 2>/dev/null | sed "s|$OUTPUT_DIR/||g" > "$SEARCH_RESULT"
     MATCH_COUNT=$(wc -l < "$SEARCH_RESULT")
-    if (( $MATCH_COUNT > 1 )); then
+    if (( $MATCH_COUNT > 0 )); then
         echo "  ✓ Found $MATCH_COUNT matches (fixed string)"
         echo "  Results saved: $SEARCH_RESULT"
     else
