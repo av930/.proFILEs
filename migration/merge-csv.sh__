@@ -1,0 +1,146 @@
+#!/bin/bash -e
+# merge_csv.sh - Merge CSV files with substring matching
+# Usage: ./merge-csv.sh [prefix1 prefix2 ...]
+#   prefix: Strings to remove from gen-new.csv name field before matching
+
+# ==================== 설정 ====================
+PATH_WORK="/data001/vc.integrator/mirror/down-src/ori/.repo/manifests"
+FILE_NEW="gen-new.csv"
+FILE_ORI="gen-ori.csv"
+FILE_FIN="gen-fin.csv"
+
+# 명령행 인자로 받은 제거할 문자열들 (배열로 저장)
+declare -a remove_prefixes=("$@")
+
+cd "$PATH_WORK" || { echo "Error: Cannot change to $PATH_WORK"; exit 1; }
+
+# ==================== 함수 ====================
+
+# CSV 헤더 건너뛰고 데이터 읽기
+read_csv_skip_header() {
+    local file="$1"
+    tail -n +2 "$file"
+}
+
+# CSV 필드 추출 (간단한 파서, 쉼표로만 구분)
+get_csv_field() {
+    local line="$1"
+    local field_num="$2"
+    echo "$line" | cut -d',' -f"$field_num"
+}
+
+# ==================== 메인 로직 ====================
+
+# 파일 존재 확인
+[[ -f "$FILE_NEW" ]] || { echo "Error: $FILE_NEW not found"; exit 1; }
+[[ -f "$FILE_ORI" ]] || { echo "Error: $FILE_ORI not found"; exit 1; }
+
+# gen-ori.csv 읽기 (name과 path를 배열에 저장)
+declare -a ori_names
+declare -a ori_paths
+idx=0
+
+while IFS= read -r line; do
+    name=$(get_csv_field "$line" 1)
+    path=$(get_csv_field "$line" 2)
+    ori_names[$idx]="$name"
+    ori_paths[$idx]="$path"
+    idx=$((idx + 1))
+done < <(read_csv_skip_header "$FILE_ORI")
+
+ori_count=${#ori_names[@]}
+
+# gen-new.csv의 헤더 읽기
+header=$(head -1 "$FILE_NEW")
+
+# gen-fin.csv 생성 (헤더 먼저 쓰기)
+echo "$header" > "$FILE_FIN"
+
+# gen-new.csv 처리
+matched=0
+not_matched=0
+declare -a not_matched_list
+new_count=0
+
+while IFS= read -r line; do
+    new_count=$((new_count + 1))
+    # 각 필드 추출
+    new_name=$(get_csv_field "$line" 1)
+    new_path=$(get_csv_field "$line" 2)
+    new_revision=$(get_csv_field "$line" 3)
+    new_groups=$(get_csv_field "$line" 4)
+
+    # 명령행 인자로 받은 문자열들을 new_name에서 제거
+    stripped_name="$new_name"
+    for prefix in "${remove_prefixes[@]}"; do
+        stripped_name="${stripped_name//$prefix/}"
+    done
+    # 앞/뒤 슬래시(/) 제거
+    stripped_name="${stripped_name#/}"
+    stripped_name="${stripped_name%/}"
+
+    found=0
+    # gen-ori에서 stripped_name이 suffix로 일치하는 항목 찾기
+    for i in "${!ori_names[@]}"; do
+        ori_name="${ori_names[$i]}"
+
+        # suffix 매칭: ori_name이 stripped_name으로 끝나는지 확인
+        if [[ "$ori_name" == *"$stripped_name" ]]; then
+            # 정확한 경로 구분자 확인: stripped_name 앞에 / 또는 시작부분이어야 함
+            # 예: "abl/tianocore/edk2"는 "qct/sa525m/abl/tianocore/edk2"와 매칭 OK
+            #     "common"은 "common/linux/apps"와 매칭되지 않음 (suffix 아님)
+            prefix="${ori_name%"$stripped_name"}"
+            # prefix가 비어있거나 /로 끝나면 올바른 매칭
+            if [[ -z "$prefix" ]] || [[ "$prefix" == */ ]]; then
+                new_path="${ori_paths[$i]}"
+                matched=$((matched + 1))
+                found=1
+                break
+            fi
+        fi
+    done
+
+    if [ "$found" -eq 0 ]; then
+        not_matched=$((not_matched + 1))
+        not_matched_list+=("$new_name -> $new_path")
+    fi
+
+    # gen-fin.csv에 쓰기
+    echo "$new_name,$new_path,$new_revision,$new_groups" >> "$FILE_FIN"
+
+done < <(read_csv_skip_header "$FILE_NEW")
+
+# 중복 path 검사
+duplicate_paths=$(tail -n +2 "$FILE_FIN" | cut -d',' -f2 | grep -v '^$' | sort | uniq -c | awk '$1 >= 2 {print}')
+duplicate_count=$(echo "$duplicate_paths" | grep -c . 2>/dev/null || echo 0)
+
+# 결과 출력
+echo "=== Work Completed ==="
+echo "Input-File: $FILE_NEW (Loaded $new_count entries)"
+echo "Compare-File: $FILE_ORI (Loaded $ori_count entries)"
+
+echo ""
+echo "=== Check Result ==="
+echo "Output-File: $FILE_FIN (Matched/Total: $matched/$new_count, Not matched: $not_matched, Duplicated: $duplicate_count)"
+
+if [ "$not_matched" -gt 0 ]; then
+    echo "  --- Not matched items --- ($not_matched)"
+    if [ "$not_matched" -le 10 ]; then
+        for item in "${not_matched_list[@]}"; do
+            echo "  $item"
+        done
+    else
+        for i in {0..9}; do
+            [[ -n "${not_matched_list[$i]}" ]] && echo "  ${not_matched_list[$i]}"
+        done
+    fi
+fi
+
+if [[ -n "$duplicate_paths" ]]; then
+    echo ""
+    echo "  --- Duplicate Path items --- ($duplicate_count)"
+    echo "$duplicate_paths" | while read count path; do
+        echo "<$path> (used: ${count} times)"
+        grep -n ",$path," "$FILE_FIN"
+    done
+fi

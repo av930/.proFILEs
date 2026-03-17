@@ -1,5 +1,5 @@
 # GitHub Copilot 커스텀 인스트럭션
-사고(thinking)하는 과정을 chat창에 fold하여 숨기지 말고 보여줘.
+사고(thinking)하는 과정을 chat창에 한글로 보여주고, fold(숨기지) 하지말고 보여줘.
 
 ## 인증 정보
 
@@ -24,6 +24,14 @@
   if [ "$str" = "string" ];
   then echo "matched"
   else echo "unmatched"
+  fi
+  ```
+
+- **권장**: if/elif/else 각 분기의 조건과 실행문이 모두 1줄로 표현 가능한 경우, `then`을 조건식과 같은 줄에 놓고 실행문을 `then` 뒤에 작성. 조건식들의 길이가 다를 경우 `then` 키워드를 공백으로 align 맞춤. 주석은 실행문 뒤에 인라인으로 작성하고 가능하면 align 맞춤.
+  ```bash
+  if   [[ "$local_head" == "$remote_head" ]];                   then head_status="HEAD_SAME"      # local == remote: 이미 동기화됨
+  elif git merge-base "$local_head" "$remote_head" 2>/dev/null; then head_status="HEAD_REMOTE"    # local이 remote의 ancestor → remote가 앞서있음
+  else head_status="HEAD_UNRELATED"                                                               # 공통 조상 없음 (unrelated histories)
   fi
   ```
 
@@ -76,7 +84,9 @@
   - `-e`: 명령어 실패 시 즉시 종료
   - `-u`: 미정의 변수 사용 시 오류
   - `-o pipefail`: 파이프라인 중 하나라도 실패하면 전체 실패
-- 스크립트 목적을 설명하는 주석 추가
+- 스크립트 목적을 설명하는 주석을 맨위에 추가
+- 주석은 모두 한글로 표기, 코드(로그포함)는 모두 영어로 표기
+- 코드 여러줄을 블럭단위로 묶어서 코드의 의도를 주석으로 표기해줘.
 
 ### 변수 사용
 - 변수 선언 시 `local` 키워드 사용 (함수 내)
