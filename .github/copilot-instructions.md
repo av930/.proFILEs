@@ -13,10 +13,11 @@
 ## Bash Script 코딩 형식
 
 ### 조건문 작성 규칙
-- **권장**: 간단한 조건문은 `&&`와 `||` 연산자 사용
+- **권장**: 간단한 `if/fi`조건문은 `&&`와 `||` 연산자 사용
   ```bash
   [ "$str" = "string" ] && echo "matched"
   [ "$str" != "string" ] && echo "not matched" || echo "matched"
+  [ "$str" != "string" ] && { echo "not matched"; exit 0; } || { echo "matched"; exit 1; }
   ```
 
 - **권장**: if else구문에서 각 1줄로 표현할수 있는 조건문은 then과 else의 indentation을 동일하게 유지
