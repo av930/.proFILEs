@@ -86,3 +86,20 @@ PATH=.:$JAVA_HOME/bin:$PATH
 }
 
 
+function killdate() {
+    local now pid_list days="$1"
+    [ -z "$days" ] && { echo "usage: killdate 10 (kill process over 10 days)"; exit 0; }
+    now=$(date +%s)
+    pid_list=$(ps -eo pid,uid,lstart,comm --no-headers | awk -v d="$days" -v now="$now" '
+        $2 != 0 { ## root process가 아닌것만 kill
+            cmd="date -d \""$3" "$4" "$5" "$6" "$7"\" +%s"
+            cmd | getline start; close(cmd)
+            if ((now-start)/(60*60*24) >= d) print $1
+        }
+    ')
+    [[ -z "$pid_list" ]] && { echo "No user process older than $days days."; return 0; }
+    echo "Killing user processes older than $days days (excluding root):"
+    echo "$pid_list"
+    sudo kill $pid_list
+}
+alias killdate='killdate'
