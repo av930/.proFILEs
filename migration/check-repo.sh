@@ -11,6 +11,7 @@
 # Usage: check-repo.sh <gen-fin.xml> <branch>
 # ex)    check-repo.sh .repo/manifests/gen-fin.xml master
 
+
 set -uo pipefail
 
 # 색상 정의
@@ -40,36 +41,30 @@ while IFS='`' read -r rname fetch; do
     [[ -n "$rname" && -n "$fetch" ]] && remote_fetch["$rname"]="$fetch"
 done < <(xmlstarlet sel -t -m "//remote" -v "@name" -o '`' -v "@fetch" -n "$GEN_FIN_XML" 2>/dev/null)
 
-# gen-fin.xml에서 tmp_lookup파일 생성(형식: project_name|remote_name|full_remote_url)
+# gen-fin.xml에서 tmp_lookup파일 생성(형식: project_name|project_path|remote_name|full_remote_url)
 while IFS='`' read -r pname ppath premote; do
     [[ -z "$pname" || -z "$ppath" || -z "$premote" ]] && continue
     fetch="${remote_fetch[$premote]:-}"
-    [[ -n "$fetch" ]] && echo "${pname}|${premote}|${fetch}/${ppath}" >> "$tmp_lookup"
+    [[ -n "$fetch" ]] && echo "${pname}|${ppath}|${premote}|${fetch}/${ppath}" >> "$tmp_lookup"
 done < <(xmlstarlet sel -t -m "//project[@path]" -v "@name" -o '`' -v "@path" -o '`' -v "@remote" -n "$GEN_FIN_XML" 2>/dev/null)
 
 
-# repo forall로 모든 git에서 remote 등록 및 확인
-# HEREDOC + bash -s 사용 이유:
-#   repo forall -c 는 기본적으로 /bin/sh 로 실행되어 bash 전용 문법([[]], <<<)이 동작하지 않을 수 있음
-#   cat << EOF | bash -s 패턴으로 내부 스크립트를 명시적으로 bash에서 실행
-# repo forall에서 사용할수 있도록 export
-export BRANCH_NAME tmp_lookup FILE_RESULT
-# shellcheck disable=SC2016
-repo forall -cj16 'cat << \EOF | bash -s
-    # gen-fin.xml lookup 파일에서 REPO_PROJECT에 해당하는 remote_name과 remote URL 조회
-    # lookup 미발견: gen-fin.xml에 path/remote 미정의 → ERROR로 기록 후 스킵
-    lookup_line=$(grep "^$REPO_PROJECT|" "$tmp_lookup" | head -1)
-    [[ -z "$lookup_line" ]] && { echo "NO_REMOTE|$REPO_PROJECT|not in gen-fin.xml ($REPO_PROJECT)" >> "$FILE_RESULT";  exit 0; }
-    IFS="|" read -r _ remote_name remote_url <<< "$lookup_line"
+# repo forall 대신 tmp_lookup을 while 루프로 순회 (repo forall은 manifest의 devops_test remote 검증으로 pool 강제 종료 발생)
+# tmp_lookup 형식: project_name|project_path|remote_name|full_remote_url
+WORKSPACE_ROOT=$(pwd)
+while IFS='|' read -r REPO_PROJECT REPO_PATH remote_name remote_url; do
+    GIT_DIR="${WORKSPACE_ROOT}/${REPO_PATH}"
+    [[ ! -d "$GIT_DIR/.git" ]] && { echo "NO_REMOTE|${REPO_PATH}|no .git dir" >> "$FILE_RESULT"; continue; }
 
-    # 모든 remote 제거
-    git remote 2>/dev/null | xargs -r -I{} git remote rm {}
-    # lookup_line에서 추출한 remote name/url로 등록
-    git remote add "$remote_name" "$remote_url"
+    # 모든 remote 제거 후 lookup에서 추출한 remote name/url로 등록
+    while IFS= read -r rname; do
+        git -C "$GIT_DIR" remote rm "$rname" 2>/dev/null || true
+    done < <(git -C "$GIT_DIR" remote 2>/dev/null)
+    git -C "$GIT_DIR" remote add "$remote_name" "$remote_url"
 
     # vgit 서버에 remote repository 자체 존재 여부 확인, 대상 branch 존재 여부 확인
-    git ls-remote --exit-code "$remote_name" HEAD          >/dev/null 2>&1 && remote_status="exist" || remote_status="none"
-    git ls-remote --exit-code "$remote_name" "$BRANCH_NAME" >/dev/null 2>&1 && branch_status="exist" || branch_status="none"
+    git -C "$GIT_DIR" ls-remote --exit-code "$remote_name" HEAD          >/dev/null 2>&1 && remote_status="exist" || remote_status="none"
+    git -C "$GIT_DIR" ls-remote --exit-code "$remote_name" "$BRANCH_NAME" >/dev/null 2>&1 && branch_status="exist" || branch_status="none"
 
     # 로컬 HEAD와 vgit remote branch HEAD 비교 (branch가 존재할 때만 의미 있음)
     # 판별 전략 (네트워크 비용 최소화):
@@ -80,31 +75,29 @@ repo forall -cj16 'cat << \EOF | bash -s
     #      - merge-base --is-ancestor local fetched              → HEAD_REMOTE   (remote가 앞서있음)
     # ※ git ls-remote 는 branch 지정 ("$BRANCH_NAME") 으로만 사용 → 전체 refs 스캔 금지
     if [[ "$branch_status" == "exist" ]]; then
-        local_head=$(git rev-parse HEAD 2>/dev/null)
-        remote_head=$(git ls-remote "$remote_name" "$BRANCH_NAME" 2>/dev/null | cut -f1)
-        if   [[ -z "$local_head" || -z "$remote_head" ]];               then head_status="HEAD_DIFFER"  # SHA 획득 불가 → 판별 불가
-        elif [[ "$local_head" == "$remote_head" ]];                      then head_status="HEAD_SAME"    # 완전 동일
-        elif git rev-list HEAD 2>/dev/null | grep -qm1 "^${remote_head}"; then head_status="HEAD_LOCAL"   # 로컬 히스토리에 remote HEAD 존재 → local이 앞서있음
+        local_head=$(git -C "$GIT_DIR" rev-parse HEAD 2>/dev/null)
+        remote_head=$(git -C "$GIT_DIR" ls-remote "$remote_name" "$BRANCH_NAME" 2>/dev/null | cut -f1)
+        if   [[ -z "$local_head" || -z "$remote_head" ]];                                          then head_status="HEAD_DIFFER"  # SHA 획득 불가 → 판별 불가
+        elif [[ "$local_head" == "$remote_head" ]];                                                then head_status="HEAD_SAME"    # 완전 동일
+        elif git -C "$GIT_DIR" rev-list HEAD 2>/dev/null | grep -qm1 "^${remote_head}";           then head_status="HEAD_LOCAL"   # 로컬 히스토리에 remote HEAD 존재 → local이 앞서있음
         else
             # ①②로 판별 불가 → shallow fetch 후 merge-base로 정확 판별, HEAD_DIFFER가 기본값 (판별 불가 케이스 통합)
             head_status="HEAD_DIFFER"
-            local_commit_date=$(git log -1 --format="%cI" HEAD 2>/dev/null)
+            local_commit_date=$(git -C "$GIT_DIR" log -1 --format="%cI" HEAD 2>/dev/null)
             if [[ -n "$local_commit_date" ]]; then
-                git fetch --shallow-since="$local_commit_date" "$remote_name" "$BRANCH_NAME" >/dev/null 2>&1
-                fetched_head=$(git rev-parse FETCH_HEAD 2>/dev/null)
-                git merge-base --is-ancestor "$local_head" "$fetched_head" 2>/dev/null && head_status="HEAD_REMOTE"  # local이 remote의 ancestor → remote가 앞서있음
+                git -C "$GIT_DIR" fetch --shallow-since="$local_commit_date" "$remote_name" "$BRANCH_NAME" >/dev/null 2>&1
+                fetched_head=$(git -C "$GIT_DIR" rev-parse FETCH_HEAD 2>/dev/null)
+                git -C "$GIT_DIR" merge-base --is-ancestor "$local_head" "$fetched_head" 2>/dev/null && head_status="HEAD_REMOTE"  # local이 remote의 ancestor → remote가 앞서있음
             fi
         fi
     fi
 
     # 결과를 state|path|url 형식으로 기록
-    if   [[ "$remote_status" == "exist" && "$branch_status" == "exist" ]]; then echo "$head_status|$REPO_PATH|$remote_url" >> "$FILE_RESULT"
-    elif [[ "$remote_status" == "exist" ]];                                   then echo "NO_BRANCH|$REPO_PATH|$remote_url" >> "$FILE_RESULT"
-    else                                                                             echo "NO_REMOTE|$REPO_PATH|remote not found on vgit" >> "$FILE_RESULT"
+    if   [[ "$remote_status" == "exist" && "$branch_status" == "exist" ]]; then echo "${head_status}|${REPO_PATH}|${remote_url}" >> "$FILE_RESULT"
+    elif [[ "$remote_status" == "exist" ]];                                   then echo "NO_BRANCH|${REPO_PATH}|${remote_url}" >> "$FILE_RESULT"
+    else                                                                             echo "NO_REMOTE|${REPO_PATH}|remote not found on vgit" >> "$FILE_RESULT"
     fi
-
-EOF
-' 2>/dev/null
+done < "$tmp_lookup"
 
 echo "=== Results ==="
 # FILE_RESULT를 state 기준으로 정렬하여 출력
