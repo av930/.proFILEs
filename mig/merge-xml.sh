@@ -1,10 +1,31 @@
 #!/bin/bash -e
-# merge_xml.sh - Merge XML manifest files with path matching
-# Usage: ./merge_xml.sh <ori.xml> <new.xml> [prefix1 prefix2 ...]
-
-# new소스를 ori소스의 git repository구조에 맞도록 push하기 위해서
-# new소스의 manifest의 path부분에 ori의 git name을 강제로 넣어서 manifest를 만듦.
-# 이후, repo forall로 new 소스를 remote에 push할 예정임
+# merge-xml.sh - Manifest Path/Remote 주입 스크립트
+#
+# Purpose:
+#   new 소스의 manifest에 ori(구형) 소스의 git name을 path로 강제 주입하여 gen-fin.xml을 생성합니다.
+#   이를 통해 new 소스를 ori의 git 저장소 구조에 맞게 remote에 push할 수 있도록 준비합니다.
+#
+# Features:
+#   - Suffix 매칭: ori의 git name이 new의 git name을 suffix로 포함하면 동일 git으로 판별
+#   - Prefix 제거: new git name에서 지정한 prefix 문자열을 제거한 후 매칭 수행
+#   - 최장 매칭 우선: 복수 매칭 시 가장 긴 ori name 선택
+#   - Remote 블록 교체: gen-fin.xml의 remote 정의를 ori의 remote 블록으로 교체
+#   - 결과 보고: Matched / Not matched / Duplicated 통계 및 미매칭·중복 목록 출력
+#
+# Usage:
+#   merge-xml.sh <ori.xml> <new.xml> [prefix1 prefix2 ...]
+#
+# Arguments:
+#   ori.xml    - 기존 소스의 manifest (path/remote 구조 기준)
+#   new.xml    - 신규 소스의 manifest (project name만 있음)
+#   prefix...  - new의 project name에서 제거할 prefix 문자열 목록 (선택)
+#
+# Output:
+#   gen-fin.xml - new.xml 기반에 ori의 path/remote가 주입된 최종 manifest
+#
+# Example:
+#   merge-xml.sh .repo/manifests/default.xml new-manifest.xml
+#   merge-xml.sh ori.xml new.xml sa525m-le-3-1_
 
 FILE_ORI="$1"
 FILE_NEW="$2"
