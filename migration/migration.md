@@ -8,19 +8,20 @@
 
 ## 전체 워크플로우 개요
 
-**구형 소스(ori)를 신형 소스(new)로 마이그레이션**하기 위한 전체 workflow 입니다.
-[1] origin 소스다운: migration이 필요한 현재 project 소스(ORI)를 다운받는다.
-[2] chip 소스다운: chipset 제조사의 신규 소스(CHIP)를 다운받는다. - down-src.sh 사용
-[3] chip 소스분리: 신규 소스(CHIP)중 용량이 큰 1개의 git소스를 여러개의 git으로 분리한다. -split-git.sh (split) 사용
-[4] 분리된소스 manifest생성: 분리된 여러개의 git에 대해서 manifest(xml)를 생성한다. -split-git.sh (mani) 사용
-[5] 분리된소스 remote등록: 분리된 여러개의 git에 대해서 업로드를 위해 remote를 등록한다. -split-git.sh (verify) 사용
-[6] 분리된소스 upload: 분리된 여러개의 git에 대해서 업로드를 진행한다. -split-git.sh (push) 사용
-[7] 다운받은 모든소스를 분석하여 하나의 통합 manifest(merged-manifest.xml)를 생성한다. merge-mani.sh 사용
-[8] 생성된 Manifest의 모든 project를 분석하여 mirror/merged dir에 심볼릭 링크를 생성한다. - merge-mirror.sh 사용
-[9] 생성된 Manifest를 이용하여 CHIP소스를 repo init으로 받아 신규소스(NEW)를 만든다(repo구조로 만듦).
-[10] ORI소스의 repo 구조에 맞게 NEW소스를 push하기 위해 gen-fin.xml만듦. - merge-xml.sh 사용
-[11] gen-fin.xml을 기준으로 NEW소스를 push하기 위해 모든 git의 remote,branch,commit상태 검사. - check-repo.sh 사용
-[12] gen-fin.xml을 기준으로 NEW소스를 실제 remote의 지정한 branch로 push - push-repo.sh 사용
+**구형 소스(ori)를 신형 소스(new)로 마이그레이션**하기 위한 전체 workflow 입니다. migration dir아래 사용 script 기술
+01. ORI 소스다운(10): migration이 필요한 현재 project 소스(ORI)를 다운받는다.
+02. CHIP 소스다운(11): chipset 제조사의 신규 소스(CHIP)를 다운받는다. - down-src.sh 사용
+03. CHIP 소스분리(20): 신규 소스(CHIP)중 용량이 큰 1개의 git소스를 여러개의 git으로 분리한다. -split-git.sh (split) 사용
+04. 분리된소스 manifest생성(21): 분리된 여러개의 git에 대해서 manifest(xml)를 생성한다. -split-git.sh (mani) 사용
+05. 분리된소스 remote등록(22): 분리된 여러개의 git에 대해서 업로드를 위해 remote를 등록한다. -split-git.sh (verify) 사용
+06. 분리된소스 upload(23): 분리된 여러개의 git에 대해서 업로드를 진행한다. -split-git.sh (push) 사용
+07. CHIP 소스 통합 manifest생성(30): 다운받은 모든소스를 분석후 repo 구동을 위한 manifest(merged-manifest.xml)를 생성한다. merge-mani.sh 사용
+08. mirror생성 (31): 생성된 Manifest의 repo로 동작하기 위해 모든 project에 대한 mirror를 만든다.(symbolic link이용) - merge-mirror.sh 사용
+09. NEW 소스생성 (32): CHIP소스의 repo version인 신규소스(NEW)를 repo init으로 만든다 (repo구조 확인).
+10. remote연결 manifest생성 (40): ORI소스의 repo 구조에 맞게 NEW소스를 push하기 위해 gen-fin.xml만듦. - merge-xml.sh 사용
+11. remote및 commit검사 (41): gen-fin.xml을 기준으로 NEW소스를 push하기 위해 모든 git의 remote,branch,commit상태 검사. - check-repo.sh 사용
+12. remote push (42):gen-fin.xml을 기준으로 NEW소스를 실제 remote의 지정한 branch로 push - push-repo.sh 사용
+
 
 
 ### 아래 스크립트들은 이 과정에서 사용되는 script들입니다.
@@ -49,14 +50,14 @@
 
 ---
 
-## 1. `down-src.sh` — 병렬 소스 다운로드
+## 1. `down-srcs.sh` — 병렬 소스 다운로드
 
 ### 목적
 `down.list` 파일에 정의된 `git clone` / `repo init+sync` 명령 블록들을 **최대 3개 동시에** 병렬로 실행하는 다운로드 관리 스크립트.
 
 ### CLI 인터페이스
-```
-down-src.sh <input_file> [mirror_path]
+```bash
+down-srcs.sh <input_file> [mirror_path]
 ```
 - `input_file`: 빈 줄로 구분된 명령 블록이 담긴 파일 (필수)
 - `mirror_path`: mirror를 저장할 경로 (선택, 미입력 시 mirror 미사용)
@@ -103,19 +104,19 @@ down-src.sh <input_file> [mirror_path]
 - 전체 성공 시 `[FINISH]`, 실패 시 `[ERROR]` 출력 후 해당 로그 출력
 
 ### 실행 전 처리
-- 기존 `down_src.sh` 프로세스가 있으면 자식까지 `pkill -P`로 정리
+- 기존 `down_srcs.sh` 프로세스가 있으면 자식까지 `pkill -P`로 정리
 
 ---
 
-## 2. `split-git.sh` — 단일 Git 저장소 분리
+## 2. `split-gits.sh` — 단일 Git 저장소 분리
 
 ### 목적
-하나의 git 저장소(모노레포)를 지정한 서브디렉토리 목록 기준으로 **독립된 git 저장소들로 분리**하거나, 분리 결과를 remote에 push하는 스크립트.
+하나의 git 저장소(모노레포)를 지정한 서브디렉토리 목록 기준으로 **독립된 git 저장소들로 분리**하거나, 분리 결과를 remote에 다루는 매니페스트 및 푸시 스크립트.
 
 ### CLI 인터페이스
-```
+```bash
 CMD=<mode> WORK_DIR=<path> [REMOTE_NAME=... REMOTE_ADDR=... REMOTE_BNCH=...] [PUSH_OPT=...] \
-split-git.sh <dir1> <dir2> ... <dirN>
+split-gits.sh <dir1> <dir2> ... <dirN>
 ```
 
 ### 환경변수
@@ -167,267 +168,81 @@ split-git.sh <dir1> <dir2> ... <dirN>
 
 ---
 
-## 3. `merge-mani.sh` — Manifest 파일 통합 병합
+## 3. `push-gits.sh` — 미러링 연동, 검증 및 원격 Push
 
 ### 목적
-`down.list`를 분석하여 각 다운로드 작업의 manifest XML 파일들을 **하나의 통합 manifest**로 병합하는 스크립트.
+다운받은 소스의 `manifest.xml`을 이용하여 통합 미러링용 리스트(CSV)를 만들고, 루프 구문을 통해 효율적으로 각 컴포넌트의 Remote/Branch 상태 검증 및 최종 Push를 수행하는 스크립트.
 
 ### CLI 인터페이스
+```bash
+push-gits.sh <prepare|verify|push> [옵션]
 ```
-merge-mani.sh [input_file] [output_manifest]
-```
-- `input_file`: 기본값 `down.list`
-- `output_manifest`: 기본값 `merged-manifest.xml`
-
-### 출력 파일
-| 파일 | 설명 |
-|------|------|
-| `${input_file}.xml` | include manifest (중간 산출물) |
-| `merged-manifest.xml` | 최종 병합된 manifest |
 
 ### 기능 요구사항
 
-#### 3-1. down.list 분석 및 include manifest 생성
-- `down.list`를 줄 단위로 읽으며 `git clone`과 `repo init` 명령 감지
-- `git clone` → `down.git.N` (N: git_job_id, 1부터 증가)
-- `repo init` → `down.repo.N` (N: repo_job_id, **2부터** 시작)
-- `-m <file.xml>` 옵션 있으면 해당 파일, 없으면:
-  - `repo init` → `default.xml`
-  - `git clone` → `chipcode.xml`
-- `repo init`: manifest 경로 = `down.repo.N/.repo/manifests/<file>`
-- `git clone`: `down.git.N/` 내에서 `find -maxdepth 2`로 파일 탐색, 없으면 기본 경로 사용
-- 최종 `<include name="<경로>"/>` 태그를 `${input_file}.xml`에 기록
+#### 3-1. `prepare` (CSV 생성 모드)
+- 기존에 XML을 통합하던 방식을 폐기하고, 병합용 메타데이터인 `merged-mani.csv`을 생성.
+- `manifest.xml`의 각 `project` 요소를 파싱하여 `name`, `path`, `remote` 등의 필수 항목 추출.
 
-#### 3-2. 최종 manifest 병합
-- 각 include 파일의 `<remote>` 태그 추출 및 중복 처리:
-  - 동일 `name`이 이미 존재하면 `name.1`, `name.2` 형태로 자동 변경
-  - 추출된 remote는 `<!-- ... -->` 주석 처리로만 출력 (실제 사용 안함)
-- 실제 사용 remote: `devops_test` 하나만 정의 (`fetch="mirror/merged 절대경로"`)
-- `<default remote="devops_test" revision="master"/>` 추가
-- 각 include 파일의 `<project>` 태그 전부 순서대로 추가
-  - `upstream`, `dest-branch`, `remote` 속성은 sed로 제거
-  - 각 include 섹션 앞에 `<!-- Projects from: <file> -->` 주석 삽입
+#### 3-2. `verify` (검증 모드)
+- `merged-mani.csv`를 읽어들여 각 git의 실제 Push가 가능한지 사전 검증.
+- 대상 원격지(Remote 주소, Target Branch 유무, Local과 Remote의 Commit 히스토리) 상태 체크.
+- 기존에 이미 미러링(Mirroring)된 소스가 존재하는 케이스를 고려(단순 FF-업데이트인지 Conflict가 예측되는지 파악).
 
-#### 3-3. include 파일 검증
-- `<include>` 태그에 지정된 파일이 실제 존재하지 않으면 `exit 1`로 종료
+#### 3-3. `push` (푸시 및 태깅 모드)
+- Bash 순환(loop) 구문을 사용하여 CSV 목록 내의 각 git에 대해 실제 `git push` 진행.
+- Push 성공 후 버전을 마킹하기 위한 **Tag 생성 기능**을 포함.
+- Push 도중 Error 발생 시 적절히 처리(Resume 등) 후 최종 **성공/실패/로그 등 요약정보(Report) 출력**.
 
 ---
 
-## 4. `merge-mirror.sh` — Mirror 통합 심볼릭 링크 생성
+## 4. `merge-repo.sh` — ORI와 MIRR 브랜치 병합 처리
 
 ### 목적
-통합 manifest의 모든 project에 대해, 다운로드된 `.git` 디렉토리를 탐색하여 `mirror/merged/` 디렉토리에 **심볼릭 링크**로 일원화하는 스크립트.
+개발 중인 ORI 소스와 미러링된 MIRR 소스(chipset 코드 등) 2개의 브랜치를 Repo 기반 하에서 정책에 맞게 자동으로 머지(Merge)하는 스크립트.
 
 ### CLI 인터페이스
+```bash
+merge-repo.sh <prepare|merge>
 ```
-merge-mirror.sh [manifest] [work_dir]
-```
-- `manifest`: 기본값 `merged-manifest.xml`
-- `work_dir`: 기본값 — manifest 경로에서 상위로 traverse하며 `down.list` 있는 디렉토리 자동 탐지
-
-### 환경변수
-| 변수 | 기본값 | 설명 |
-|------|--------|------|
-| `MARKER_FILE` | `down.list` | 작업 디렉토리 탐색 기준 파일 |
-| `MIRROR_SUBDIR` | `mirror/merged` | 링크를 생성할 서브 경로 |
-| `REPO_OBJECTS_PATH` | `.repo/project-objects` | repo 구조에서 git 오브젝트 경로 |
 
 ### 기능 요구사항
 
-#### 4-1. 소스 디렉토리 자동 탐색 (우선순위 순)
-1. **split 우선**: `down.git.*/*_split` 패턴 디렉토리 → split 버전 우선 사용
-2. **일반 git**: `down.git.*` 디렉토리 (단, `_split` 버전이 있는 경우 제외)
-3. **repo 구조**: `down.repo.*/.repo/project-objects` 디렉토리
+#### 4-1. `prepare` (병합 지침 작성 모드)
+- 병합을 바로 수행하지 않고, `merged-mani.csv` 파일에 **각 컴포넌트별 병합 방법론(Action)**을 사전 기술.
+- 상태 분석 조건 (`Condition`): `mergible`(병합가능), `not mergeble`(병합불가) 등의 상태값을 검사.
+- 취할 액션 (`Action`): 
+  - 특정 git은 강제로 **ORI 우선(`ours`)** 으로 반영.
+  - Conflict 발생이 예측될 때는 **MIRROR 기준(`theirs`)** 으로 폴백.
+  - 혹은 **수동 해결(`conflict`)** 로 표시하고 대기하게 설정.
 
-#### 4-2. 심볼릭 링크 생성 규칙
-- manifest의 각 `<project name="...">` 에서 project name 추출
-- 링크 대상 경로: `mirror/merged/<project_name>.git`
-- 이미 존재하는 링크/경로는 건너뜀 (skip)
-- 소스 우선순위로 `.git` 경로 탐색:
-  - split: `<parent>/<project_name>/.git`
-  - git: `<down.git.N>/<project_name>/.git`
-  - repo: `<project-objects>/<project_name>.git`
-- 찾지 못한 경우: `WARN: Not found: <name>` 출력
-
-#### 4-3. 결과 요약
-- 완료 후 `Created: N, Skipped: N, Not found: N` 출력
+#### 4-2. `merge` (실제 병합 모드)
+- 앞서 지침이 기술된 `merged-mani.csv`를 순회.
+- 기술된 Action (`merge theirs`, `merge ours`, 일반 `merge`, `conflict` 등)에 맞게 백그라운드나 순차적으로 `git merge` 명령을 실행.
+- 최종적으로 Repo 명령으로 묶어 원격지에 안전하게 최종 반영할 수 있도록 상태를 준비함.
 
 ---
 
-## 5. `merge-xml.sh` — Manifest Path/Remote 주입
+## 5. `compare-repo.sh` — 병합 전/후 트리 비교 리포트
 
 ### 목적
-**new 소스의 manifest**에 **ori(구형) 소스 manifest의 `path`와 `remote` 정보를 주입**하여 `gen-fin.xml`을 생성하는 스크립트.
-이를 통해 new 소스를 ori의 git 저장소 구조에 맞게 push할 수 있도록 준비한다.
+ORI와 MIRR 소스를 병합하는 전 과정에서, 두 디렉토리 트리(`.git` 환경)의 차이를 명확히 분석하여 결과 리포트를 출력하는 분석 스크립트.
 
 ### CLI 인터페이스
+```bash
+compare-repo.sh <dir1> <dir2>
 ```
-merge-xml.sh <ori.xml> <new.xml> [prefix1 prefix2 ...]
-```
-- `ori.xml`: 기존 소스의 manifest (path/remote 구조 기준)
-- `new.xml`: 신규 소스의 manifest (project name만 있음)
-- `prefix...`: new의 project name에서 제거할 prefix 문자열 목록 (선택)
-
-### 출력 파일
-- `gen-fin.xml`: new.xml 기반에 ori의 path/remote가 주입된 최종 manifest
 
 ### 기능 요구사항
 
-#### 5-1. ori manifest 파싱
-- `xmlstarlet sel`로 모든 `//project`의 `@name`, `@remote` 추출
-- `name → { used_count, remote }` 구조로 연상 배열 저장
-- remote 속성 없는 project → 오류 출력 후 즉시 종료
+#### 5-1. 두 디렉토리 간 상태 분석 (`dir1` vs `dir2`)
+- Merge 수행 이전 버전의 트리와 Merge 후의 트리를 받아 각 git 별 변경분 추적.
 
-#### 5-2. new manifest의 path 속성 초기화
-- `new.xml`을 `gen-fin.xml`로 복사 후, `xmlstarlet ed`로 모든 `//project/@path` 삭제
+#### 5-2. 변경(Update)이 발생한 git 출력
+- **새로운 Commit 추가됨**: Fast-forward 되었는지, 혹은 추가 Merge 커밋이 발생했는지 표시.
+- **충돌 상태(Conflict)** 여부 명시.
+- 해당 레포지토리 정보 하단에 **추가된 최신 커밋을 최대 10개까지** 요약 출력.
 
-#### 5-3. 후방 suffix 매칭 (뒤에서부터 매칭)
-- new의 각 project name에서 prefix 인수 제거 후 `stripped_name` 획득
-- ori의 모든 name 중 `name`이 `stripped_name`을 suffix로 포함하는 것 탐색
-  - prefix 부분이 없거나 `/`로 끝나는 경우만 유효 (경로 경계 일치)
-  - 복수 매칭 시 **가장 긴 ori name** 선택
-- 매칭 성공: `gen-fin.xml`에서 해당 project 태그에 `path="<ori_name>" remote="<ori_remote>"` 속성 삽입 (sed 사용)
-- 매칭 실패: `not_matched` 카운트 증가
-
-#### 5-4. Remote 블록 교체
-- `gen-fin.xml`의 모든 `<remote>` 라인 삭제
-- ori.xml의 `<remote>` 블록을 `<manifest>` 여는 태그 바로 다음에 삽입
-
-#### 5-5. 결과 출력
-```
-=== Completed ===
-Input: <new.xml>, Compare: <ori.xml>, Output: gen-fin.xml
-Matched: N, Not matched: N, Duplicated: N
-```
-- `not_matched > 0`: path 속성 없는 project 목록을 `grep --color`로 출력
-- `duplicated > 0` (동일 ori name에 2회 이상 매칭): 중복 목록과 라인 번호 출력
-
----
-
-## 6. `check-repo.sh` — Remote/Branch 존재 여부 검증
-
-### 목적
-`gen-fin.xml`을 기준으로 현재 작업 디렉토리의 모든 git에 대해 **remote 등록, remote 서버 접속 가능 여부, branch 존재 여부, HEAD 비교**를 수행하여 push 준비 상태를 확인하는 스크립트.
-
-### CLI 인터페이스
-```
-check-repo.sh <gen-fin.xml> <branch>
-```
-- `gen-fin.xml`: merge-xml.sh로 생성된 manifest
-- `branch`: 확인할 branch 이름 (`refs/heads/` 자동 prefix 추가)
-
-### 출력 파일
-- `check-repo.result`: `STATE|REPO_PATH|REMOTE_URL` 형식의 결과 파일 (항상 신규 생성)
-
-### 기능 요구사항
-
-#### 6-1. gen-fin.xml 파싱
-- `xmlstarlet sel`로 `<remote name fetch>` 추출 → `remote_name → fetch_url` 연상 배열
-- `xmlstarlet sel`로 `<project name path remote>` 추출 → `tmp_lookup` 파일 생성
-  - 형식: `project_name|project_path|remote_name|full_remote_url`
-  - `full_remote_url = fetch_url/project_path`
-
-#### 6-2. 각 git 처리 (tmp_lookup 줄 단위 순회)
-1. `<workspace>/<REPO_PATH>/.git` 없으면: `NO_REMOTE` 기록 후 다음
-2. 기존 remote 전부 삭제 후 추출한 `remote_name/url`로 새로 등록
-3. `git ls-remote --exit-code <remote> HEAD` → `remote_status`
-4. `git ls-remote --exit-code <remote> refs/heads/<branch>` → `branch_status`
-
-#### 6-3. HEAD 비교 전략 (branch 존재 시만 수행, 네트워크 비용 최소화)
-| 순서 | 조건/방법 | 판별 결과 |
-|------|-----------|-----------|
-| ① | SHA 획득 불가 | `HEAD_DIFFER` |
-| ② | `local_head == remote_head` (직접 비교) | `HEAD_SAME` |
-| ③ | `git rev-list HEAD \| grep remote_head` (로컬 히스토리 탐색) | `HEAD_LOCAL` (local이 앞) |
-| ④ | `git fetch --shallow-since=<local commit date>` 후 `merge-base --is-ancestor` | `HEAD_REMOTE` (remote가 앞) |
-| ⑤ | ④ 실패 또는 판별 불가 | `HEAD_DIFFER` |
-
-#### 6-4. 결과 기록 및 출력
-- `FILE_RESULT`에 `STATE|REPO_PATH|REMOTE_URL` 기록
-- STATE 값: `HEAD_SAME`, `HEAD_REMOTE`, `HEAD_LOCAL`, `HEAD_DIFFER`, `NO_BRANCH`, `NO_REMOTE`
-- 결과 파일을 STATE 기준 정렬 후 컬러 출력:
-  - `NO_BRANCH`, `HEAD_SAME`: GREEN
-  - `HEAD_REMOTE`, `HEAD_LOCAL`: YELLOW
-  - `HEAD_DIFFER`, `NO_REMOTE`: RED
-- 출력 포맷: `[STATE라벨] %-100s(remote_url) %-60s(repo_path)`
-
-#### 6-5. 최종 요약
-```
-=== Summary ===
-  GEN_FIN_XML : <절대경로>
-  BRANCH_NAME : refs/heads/<branch>
-  Total processed : N
-    NO_REMOTE   : N  (err, must check gen-fin.xml)
-    NO_BRANCH   : N  (need to push)
-    HEAD_SAME   : N  (already synced)
-    HEAD_REMOTE : N  (remote advanced)
-    HEAD_LOCAL  : N  (local advanced)
-    HEAD_DIFFER : N  (need full fetch)
-```
-
----
-
-## 7. `push-repo.sh` — Remote Push 수행
-
-### 목적
-`check-repo.sh`가 생성한 `check-repo.result`를 기반으로, STATE에 따라 전략적으로 **각 git을 remote에 push**하는 스크립트.
-
-### CLI 인터페이스
-```
-push-repo.sh <compare-branch> <dest-branch> <force|merge>
-```
-- `compare-branch`: local 비교 기준 branch (push 소스)
-- `dest-branch`: remote에 push할 대상 branch (`refs/heads/` 자동 추가)
-- `force|merge`: HEAD_DIFFER 처리 전략 선택
-
-### 전제 조건
-- `check-repo.result`가 현재 디렉토리에 존재해야 함
-- `NO_REMOTE` 항목이 하나라도 있으면 즉시 abort (`gen-fin.xml` 수정 안내)
-
-### 입력 파일 검증
-- `check-repo.result` 존재 여부 확인
-- 첫 줄의 column 수가 3인지, STATE 값이 유효한지, path/url이 비어있지 않은지 확인
-
-### push 전략 (STATE별)
-
-| STATE | 처리 방법 | 결과 기록 |
-|-------|-----------|-----------|
-| `HEAD_LOCAL` | `git push <remote> <compare>:<dest>` 직접 push | `PUSH` |
-| `NO_BRANCH` | 신규 branch 생성 push (동일 명령) | `PUSH` |
-| `HEAD_SAME` | skip | `SKIP` |
-| `HEAD_REMOTE` | skip | `SKIP` |
-| `HEAD_DIFFER` + `force` | `git fetch` 후 DIVERGED/UNRELATED 판별 → `git push --force` | `FORCE` |
-| `HEAD_DIFFER` + `merge` | `git fetch` 후 임시 branch 생성, DIVERGED → `git merge FETCH_HEAD`, UNRELATED → `git merge --allow-unrelated-histories -s ours` → push | `MERGE` |
-| push 실패 | 오류 기록 | `FAIL` |
-
-#### HEAD_DIFFER 상세 처리
-- `git fetch <remote> <BRANCH_DEST>` 실행
-- `git merge-base <local_head> <fetched_head>` 성공 여부로 DIVERGED / UNRELATED 판별
-- merge 모드: 임시 branch `push_tmp_$$` 생성 후 merge 시도 → push → branch 삭제
-
-### 실행 방식
-- `repo forall -cj1`: 순차 실행 (병렬 push 금지 - 서버 부하/충돌 방지)
-- 내부 스크립트: `/bin/sh` 호환 문제 회피를 위해 `cat << EOF | bash -s` 패턴으로 bash로 명시 실행
-- `FILE_CHECK`, `FILE_PUSH`, `BRANCH_COMPARE`, `BRANCH_DEST`, `PUSH_OPTION`은 `export`로 forall에 전달
-
-### 출력 파일
-- `push-repo.result`: `RESULT|STATE|TYPE|REPO_PATH|REMOTE_URL` 형식
-
-### 결과 출력 및 요약
-- STATE 기준 정렬 후 컬러 라벨 출력:
-  - `PUSH`: GREEN, `SKIP`: BLUE, `FORCE:DIVERGED`: YELLOW, `FORCE:UNRELATED`: RED
-  - `MERGE:DIVERGED/UNRELATED`: YELLOW, `FAIL`: RED
-- 최종 요약: 각 결과 카운트 + 옵션(force/merge)에 따라 다른 요약 형식 출력
-
-```
-=== Summary ===
-  COMPARE_BRANCH : refs/heads/<compare>
-  DEST_BRANCH    : refs/heads/<dest>
-  PUSH_OPTION    : force|merge
-    PUSH   (normal / new branch) : N
-    FORCE/MERGE (DIVERGED)       : N
-    FORCE/MERGE (UNRELATED)      : N
-    SKIP                         : N
-    FAIL                         : N
-push log: push-repo.result
-```
+#### 5-3. 완전 대체(Replaced)된 git 출력
+- 완전히 다른 git 이력으로 덮어씌워진 경우 명시.
+- 대체된 해당 git 저장소의 정보를 식별을 위해 **최근 3개 커밋 내역만** 출력.
