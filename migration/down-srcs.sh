@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/bin/bash -ex
 ## ======================================================================
-## down-src.sh - 병렬 소스 다운로드 관리 스크립트
+## down-srcs.sh - 병렬 소스 다운로드 관리 스크립트
 ## ======================================================================
 ## 목적:
 ##   - git clone/repo init 명령을 병렬로 실행 (최대 3개 동시 실행)
@@ -10,7 +10,7 @@
 ##   - Manifest clone-depth 속성 제거
 ##
 ## 사용법:
-##   down-src.sh <input_file> [mirror_path]
+##   down-srcs.sh <input_file> [mirror_path]
 ##
 ## 입력 파일 형식:
 ##   - 빈 줄로 구분된 명령 블록
@@ -40,7 +40,10 @@ MAX_JOBS=3
 LOG_DIR="log"
 
 ## Mirror 경로 절대 경로 변환
-if [ -n "$MIRROR_PATH" ]; then { MIRROR_PATH=$(readlink -f "$MIRROR_PATH"); mkdir -p "$MIRROR_PATH"; }; fi
+if [ -n "$MIRROR_PATH" ]; then
+    MIRROR_PATH=$(readlink -f "$MIRROR_PATH") || true
+    mkdir -p "$MIRROR_PATH" || true
+fi
 
 ## ======================================================================
 ## 유효성 검사
@@ -73,13 +76,13 @@ fi
 ## 현재 디렉토리에서 실행 중인 기존 down_src.sh 및 자식 프로세스 종료
 CURRENT_PID=$$
 
-OLD_PIDS=$(ps aux | grep "[d]own_src.sh" | grep -v "grep" | awk '{print $2}' | grep -v "^${CURRENT_PID}$")
+OLD_PIDS=$(ps aux | grep "[d]own_src.sh" | awk '{print $2}' | grep -v "^${CURRENT_PID}$" || true)
 
 if [ -n "$OLD_PIDS" ]; then
     echo "Killing existing down_src.sh processes..."
     for pid in $OLD_PIDS; do
-        pkill -P "$pid" 2>/dev/null
-        kill "$pid" 2>/dev/null
+        pkill -P "$pid" 2>/dev/null || true
+        kill "$pid" 2>/dev/null || true
     done
     sleep 1
     echo "Cleanup completed."
@@ -138,7 +141,8 @@ for idx in "${!command_blocks[@]}"; do
     JOB_COLOR="${JOB_COLORS[$color_idx]}"
 
     ## 작업 디렉토리 생성 및 이동
-    mkdir -p "$JOB_DIR" && pushd "$JOB_DIR" > /dev/null
+    mkdir -p "$JOB_DIR" || true
+    pushd "$JOB_DIR" > /dev/null || exit 1
     echo -e "${JOB_COLOR}[${JOB_ID}.CMD-ORI] ${cmd_block// && / && \\n}${NC}" | sed 's/ ; / ;\n/g'
     actual_cmd="$cmd_block"
 
@@ -200,11 +204,13 @@ for idx in "${!command_blocks[@]}"; do
                     echo -e "${JOB_COLOR}[${JOB_ID}.MIRROR-USE] Creating mirror at $mirror_git_dir${NC}"
                     rm -rf "$mirror_git_dir" 2>/dev/null || true
                     mirror_cmd="${actual_cmd/git clone /git clone --mirror }"
-                    actual_cmd="$mirror_cmd \"$mirror_git_dir\" && $git_clone_with_ref"
+                    actual_cmd="$mirror_cmd \"$mirror_git_dir\"
+$git_clone_with_ref"
                 else
                     ## Mirror 있음 → git remote update 후 --reference clone
                     echo -e "${JOB_COLOR}[${JOB_ID}.MIRROR-USE] Updating mirror at $mirror_git_dir${NC}"
-                    actual_cmd="(cd \"$mirror_git_dir\" && git remote update) || true && $git_clone_with_ref"
+                    actual_cmd="(cd \"$mirror_git_dir\" && git remote update) || true
+$git_clone_with_ref"
                 fi
             fi
             ;;
@@ -220,19 +226,29 @@ for idx in "${!command_blocks[@]}"; do
 
                 ## repo init --mirror 명령 생성 (--depth 제거)
                 mirror_init_cmd="${actual_cmd//repo init /repo init --mirror }"
-                mirror_init_cmd="$(echo "$mirror_init_cmd" | sed -E '0,/repo init/s|(^|[[:space:]])--depth(=[0-9]+|[[:space:]]+[0-9]+)([[:space:]]|$)| |g' | sed -E 's|  +| |g')"
+                mirror_init_cmd="$(echo "$mirror_init_cmd" | sed -E 's/(^|[[:space:]])--depth(=[0-9]+|[[:space:]]+[0-9]+)([[:space:]]|$)/ /g' | sed -E 's/  +/ /g')"
 
-                ## repo sync 명령 추출 (없으면 기본값 사용)
-                mirror_sync_cmd="$(echo "$mirror_init_cmd" | sed -n '1{s|\(.*repo sync[^;]*\).*|\1|p}')"
-                [ -z "$mirror_sync_cmd" ] && mirror_sync_cmd="${mirror_init_cmd} && repo sync -cj8"
+                ## repo sync 명령이 포함되어 있는지 확인, 없으면 추가
+                if ! echo "$mirror_init_cmd" | grep -q 'repo sync'; then
+                    mirror_init_cmd="${mirror_init_cmd} ; repo sync -cj8"
+                fi
 
                 ## Mirror 생성 후 실제 작업 디렉토리에서도 실행
-                actual_cmd="(cd \"$repo_mirror_base\" && $mirror_sync_cmd) && $actual_cmd"
+                actual_cmd="(cd \"$repo_mirror_base\" && bash -c \"$mirror_init_cmd\")
+$actual_cmd"
             fi
 
             ## Mirror 존재시 --reference 옵션 추가
-            if [[ -d "$repo_mirror_base/.repo" && ! "$actual_cmd" =~ --reference ]]; then
-                actual_cmd="$(echo "$actual_cmd" | sed '0,/repo init /s|repo init |repo init --reference='"$repo_mirror_base"' |')"
+            if [[ -d "$repo_mirror_base/.repo" ]]; then
+                if [[ ! "$actual_cmd" =~ --reference ]]; then
+                    actual_cmd="$(echo "$actual_cmd" | sed '0,/repo init /s|repo init |repo init --reference='"$repo_mirror_base"' |')"
+                fi
+            else
+                ## Mirror 없으면 업데이트 명령 추가
+                only_sync_cmd="$(echo "$actual_cmd" | grep -o 'repo sync[^;]*' || true)"
+                [ -z "$only_sync_cmd" ] && only_sync_cmd="repo sync -cj8"
+                actual_cmd="(cd \"$repo_mirror_base\" && $only_sync_cmd) || true
+$actual_cmd"
             fi
             ;;
     esac
@@ -281,7 +297,7 @@ MANIFEST_FIX_EOF
 
     echo -e "${JOB_COLOR}[${JOB_ID}.CMD-FINAL] ${actual_cmd//;/;\\n}${NC}"
     bash -ec "$actual_cmd" &> "$LOG_FILE" &
-    popd > /dev/null
+    popd > /dev/null || true
 
     ## PID 추적 및 실행 상태 출력
     pid=$!
@@ -292,7 +308,7 @@ MANIFEST_FIX_EOF
     if kill -0 "$pid" 2>/dev/null; then
         echo -e "${JOB_COLOR}[${JOB_ID}.RUNNING]: ${JOB_ID} in ${JOB_DIR}/ (PID: $pid, Log: ${LOG_DIR}/downcmd_${JOB_ID}.log)${NC}"
     fi
-    ((active_jobs++))
+    ((active_jobs=active_jobs + 1)) || true
 
     ## ==================================================================
     ## 7단계: 동시 실행 제어 (Throttling)
@@ -301,8 +317,7 @@ MANIFEST_FIX_EOF
     ## 완료된 작업의 종료 코드 확인 및 실패 로그 수집
 
     if (( active_jobs >= MAX_JOBS )); then
-        wait -n
-        exit_code=$?
+        wait -n && exit_code=0 || exit_code=$?
 
         ## 종료된 작업 찾기 (kill -0으로 프로세스 존재 확인)
         for p in "${!job_logs[@]}"; do
@@ -324,7 +339,7 @@ MANIFEST_FIX_EOF
                 break
             fi
         done
-        ((active_jobs--))
+        ((active_jobs=active_jobs - 1)) || true
     fi
 done
 
@@ -334,8 +349,7 @@ done
 ## 모든 백그라운드 작업 완료 대기 및 에러 수집
 
 for pid in "${!job_logs[@]}"; do
-    wait "$pid"
-    exit_code=$?
+    wait "$pid" && exit_code=0 || exit_code=$?
 
     ## 실패한 작업 로그 기록
     if [ $exit_code -ne 0 ]; then
