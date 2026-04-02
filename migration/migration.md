@@ -9,30 +9,52 @@
 ## 전체 워크플로우 개요
 
 **구형 소스(ori)를 신형 소스(new)로 마이그레이션**하기 위한 전체 workflow 입니다. migration dir아래 사용 script 기술
-01. ORI 소스다운(10): migration이 필요한 현재 project 소스(ORI)를 다운받는다.
-02. CHIP 소스다운(11): chipset 제조사의 신규 소스(CHIP)를 다운받는다. - down-src.sh 사용
-03. CHIP 소스분리(20): 신규 소스(CHIP)중 용량이 큰 1개의 git소스를 여러개의 git으로 분리한다. -split-git.sh (split) 사용
-04. 분리된소스 manifest생성(21): 분리된 여러개의 git에 대해서 manifest(xml)를 생성한다. -split-git.sh (mani) 사용
-05. 분리된소스 remote등록(22): 분리된 여러개의 git에 대해서 업로드를 위해 remote를 등록한다. -split-git.sh (verify) 사용
-06. 분리된소스 upload(23): 분리된 여러개의 git에 대해서 업로드를 진행한다. -split-git.sh (push) 사용
-07. CHIP 소스 통합 manifest생성(30): 다운받은 모든소스를 분석후 repo 구동을 위한 manifest(merged-manifest.xml)를 생성한다. merge-mani.sh 사용
-08. mirror생성 (31): 생성된 Manifest의 repo로 동작하기 위해 모든 project에 대한 mirror를 만든다.(symbolic link이용) - merge-mirror.sh 사용
-09. NEW 소스생성 (32): CHIP소스의 repo version인 신규소스(NEW)를 repo init으로 만든다 (repo구조 확인).
-10. remote연결 manifest생성 (40): ORI소스의 repo 구조에 맞게 NEW소스를 push하기 위해 gen-fin.xml만듦. - merge-xml.sh 사용
-11. remote및 commit검사 (41): gen-fin.xml을 기준으로 NEW소스를 push하기 위해 모든 git의 remote,branch,commit상태 검사. - check-repo.sh 사용
-12. remote push (42):gen-fin.xml을 기준으로 NEW소스를 실제 remote의 지정한 branch로 push - push-repo.sh 사용
+ORI 소스 : 현재 개발진행중인 소스
+MIG 소스 : chipset 제조사에서 release 한 migration 원본 소스
+CHIP 소스 : migration소스중 git 분리가 필요한 소스
+MIRR 소스 : ORI소스와 동일구조로 MIG소스를 mirroring한 소스
+NEW 소스 : ORI+MIRR를 merge한 migration이 완료된 소스
+
+10. ORI 소스다운: migration이 필요한 현재 project 소스(ORI)를 다운받는다.
+11. MIG 소스다운: chipset 제조사의 신규 소스(MIG)를 다운받는다. - down-srcs.sh 사용
+20. CHIP 소스생성: 신규 소스(MIG)중 용량이 큰 1개의 git소스를 여러개의 git으로 분리한다. - split-gits.sh (split) 사용
+21. CHIP 소스생성 manifest생성: 분리한 git들에 대해서 manifest(xml)를 생성한다. - split-gits.sh (mani) 사용
+22. CHIP 소스생성 remote등록(선택): 분리한 git들에 대해서 업로드를 위해 remote를 등록한다. - split-gits.sh (verify) 사용
+23. CHIP 소스생성 upload(선택): 분리한 git들에 대해서 업로드를 진행한다. - split-gits.sh (push) 사용
+30. MIRR소스 통합 csv생성(30): 다운받은 소스의 manifest.xml을 이용하여 mirroring을 위한 csv파일을 생성한다.
+>> ori소스를 기준으로 repo forall로 git을 돌아다니며 down받은 소스를 찾아 new manifest를 생성한다.
+    >> push-repo.sh prepare로 ori와 mapping된 구조로된 MIRR.xml을 완성한다.
+       내부적으로 find-matchgit.sh dir1 dir2를 호출하여 return 0이면 manifest에 merge라는 field를 추가하여 auto로 우선기록하고
+       return 60이상이면 가상으로 merge해봐서 fastforward,merge,conflict등을 기록하게 한다.
+       return 59이하이면 서로 다른 git이고 merge도 불가능한 잘못된 git으로 must,check으로 기록한다.
+       merge=auto,ff| auto,merge| auto,conflict| force,merge| force,conflict| force,ours| force,theirs| must,check으로 구분할수 있고,force,ours와 force,theirs는 user가 수동으로 편집할수 있는 값이다.
+        >> find-matchgit.sh 으로 dir1(old)과 dir2(new)에 대해서 git history를 비교하여 old가 new에 merge될수 있는지 검사한다.
+        >> 이때, git merge가 가능하다면 return 0
+        >> 불가능하다면 (git history가 완전히 달라 common ancestor가 없다면) dir1과 dir2의 file list(file name기준으로)를 비교하여 dir1의 모든 파일의 몇%가 dir2에 존재하는지 그값을 return한다.
+
+    >> push-repo.sh verify로 실제 push할수 있는지 remote(remote, branch, commit)를 검증할수 있어야 한다. (기존에 mirriong한 소스가 있는경우도 고려)
+    >> push-repo.sh push 로 실제 push하여 mirror를 만들고, tag를 만들어놓는다. 만약 pushing중 error시 이를 처리를 한후 요약정보를 출력해야 한다.
+
+08. 로컬미러 생성 (31): 이제 repo를 사용하여 MIRR소스를 받고, 모든 git이 제대로 받아졌는지 확인한다.
+>> merge-repo.sh을 통해 2개의 branch (ORI와 MIRR)를 merge를 진행한다.
+    merge-repo.sh prepare로 merge할때 merged-mani.csv에 merge방법을 미리 기술하게한다.
+    예를 들어, 특정 git에 대해서는 ORI를 우선으로 한다던지, conflict발생시 MIRROR를 기준으로 한다던지를 설정할수 있어야 한다.
+    이를 위해, 조건(mergible, not mergeble, etc)등과 액션(merge theirs, ours, conflict등을 선택해서 merge할수 있도록 한다.)
+>> merge-repo.sh merge를 통해 실제로 merged-mani.csv 기술된대로 merge하도록 만든다.
+>> compare-repo.sh dir1 dir2을 통해 merge전과 merge후의 대한 차이를 report를 출력한다.
+    결과값은 merge후 변경된 git에 대해서 추가된 commit(ff/merge)과 conflict여부, 최대 10개까지 추가된 commit출력, 그리고 완전히 다른 git으로 replace된 git (최근 3개 commit출력) 등을 표시해야 한다.
+>> 일단 repo 명령으로 최종 push하게 만든다.
+
 
 
 
 ### 아래 스크립트들은 이 과정에서 사용되는 script들입니다.
 ```
-[1] down-src.sh       : 소스 다운로드 (git clone / repo sync) - 병렬 실행
-[2] split-git.sh      : 단일 git 저장소를 서브디렉토리 기준으로 분리
-[3] merge-mani.sh     : 여러 manifest XML을 하나의 통합 manifest로 병합
-[4] merge-mirror.sh   : 다운로드된 .git들을 mirror/merged dir에 심볼릭 링크로 통합하여 mirror생성
-[5] merge-xml.sh      : new 소스 manifest에 ori git의 path/remote 정보를 주입 → gen-fin.xml 생성
-[6] check-repo.sh     : gen-fin.xml 기준으로 각 git의 remote/branch 존재 및 HEAD 비교
-[7] push-repo.sh      : check-repo.sh 결과를 기반으로 각 git을 remote에 push
+[1] down-srcs.sh      : 소스 다운로드 (git clone / repo sync) - 병렬 실행
+[2] split-gits.sh     : 단일 git 저장소를 서브디렉토리 기준으로 분리
+[3] push-gits.sh      : merged-mani.csv를 prepare:생성, verify:검증, push:실제반영 한다.
+[4] merge-repo.sh     : merged-mani.csv에 prepare:merge방법기술, merge:방법대로 merge하도록 한다.
+[5] compare-repo.sh   : dir1 dir2에 git에 대한 내용을 비교한다.
 ```
 
 ---
@@ -50,13 +72,13 @@
 
 ---
 
-## 1. `down-srcs.sh` — 병렬 소스 다운로드
+## 1. `down-src.sh` — 병렬 소스 다운로드
 
 ### 목적
 `down.list` 파일에 정의된 `git clone` / `repo init+sync` 명령 블록들을 **최대 3개 동시에** 병렬로 실행하는 다운로드 관리 스크립트.
 
 ### CLI 인터페이스
-```bash
+```
 down-srcs.sh <input_file> [mirror_path]
 ```
 - `input_file`: 빈 줄로 구분된 명령 블록이 담긴 파일 (필수)
@@ -104,17 +126,17 @@ down-srcs.sh <input_file> [mirror_path]
 - 전체 성공 시 `[FINISH]`, 실패 시 `[ERROR]` 출력 후 해당 로그 출력
 
 ### 실행 전 처리
-- 기존 `down_srcs.sh` 프로세스가 있으면 자식까지 `pkill -P`로 정리
+- 기존 `down_src.sh` 프로세스가 있으면 자식까지 `pkill -P`로 정리
 
 ---
 
 ## 2. `split-gits.sh` — 단일 Git 저장소 분리
 
 ### 목적
-하나의 git 저장소(모노레포)를 지정한 서브디렉토리 목록 기준으로 **독립된 git 저장소들로 분리**하거나, 분리 결과를 remote에 다루는 매니페스트 및 푸시 스크립트.
+하나의 git 저장소(모노레포)를 지정한 서브디렉토리 목록 기준으로 **독립된 git 저장소들로 분리**하거나, 분리 결과를 remote에 push하는 스크립트.
 
 ### CLI 인터페이스
-```bash
+```
 CMD=<mode> WORK_DIR=<path> [REMOTE_NAME=... REMOTE_ADDR=... REMOTE_BNCH=...] [PUSH_OPT=...] \
 split-gits.sh <dir1> <dir2> ... <dirN>
 ```
@@ -166,83 +188,3 @@ split-gits.sh <dir1> <dir2> ... <dirN>
 - split 모드: `WORK_DIR/.git` 존재 필수
 - push/verify/mani 모드: `WORK_DIR/.git/filter-repo` 존재 필수 (split 완료 여부 확인)
 
----
-
-## 3. `push-gits.sh` — 미러링 연동, 검증 및 원격 Push
-
-### 목적
-다운받은 소스의 `manifest.xml`을 이용하여 통합 미러링용 리스트(CSV)를 만들고, 루프 구문을 통해 효율적으로 각 컴포넌트의 Remote/Branch 상태 검증 및 최종 Push를 수행하는 스크립트.
-
-### CLI 인터페이스
-```bash
-push-gits.sh <prepare|verify|push> [옵션]
-```
-
-### 기능 요구사항
-
-#### 3-1. `prepare` (CSV 생성 모드)
-- 기존에 XML을 통합하던 방식을 폐기하고, 병합용 메타데이터인 `merged-mani.csv`을 생성.
-- `manifest.xml`의 각 `project` 요소를 파싱하여 `name`, `path`, `remote` 등의 필수 항목 추출.
-
-#### 3-2. `verify` (검증 모드)
-- `merged-mani.csv`를 읽어들여 각 git의 실제 Push가 가능한지 사전 검증.
-- 대상 원격지(Remote 주소, Target Branch 유무, Local과 Remote의 Commit 히스토리) 상태 체크.
-- 기존에 이미 미러링(Mirroring)된 소스가 존재하는 케이스를 고려(단순 FF-업데이트인지 Conflict가 예측되는지 파악).
-
-#### 3-3. `push` (푸시 및 태깅 모드)
-- Bash 순환(loop) 구문을 사용하여 CSV 목록 내의 각 git에 대해 실제 `git push` 진행.
-- Push 성공 후 버전을 마킹하기 위한 **Tag 생성 기능**을 포함.
-- Push 도중 Error 발생 시 적절히 처리(Resume 등) 후 최종 **성공/실패/로그 등 요약정보(Report) 출력**.
-
----
-
-## 4. `merge-repo.sh` — ORI와 MIRR 브랜치 병합 처리
-
-### 목적
-개발 중인 ORI 소스와 미러링된 MIRR 소스(chipset 코드 등) 2개의 브랜치를 Repo 기반 하에서 정책에 맞게 자동으로 머지(Merge)하는 스크립트.
-
-### CLI 인터페이스
-```bash
-merge-repo.sh <prepare|merge>
-```
-
-### 기능 요구사항
-
-#### 4-1. `prepare` (병합 지침 작성 모드)
-- 병합을 바로 수행하지 않고, `merged-mani.csv` 파일에 **각 컴포넌트별 병합 방법론(Action)**을 사전 기술.
-- 상태 분석 조건 (`Condition`): `mergible`(병합가능), `not mergeble`(병합불가) 등의 상태값을 검사.
-- 취할 액션 (`Action`): 
-  - 특정 git은 강제로 **ORI 우선(`ours`)** 으로 반영.
-  - Conflict 발생이 예측될 때는 **MIRROR 기준(`theirs`)** 으로 폴백.
-  - 혹은 **수동 해결(`conflict`)** 로 표시하고 대기하게 설정.
-
-#### 4-2. `merge` (실제 병합 모드)
-- 앞서 지침이 기술된 `merged-mani.csv`를 순회.
-- 기술된 Action (`merge theirs`, `merge ours`, 일반 `merge`, `conflict` 등)에 맞게 백그라운드나 순차적으로 `git merge` 명령을 실행.
-- 최종적으로 Repo 명령으로 묶어 원격지에 안전하게 최종 반영할 수 있도록 상태를 준비함.
-
----
-
-## 5. `compare-repo.sh` — 병합 전/후 트리 비교 리포트
-
-### 목적
-ORI와 MIRR 소스를 병합하는 전 과정에서, 두 디렉토리 트리(`.git` 환경)의 차이를 명확히 분석하여 결과 리포트를 출력하는 분석 스크립트.
-
-### CLI 인터페이스
-```bash
-compare-repo.sh <dir1> <dir2>
-```
-
-### 기능 요구사항
-
-#### 5-1. 두 디렉토리 간 상태 분석 (`dir1` vs `dir2`)
-- Merge 수행 이전 버전의 트리와 Merge 후의 트리를 받아 각 git 별 변경분 추적.
-
-#### 5-2. 변경(Update)이 발생한 git 출력
-- **새로운 Commit 추가됨**: Fast-forward 되었는지, 혹은 추가 Merge 커밋이 발생했는지 표시.
-- **충돌 상태(Conflict)** 여부 명시.
-- 해당 레포지토리 정보 하단에 **추가된 최신 커밋을 최대 10개까지** 요약 출력.
-
-#### 5-3. 완전 대체(Replaced)된 git 출력
-- 완전히 다른 git 이력으로 덮어씌워진 경우 명시.
-- 대체된 해당 git 저장소의 정보를 식별을 위해 **최근 3개 커밋 내역만** 출력.
