@@ -129,6 +129,8 @@ analyze_yocto_config() {
     [[ -n "$premirrors" ]] && echo -e "$TAG_OK PREMIRRORS = $premirrors" || echo -e "$TAG_WARN PREMIRRORS not found"
     [[ -n "$mirrors" ]] && echo -e "$TAG_OK MIRRORS = $mirrors" || echo -e "$TAG_WARN MIRRORS not found"
     [[ -n "$sstate" ]] && echo -e "$TAG_OK SSTATE_DIR = $sstate" || echo -e "$TAG_WARN SSTATE_DIR not found"
+
+    grep -a "Sstate summary:" "$log_file" || true
 }
 
 # ------------------------------------------------------------------------------
@@ -159,11 +161,11 @@ analyze_time() {
     # Yocto Tasks 카운팅
     echo -e "\n- Task Extracted Count (1st hit time ratio):"
     for task in do_fetch do_unpack do_patch do_configure do_compile do_install do_package do_rootfs do_image; do
-        local count=$(grep -c "$task" "$log_file" || echo 0)
+        local count=$(grep -a -c "$task" "$log_file" || true)
         local pct_str=""
 
         if [[ "$count" -gt 0 && "$total_diff" -gt 0 ]]; then
-            local t_hit=$(grep -m1 "$task" "$log_file" | grep -Eo "[0-9]{2}:[0-9]{2}:[0-9]{2}" | head -1 || true)
+            local t_hit=$(grep -a -m1 "$task" "$log_file" | grep -Eo "[0-9]{2}:[0-9]{2}:[0-9]{2}" | head -1 || true)
             if [[ -n "$t_hit" ]]; then
                 local t_sec=$(date -u -d "1970-01-01 $t_hit" +"%s" 2>/dev/null || echo 0)
                 (( t_sec < s_sec )) && (( t_sec += 86400 ))
