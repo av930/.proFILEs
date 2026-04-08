@@ -26,8 +26,8 @@ function get_commit_info() {
     local base_url="${commit_url%%/c/*}"
     local gerrit_query_url="${base_url}/a/changes/?q=${change_number}"
 
-    local auth_string="${GERRIT_CI_USER}:${GERRIT_CI_TOKEN}"
-    [[ "$commit_url" == *"lamp.lge.com"* ]] && auth_string="${GERRIT_LAMP_USER}:${GERRIT_LAMP_TOKEN}"
+    local auth_string="${USER}:${VGIT_TOKEN}"
+    [[ "$commit_url" == *"lamp.lge.com"* ]] && auth_string="${USER}:${LAMP_TOKEN}"
 
     local commit_info
     commit_info="$(curl -fsSu "$auth_string" "${gerrit_query_url}&o=CURRENT_REVISION&o=DOWNLOAD_COMMANDS&o=CURRENT_COMMIT&n=1" | sed '1d')" \
@@ -68,6 +68,7 @@ function get_relate_changes() {
         done
 
         if [[ "$is_new_changes" == "True" ]]; then
+            echo "[CHECK----------------------------] Found related change: $r_change" >&2
             patch_buffer+=("${r_change}")
             get_relate_changes "$r_change"
         fi
@@ -105,9 +106,13 @@ function git_pull() {
 
     [[ -z "$project_path" || -z "$cmt_pull_cmd" ]] && { echo "Error: incomplete commit info" >&2; return 1; }
 
+    # Force merge strategy for git pull to avoid "Need to specify how to reconcile divergent branches".
+    local safe_pull_cmd
+    safe_pull_cmd="${cmt_pull_cmd/git pull /git -c pull.rebase=false pull }"
+
     (
         cd "$project_path" || return 1
-        eval "$cmt_pull_cmd"
+      eval "$safe_pull_cmd"
     ) || { echo "Error: failed to pull in $project_path" >&2; return 1; }
 
     echo "[OKAY] Successfully pulled commit to $project_path"
@@ -129,14 +134,16 @@ function get_commit_and_merge() {
   # do not support check relate/parent changes is invalid
   # do not support AOSP commit valid (commit need review by Architect)
   set +x
-  bar "Make candidate list"
-  rm -rf "${CANDIDATE_LIST_FILE}" "${MERGE_RESULT_FILE}"
-
+  
   manifest_formatted="manifest_formatted.json"
   repo manifest --json -o $manifest_formatted
 
   default_remote="$(cat $manifest_formatted | jq .default.remote)"
   remote_list="$(cat $manifest_formatted | jq .remote)"
+  
+  remote_count=$(echo "$remote_list" | jq -r '.[] | select(.review != null) | .review' | sort -u | wc -l)
+  bar "remote list: $remote_count"
+  rm -rf "${CANDIDATE_LIST_FILE}" "${MERGE_RESULT_FILE}"
 
   # manifest에 등록된 프로젝트 목록 추출 (.git 확장자 제거)
   project_names="$(cat $manifest_formatted | jq -r '.project | .[] | .name' | sed 's/\.git$//')"
@@ -146,13 +153,13 @@ function get_commit_and_merge() {
 
 
   # remote URL 기준으로 중복을 제거하여 한 번에 전체 조회
-  echo "$remote_list" | jq -r '.[] | select(.review != null) | .review' | sort -u | while read -r remote_url; do
+  while read -r remote_url; do
 
       echo -ne "${COLOR_GREEN}[OKAY]${COLOR_RESET} Querying remote URL: $remote_url"
 
       # 전역변수로 받은 인증 정보
-      local auth_string="${GERRIT_CI_USER}:${GERRIT_CI_TOKEN}"
-      [[ "$remote_url" == *"lamp.lge.com"* ]] && auth_string="${GERRIT_LAMP_USER}:${GERRIT_LAMP_TOKEN}"
+      local auth_string="${USER}:${VGIT_TOKEN}"
+      [[ "$remote_url" == *"lamp.lge.com"* ]] && auth_string="${USER}:${LAMP_TOKEN}"
 
       # 전체 커밋 조회 (프로젝트 필터 없이) - sed '1d' 로 )]}' 제거
       all_commits="$(curl -fsSu "$auth_string" \
@@ -196,17 +203,20 @@ function get_commit_and_merge() {
       else
           [[ $sample_idx -eq 0 ]] && echo ""
       fi
-    done
+  done < <(echo "$remote_list" | jq -r '.[] | select(.review != null) | .review' | sort -u)
 
     # 중복 제거
     [[ -f "$CANDIDATE_LIST_FILE" ]] && sort -u -o "$CANDIDATE_LIST_FILE" "$CANDIDATE_LIST_FILE"
 
 
-    bar "List Changes"
     local total_commits=0
     if [[ -f "${CANDIDATE_LIST_FILE}" ]]; then
-      cat "${CANDIDATE_LIST_FILE}"
       total_commits=$(wc -l < "${CANDIDATE_LIST_FILE}")
+    fi
+    
+    bar "List Changes: $total_commits"
+    if [[ -f "${CANDIDATE_LIST_FILE}" ]]; then
+      cat "${CANDIDATE_LIST_FILE}"
     else
       echo "We have no changes"
       return 0
