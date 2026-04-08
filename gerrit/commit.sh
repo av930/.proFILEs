@@ -8,7 +8,7 @@ COLOR_YELLOW="\033[93m\033[1m"
 COLOR_RESET="\033[0m"
 
 line="---------------------------------------------------------------------------------------------------------------------------------"
-bar() { printf "\e[1;36m%s%s \e[0m\n\n" "${1:+[$1] }" "${line:(${1:+3} + ${#1})}"; }
+bar() { printf "\n\n\e[1;36m%s%s \e[0m\n" "${1:+[$1] }" "${line:(${1:+3} + ${#1})}"; }
 
 
 function get_commit_info() {
@@ -144,35 +144,34 @@ function get_commit_and_merge() {
   echo -e "${COLOR_GREEN} Total projects in manifest: $(echo "$project_names" | wc -l)"
   #echo "[DEBUG parsing] First 3 projects: $(echo "$project_names" | head -3 | tr '\n' ', ')"
 
+
   # remote URL 기준으로 중복을 제거하여 한 번에 전체 조회
   echo "$remote_list" | jq -r '.[] | select(.review != null) | .review' | sort -u | while read -r remote_url; do
 
-    echo -e "${COLOR_GREEN}[OKAY]${COLOR_RESET} Querying remote URL: $remote_url"
+      echo -ne "${COLOR_GREEN}[OKAY]${COLOR_RESET} Querying remote URL: $remote_url"
 
-    # 전역변수로 받은 인증 정보
-    local auth_string="${GERRIT_CI_USER}:${GERRIT_CI_TOKEN}"
-    [[ "$remote_url" == *"lamp.lge.com"* ]] && auth_string="${GERRIT_LAMP_USER}:${GERRIT_LAMP_TOKEN}"
+      # 전역변수로 받은 인증 정보
+      local auth_string="${GERRIT_CI_USER}:${GERRIT_CI_TOKEN}"
+      [[ "$remote_url" == *"lamp.lge.com"* ]] && auth_string="${GERRIT_LAMP_USER}:${GERRIT_LAMP_TOKEN}"
 
-    # 전체 커밋 조회 (프로젝트 필터 없이) - sed '1d' 로 )]}' 제거
-    all_commits="$(curl -fsSu "$auth_string" \
-      "$remote_url/a/changes/?q=status:open+-label:verified%2B1+label:Code-Review%2B2+branch:connect_w_event_jg_p2_a2_260224" \
-      2>/dev/null | sed '1d')" || { echo -e "${COLOR_YELLOW}[WARN]${COLOR_RESET} Failed to query $remote_url"; continue; }
+      # 전체 커밋 조회 (프로젝트 필터 없이) - sed '1d' 로 )]}' 제거
+      all_commits="$(curl -fsSu "$auth_string" \
+        "$remote_url/a/changes/?q=status:open+-label:verified%2B1+label:Code-Review%2B2+branch:connect_w_event_jg_p2_a2_260224" \
+        2>/dev/null | sed '1d')" || { echo -e " -> ${COLOR_YELLOW}[WARN]${COLOR_RESET} Failed"; continue; }
 
-    commit_count=$(echo "$all_commits" | jq -r 'length // 0' 2>/dev/null)
-    #echo "[DEBUG getcomit] get $commit_count commits from gerrit API"
+      commit_count=$(echo "$all_commits" | jq -r 'length // 0' 2>/dev/null)
+      #echo "[DEBUG getcomit] get $commit_count commits from gerrit API"
 
-    [[ "$commit_count" -eq 0 ]] && { echo "[DEBUG] No commits found, skipping"; continue; }
-
-    # manifest에 있는 프로젝트만 필터링
+      [[ "$commit_count" -eq 0 ]] && { echo ""; continue; }
     matched=0
 
     local sample_idx=0
-    
+
     # Subshell 이슈 해결을 위해 done <<< 형태로 파이프라인 우회
     while IFS='|' read -r change_number project_name; do
       # \r 이나 공백 정리하여 숨겨진 문자 제거
       project_name="$(echo "$project_name" | tr -d '\r\n ')"
-      
+
       # manifest에 해당 프로젝트가 있는지 확인
       # -x를 제거하고 ^ 와 $ 로 정확히 앞뒤가 떨어지는지 검사 (공백 우회용)
       if echo "$project_names" | grep -q "^${project_name}$"; then
@@ -181,31 +180,39 @@ function get_commit_and_merge() {
       else
         # 불일치할 때만 10개까지 샘플 출력 및 빨간색 에러 로그 출력
         if [[ $sample_idx -lt 10 ]]; then
-            local sample_manifest_match
-            sample_manifest_match=$(echo "$project_names" | grep "$project_name" | head -1 || echo "NO_MATCH")
-            echo -e "${COLOR_RED}[FAIL] Not matched in manifest: '${project_name}'${COLOR_RESET}"
-            echo -e "${COLOR_RED}       (Closest Manifest was: '${sample_manifest_match}')${COLOR_RESET}"
-            sample_idx=$((sample_idx + 1))
+              [[ $sample_idx -eq 0 ]] && echo ""
+              local sample_manifest_match
+              sample_manifest_match=$(echo "$project_names" | grep "$project_name" | head -1 || echo "NO_MATCH")
+              echo -e "${COLOR_RED}[FAIL] Not matched in manifest: '${project_name}'${COLOR_RESET}"
+              echo -e "${COLOR_RED}       (Closest Manifest was: '${sample_manifest_match}')${COLOR_RESET}"
+              sample_idx=$((sample_idx + 1))
+          fi
         fi
+      done <<< "$(echo "$all_commits" | jq -r '.[] | "\(._number)|\(.project)"')"
+
+      if [ $matched -gt 0 ]; then
+          [[ $sample_idx -gt 0 ]] && echo -ne "${COLOR_GREEN}[OKAY]${COLOR_RESET} Querying remote URL: $remote_url"
+          echo -e ": matched commits:${matched}"
+      else
+          [[ $sample_idx -eq 0 ]] && echo ""
       fi
-    done <<< "$(echo "$all_commits" | jq -r '.[] | "\(._number)|\(.project)"')"
-  done
+    done
 
-  # 중복 제거
-  [[ -f "$CANDIDATE_LIST_FILE" ]] && sort -u -o "$CANDIDATE_LIST_FILE" "$CANDIDATE_LIST_FILE"
+    # 중복 제거
+    [[ -f "$CANDIDATE_LIST_FILE" ]] && sort -u -o "$CANDIDATE_LIST_FILE" "$CANDIDATE_LIST_FILE"
 
-  echo -e "\nList changes\n\n"
-  local total_commits=0
-  if [[ -f "${CANDIDATE_LIST_FILE}" ]]; then
-    cat "${CANDIDATE_LIST_FILE}"
-    total_commits=$(wc -l < "${CANDIDATE_LIST_FILE}")
-  else
-    echo "We have no changes"
-    return 0
-  fi
+
+    bar "List Changes"
+    local total_commits=0
+    if [[ -f "${CANDIDATE_LIST_FILE}" ]]; then
+      cat "${CANDIDATE_LIST_FILE}"
+      total_commits=$(wc -l < "${CANDIDATE_LIST_FILE}")
+    else
+      echo "We have no changes"
+      return 0
+    fi
 
   bar "Merge commit"
-  echo -e "\nMerge candidate list...\n\n"
 
   local success_count=0
   local fail_count=0
@@ -225,8 +232,6 @@ function get_commit_and_merge() {
     for c in "${patch_buffer[@]}"; do
         global_seen_commits["$c"]="1"
     done
-
-    echo "[BASE][${#patch_buffer[@]}] Processing base commit: ${change}"
 
     commit_seq=$((commit_seq + 1))
     local seq_str
@@ -271,25 +276,33 @@ function get_commit_and_merge() {
 
       if [ $pull_result -ne 0 ]; then
         group_has_error="True"
-        fail_reason=$(echo "$error_output" | grep -oP 'Error: \K.*' | head -1)
+        # 실제 git 에러 메세지(fatal, error, conflict)를 우선적으로 캡처
+        fail_reason=$(echo "$error_output" | grep -iE 'fatal:|error:|conflict' | head -1)
+        [[ -z "$fail_reason" ]] && fail_reason=$(echo "$error_output" | grep -oP 'Error: \K.*' | head -1)
         [[ -z "$fail_reason" ]] && fail_reason="unknown error"
+
+        # 출력 가독성을 위해 불필요한 연속 공백 처리
+        fail_reason=$(echo "$fail_reason" | tr -s ' \t' ' ' | tr -d '\r\n')
+
         commit_statuses+=("FAIL")
+        printf "[%04d]%b[FAIL]%b %s - %s\n" "$commit_seq" "${COLOR_RED}" "${COLOR_RESET}" "${commit_to_apply}" "${fail_reason}"
         break  # 에러 발생 시 현재 그룹 중단
       else
         commit_statuses+=("OKAY")
+        printf "[%04d]%b[OKAY]%b %s\n" "$commit_seq" "${COLOR_GREEN}" "${COLOR_RESET}" "${commit_to_apply}"
       fi
     done
 
     # 결과 및 롤백 처리
     if [[ "$group_has_error" == "True" ]]; then
-      echo "[WARN] Group $seq_str failed, rolling back ${#applied_paths[@]} projects..."
       for (( i=0; i<${#applied_paths[@]}; i++ )); do
           local r_path="${applied_paths[$i]}"
           local r_head="${applied_heads[$i]}"
-          echo "[WARN] Resetting ${r_path} to ${r_head}"
+          #printf "       [WARN] %s failed, reset %d projects to %s in %s\n" "$seq_str" "${#applied_paths[@]}" "${r_head:0:8}" "$r_path"
           git -C "$r_path" merge --abort >/dev/null 2>&1 || true
           git -C "$r_path" reset --hard "$r_head" >/dev/null 2>&1 || true
       done
+      #[[ ${#applied_paths[@]} -eq 0 ]] && printf "       [WARN] %s failed, no projects to reset\n" "$seq_str"
 
       # 모두 FAIL 또는 BACK으로 기록
       for (( i=0; i<${#patch_buffer[@]}; i++ )); do
