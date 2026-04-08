@@ -367,6 +367,7 @@ function dockstart(){
     docker run                                                                  \
         -dit --init --privileged --cap-add=ALL --restart="always"               \
         --name ${cntr_name}                                                     \
+        --hostname ${HOSTNAME}                                                  \
         -u ${user_id}:${group_id}                                               \
         -p ${cntr_port}:22                                                      \
         -v /etc/group:/etc/group:ro                                             \
@@ -374,9 +375,9 @@ function dockstart(){
         -v /etc/shadow:/etc/shadow:ro                                           \
         -v /etc/timezone:/etc/timezone:ro                                       \
         -v /etc/localtime:/etc/localtime:ro                                     \
+        -v /etc/hosts:/etc/hosts:ro                                             \
         -v /etc/ssh:/etc/ssh:ro                                                 \
         -v /usr/local/bin:/usr/local/bin:ro                                     \
-        -v /usr/bin/git-lfs:/usr/bin/git-lfs:ro                                 \
         -v /lib/modules:/lib/modules:ro                                         \
         -v ${home_dir}/.profile:${home_dir}/.profile:rw                         \
         -v ${home_dir}/.bashrc:${home_dir}/.bashrc:rw                           \
