@@ -26,8 +26,8 @@ function get_commit_info() {
     local base_url="${commit_url%%/c/*}"
     local gerrit_query_url="${base_url}/a/changes/?q=${change_number}"
 
-    local auth_string="${USER}:${VGIT_TOKEN}"
-    [[ "$commit_url" == *"lamp.lge.com"* ]] && auth_string="${USER}:${LAMP_TOKEN}"
+    local auth_string="${USER}:${TOKEN_VGIT}"
+    [[ "$commit_url" == *"lamp.lge.com"* ]] && auth_string="${USER}:${TOKEN_LAMP}"
 
     local commit_info
     commit_info="$(curl -fsSu "$auth_string" "${gerrit_query_url}&o=CURRENT_REVISION&o=DOWNLOAD_COMMANDS&o=CURRENT_COMMIT&n=1" | sed '1d')" \
@@ -158,8 +158,8 @@ function get_commit_and_merge() {
       echo -ne "${COLOR_GREEN}[OKAY]${COLOR_RESET} Querying remote URL: $remote_url"
 
       # 전역변수로 받은 인증 정보
-      local auth_string="${USER}:${VGIT_TOKEN}"
-      [[ "$remote_url" == *"lamp.lge.com"* ]] && auth_string="${USER}:${LAMP_TOKEN}"
+      local auth_string="${USER}:${TOKEN_VGIT}"
+      [[ "$remote_url" == *"lamp.lge.com"* ]] && auth_string="${USER}:${TOKEN_LAMP}"
 
       # 전체 커밋 조회 (프로젝트 필터 없이) - sed '1d' 로 )]}' 제거
       all_commits="$(curl -fsSu "$auth_string" \
