@@ -23,8 +23,8 @@ bar() { printf "\n\n\e[1;36m%s%s \e[0m\n" "${1:+[$1] }" "${line:(${1:+3} + ${#1}
 
 # Gerrit 서버 설정
 readonly USER="${GERRIT_USER:-vc.integrator}"
-readonly VGIT_TOKEN="${GERRIT_VGIT_TOKEN:-}"
-readonly LAMP_TOKEN="${GERRIT_LAMP_TOKEN:-}"
+readonly VGIT_TOKEN="${TOKEN_VGIT:-}"
+readonly LAMP_TOKEN="${TOKEN_LAMP:-}"
 readonly TEST_COMMIT_URL="${GERRIT_TEST_COMMIT_URL:-https://vgit.lge.com/na/c/devops/scm/infra/devenv/+/1306464}"
 readonly TEST_REVIEWER="${GERRIT_TEST_REVIEWER:-${USER}}"
 
@@ -52,7 +52,7 @@ get_auth_info() {
     esac
 
     [[ -z "$token" ]] && {
-        echo -e "${COLOR_RED}[FAIL]${COLOR_RESET} Missing token. Export GERRIT_VGIT_TOKEN or GERRIT_LAMP_TOKEN." >&2
+        echo -e "${COLOR_RED}[FAIL]${COLOR_RESET} Missing token. Export TOKEN_VGIT or TOKEN_LAMP." >&2
         return 1
     }
 
