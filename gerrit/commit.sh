@@ -1,352 +1,864 @@
-# Result path
-CANDIDATE_LIST_FILE="candidate_list_file.txt"
-MERGE_RESULT_FILE="out_mergelist"
+#!/bin/bash
 
+# Gerrit Commit read/write 자동화 스크립트
+set -euo pipefail
+
+#==================================================================================================================
+# Gerrit Commit read/write 스크립트
+# 사용법: commit.sh <read|write|wirte|test|help> <url> <item> [json파일 또는 json문자열]
+# 예시1: commit.sh write https://vgit.lge.com/na/c/project/+/1306464 message '{"change_id":1306464,"message":"New subject"}'
+# 예시2: commit.sh read  https://vgit.lge.com/na/c/project/+/1306464 message
+#==================================================================================================================
+
+# 색상 정의
 COLOR_GREEN="\033[92m\033[1m"
 COLOR_RED="\033[91m\033[1m"
 COLOR_YELLOW="\033[93m\033[1m"
+COLOR_BLUE="\033[94m\033[1m"
 COLOR_RESET="\033[0m"
 
+# 선 그리기
 line="---------------------------------------------------------------------------------------------------------------------------------"
 bar() { printf "\n\n\e[1;36m%s%s \e[0m\n" "${1:+[$1] }" "${line:(${1:+3} + ${#1})}"; }
 
+# Gerrit 서버 설정
+readonly USER="${GERRIT_USER:-vc.integrator}"
+readonly VGIT_TOKEN="${GERRIT_VGIT_TOKEN:-}"
+readonly LAMP_TOKEN="${GERRIT_LAMP_TOKEN:-}"
+readonly TEST_COMMIT_URL="${GERRIT_TEST_COMMIT_URL:-https://vgit.lge.com/na/c/devops/scm/infra/devenv/+/1306464}"
+readonly TEST_REVIEWER="${GERRIT_TEST_REVIEWER:-${USER}}"
 
-function get_commit_info() {
-#----------------------------------------------------------------------------------------------------------
-# Gerrit commit URL로부터 commit 정보 조회
-# 입력: Gerrit commit URL
-# 출력: commit info JSON
+TEMP_RESPONSE_FILE="$(mktemp)"
 
-    local commit_url="$1"
-    [[ -z "$commit_url" ]] && { echo "Error: commit URL required" >&2; return 1; }
-
-    commit_url="$(echo -e "${commit_url}" | tr -d '\r\n ')"
-
-    local change_number="${commit_url##*/}"
-    local base_url="${commit_url%%/c/*}"
-    local gerrit_query_url="${base_url}/a/changes/?q=${change_number}"
-
-    local auth_string="${USER}:${VGIT_TOKEN}"
-    [[ "$commit_url" == *"lamp.lge.com"* ]] && auth_string="${USER}:${LAMP_TOKEN}"
-
-    local commit_info
-    commit_info="$(curl -fsSu "$auth_string" "${gerrit_query_url}&o=CURRENT_REVISION&o=DOWNLOAD_COMMANDS&o=CURRENT_COMMIT&n=1" | sed '1d')" \
-        || return 1
-
-    echo "$commit_info"
-    return 0
+cleanup_temp_file() {
+    [[ -f "$TEMP_RESPONSE_FILE" ]] && rm -f "$TEMP_RESPONSE_FILE"
 }
 
+require_commands() {
+    command -v jq >/dev/null 2>&1 || { echo -e "${COLOR_RED}[FAIL]${COLOR_RESET} jq command not found"; exit 1; }
+    command -v curl >/dev/null 2>&1 || { echo -e "${COLOR_RED}[FAIL]${COLOR_RESET} curl command not found"; exit 1; }
+}
 
-function get_relate_changes() {
-#----------------------------------------------------------------------------------------------------------
-# 커밋의 의존성 체인 재귀 탐색
-# 입력: commit URL
-# 출력: patch_buffer 배열에 의존성 커밋 추가 (전역 변수 기반 작동)
+#==================================================================================================================
+# 함수: 인증 정보 결정
+#==================================================================================================================
+get_auth_info() {
+    local gerrit_url="$1"
+    local token=""
 
-    local commit="$1"
-    local commit_message
-    local -a working_r_changes=()
+    case "$gerrit_url" in
+        *"lamp.lge.com"*) token="$LAMP_TOKEN"
+    ;; *)                 token="$VGIT_TOKEN"
+    esac
 
-    commit_message="$(get_commit_info "${commit}" | jq -r '.[0].revisions[].commit.message' 2>/dev/null)" || return 0
+    [[ -z "$token" ]] && {
+        echo -e "${COLOR_RED}[FAIL]${COLOR_RESET} Missing token. Export GERRIT_VGIT_TOKEN or GERRIT_LAMP_TOKEN." >&2
+        return 1
+    }
 
-    # lamp.lge.com이 아니고 [DESC][+] 패턴이 없으면 의존성 없음
-    if [[ ! "$commit" =~ "lamp.lge.com" ]] && ! echo "$commit_message" | grep -qi "\[DESC\]\[+\]"; then
+    echo "${USER}:${token}"
+}
+
+#==================================================================================================================
+# 함수: Commit URL에서 API URL 구성
+# 입력: http://vgit.lge.com/na/c/project/+/1306464
+# 출력: {"change_id":"1306464","api_url":"http://vgit.lge.com/na/a/changes/1306464"}
+#==================================================================================================================
+parse_commit_url() {
+    local commit_url="$1"
+    local url_trimmed change_id api_url
+
+    url_trimmed="${commit_url%/}"
+
+    # 이미 API URL이 들어온 경우 그대로 사용
+    if [[ "$url_trimmed" == *"/a/changes/"* ]]; then
+        change_id="${url_trimmed##*/}"
+        [[ -z "$change_id" ]] && { echo -e "${COLOR_RED}[ERROR]${COLOR_RESET} Invalid API URL: $commit_url" >&2; return 1; }
+        echo "{\"change_id\":\"$change_id\",\"api_url\":\"$url_trimmed\"}"
         return 0
     fi
 
-    while IFS= read -r line; do
-        [[ "$line" == "[+]"* ]] && working_r_changes+=("$(echo "$line" | awk '{print $2}')")
-    done <<< "${commit_message}"
+    change_id="${url_trimmed##*/}"
+    [[ ! "$change_id" =~ ^[0-9]+$ ]] && {
+        echo -e "${COLOR_RED}[ERROR]${COLOR_RESET} URL에서 change_id를 찾지 못했습니다: $commit_url" >&2
+        return 1
+    }
 
-    for r_change in "${working_r_changes[@]}"; do
-        [[ -z "$r_change" ]] && continue
+    case "$url_trimmed" in
+        *"lamp.lge.com"*)    api_url="http://lamp.lge.com/review/a/changes/${change_id}"
+    ;; *"vgit.lge.com/na"*) api_url="http://vgit.lge.com/na/a/changes/${change_id}"
+    ;; *"vgit.lge.com/as"*) api_url="http://vgit.lge.com/as/a/changes/${change_id}"
+    ;; *)
+        api_url="${url_trimmed%/+/*}/a/changes/${change_id}"
+    esac
 
-        local is_new_changes="True"
-        for change in "${patch_buffer[@]}"; do
-            [[ "$r_change" == "$change" ]] && { is_new_changes="False"; break; }
-        done
-
-        if [[ "$is_new_changes" == "True" ]]; then
-            echo "[CHECK----------------------------] Found related change: $r_change" >&2
-            patch_buffer+=("${r_change}")
-            get_relate_changes "$r_change"
-        fi
-    done
-
-    return 0
+    echo "{\"change_id\":\"$change_id\",\"api_url\":\"$api_url\"}"
 }
 
+#==================================================================================================================
+# 함수: Gerrit 응답 Prefix 제거 및 JSON 정규화
+#==================================================================================================================
+normalize_gerrit_json() {
+    local raw_body="$1"
+    local stripped
 
-function git_pull() {
-#----------------------------------------------------------------------------------------------------------
-# Gerrit commit URL로부터 commit을 manifest 경로로 pull
-# 입력: Gerrit commit URL
-# 출력: 성공 시 0, 실패 시 1 반환
+    stripped=$(printf '%s' "$raw_body" | sed '1s/^)]}'"'"'//')
+    [[ -z "$stripped" ]] && { echo "{}"; return 0; }
 
-    local commit_url="$1"
-    [[ -z "$commit_url" ]] && { echo "Error: commit URL required" >&2; return 1; }
-
-    commit_url="$(echo -e "${commit_url}" | tr -d '\r\n ')"
-
-    local commit_info project_info project_name cmt_pull_cmd project_path
-
-    commit_info="$(get_commit_info "${commit_url}")" \
-        || { echo -e "${COLOR_RED}[FAIL]${COLOR_RESET} Error: failed to fetch commit info" >&2; return 1; }
-
-    project_info="$(echo "$commit_info" | jq -r '.[0] | "\(.project)|\(.revisions[].fetch.ssh.commands.Pull)"' 2>/dev/null)" \
-        || { echo "Error: failed to parse commit JSON" >&2; return 1; }
-
-    project_name="${project_info%%|*}"
-    cmt_pull_cmd="${project_info#*|}"
-    [[ "$project_name" == "null" ]] && project_name=""
-
-    project_path="$(repo list -r "$project_name" 2>/dev/null | grep -m1 ": $project_name" | cut -f1 -d':' | sed 's/[[:space:]]*$//')" \
-        || { echo "Error: project '$project_name' not found in manifest" >&2; return 1; }
-
-    [[ -z "$project_path" || -z "$cmt_pull_cmd" ]] && { echo "Error: incomplete commit info" >&2; return 1; }
-
-    # Force merge strategy for git pull to avoid "Need to specify how to reconcile divergent branches".
-    local safe_pull_cmd
-    safe_pull_cmd="${cmt_pull_cmd/git pull /git -c pull.rebase=false pull }"
-
-    (
-        cd "$project_path" || return 1
-      eval "$safe_pull_cmd"
-    ) || { echo "Error: failed to pull in $project_path" >&2; return 1; }
-
-    echo "[OKAY] Successfully pulled commit to $project_path"
-    return 0
-}
-
-
-function get_commit_and_merge() {
-  #------------------------------------------
-  #- Replace flow for 2 steps below:
-  #- 1. python3 sc-infra/script/integration.py -p $TARGET_PROJECT -m AUTOSTEP1 -d T -l GET_COMMITS
-  #- 2. python3 sc-infra/script/integration.py -p $TARGET_PROJECT -m AUTOSTEP1 -d T -l MERGE_COMMITS
-  #------------------------------------------
-  #- output: get all candidate commits and merge to local
-  #- its hard to follow all check from sc-infa, just assume simple case
-  # get and merge only list commit with status "ready to submit" / "is:submittable"
-  # do not support check outdate (relation change outdate)
-  # do not support check child manifest
-  # do not support check relate/parent changes is invalid
-  # do not support AOSP commit valid (commit need review by Architect)
-  set +x
-  
-  manifest_formatted="manifest_formatted.json"
-  repo manifest --json -o $manifest_formatted
-
-  default_remote="$(cat $manifest_formatted | jq .default.remote)"
-  remote_list="$(cat $manifest_formatted | jq .remote)"
-  
-  remote_count=$(echo "$remote_list" | jq -r '.[] | select(.review != null) | .review' | sort -u | wc -l)
-  bar "remote list: $remote_count"
-  rm -rf "${CANDIDATE_LIST_FILE}" "${MERGE_RESULT_FILE}"
-
-  # manifest에 등록된 프로젝트 목록 추출 (.git 확장자 제거)
-  project_names="$(cat $manifest_formatted | jq -r '.project | .[] | .name' | sed 's/\.git$//')"
-
-  echo -e "${COLOR_GREEN} Total projects in manifest: $(echo "$project_names" | wc -l)"
-  #echo "[DEBUG parsing] First 3 projects: $(echo "$project_names" | head -3 | tr '\n' ', ')"
-
-
-  # remote URL 기준으로 중복을 제거하여 한 번에 전체 조회
-  while read -r remote_url; do
-
-      echo -ne "${COLOR_GREEN}[OKAY]${COLOR_RESET} Querying remote URL: $remote_url"
-
-      # 전역변수로 받은 인증 정보
-      local auth_string="${USER}:${VGIT_TOKEN}"
-      [[ "$remote_url" == *"lamp.lge.com"* ]] && auth_string="${USER}:${LAMP_TOKEN}"
-
-      # 전체 커밋 조회 (프로젝트 필터 없이) - sed '1d' 로 )]}' 제거
-      all_commits="$(curl -fsSu "$auth_string" \
-        "$remote_url/a/changes/?q=status:open+-label:verified%2B1+label:Code-Review%2B2+branch:connect_w_event_jg_p2_a2_260224" \
-        2>/dev/null | sed '1d')" || { echo -e " -> ${COLOR_YELLOW}[WARN]${COLOR_RESET} Failed"; continue; }
-
-      commit_count=$(echo "$all_commits" | jq -r 'length // 0' 2>/dev/null)
-      #echo "[DEBUG getcomit] get $commit_count commits from gerrit API"
-
-      [[ "$commit_count" -eq 0 ]] && { echo ""; continue; }
-    matched=0
-
-    local sample_idx=0
-
-    # Subshell 이슈 해결을 위해 done <<< 형태로 파이프라인 우회
-    while IFS='|' read -r change_number project_name; do
-      # \r 이나 공백 정리하여 숨겨진 문자 제거
-      project_name="$(echo "$project_name" | tr -d '\r\n ')"
-
-      # manifest에 해당 프로젝트가 있는지 확인
-      # -x를 제거하고 ^ 와 $ 로 정확히 앞뒤가 떨어지는지 검사 (공백 우회용)
-      if echo "$project_names" | grep -q "^${project_name}$"; then
-        echo "$remote_url/c/${project_name}/+/$change_number" >>"$CANDIDATE_LIST_FILE"
-        matched=$((matched + 1))
-      else
-        # 불일치할 때만 10개까지 샘플 출력 및 빨간색 에러 로그 출력
-        if [[ $sample_idx -lt 10 ]]; then
-              [[ $sample_idx -eq 0 ]] && echo ""
-              local sample_manifest_match
-              sample_manifest_match=$(echo "$project_names" | grep "$project_name" | head -1 || echo "NO_MATCH")
-              echo -e "${COLOR_RED}[FAIL] Not matched in manifest: '${project_name}'${COLOR_RESET}"
-              echo -e "${COLOR_RED}       (Closest Manifest was: '${sample_manifest_match}')${COLOR_RESET}"
-              sample_idx=$((sample_idx + 1))
-          fi
-        fi
-      done <<< "$(echo "$all_commits" | jq -r '.[] | "\(._number)|\(.project)"')"
-
-      if [ $matched -gt 0 ]; then
-          [[ $sample_idx -gt 0 ]] && echo -ne "${COLOR_GREEN}[OKAY]${COLOR_RESET} Querying remote URL: $remote_url"
-          echo -e ": matched commits:${matched}"
-      else
-          [[ $sample_idx -eq 0 ]] && echo ""
-      fi
-  done < <(echo "$remote_list" | jq -r '.[] | select(.review != null) | .review' | sort -u)
-
-    # 중복 제거
-    [[ -f "$CANDIDATE_LIST_FILE" ]] && sort -u -o "$CANDIDATE_LIST_FILE" "$CANDIDATE_LIST_FILE"
-
-
-    local total_commits=0
-    if [[ -f "${CANDIDATE_LIST_FILE}" ]]; then
-      total_commits=$(wc -l < "${CANDIDATE_LIST_FILE}")
-    fi
-    
-    bar "List Changes: $total_commits"
-    if [[ -f "${CANDIDATE_LIST_FILE}" ]]; then
-      cat "${CANDIDATE_LIST_FILE}"
+    if echo "$stripped" | jq -e . >/dev/null 2>&1; then
+        echo "$stripped" | jq .
     else
-      echo "We have no changes"
-      return 0
+        # JSON이 아니면 문자열로 감싸서 반환
+        jq -cn --arg raw "$stripped" '{raw:$raw}'
+    fi
+}
+
+#==================================================================================================================
+# 함수: 공통 API 호출
+#==================================================================================================================
+call_gerrit_api() {
+    local cmd="$1"
+    local label="$2"
+    local method="$3"
+    local api_url="$4"
+    local payload="${5:-}"
+    local auth http_code body
+
+    auth=$(get_auth_info "$api_url") || return 1
+
+    if [[ -n "$payload" ]]; then
+        http_code=$(curl -sS -o "$TEMP_RESPONSE_FILE" -w "%{http_code}" -su "$auth" -X "$method" \
+            -H "Content-Type: application/json" \
+            -d "$payload" \
+            "$api_url")
+    else
+        http_code=$(curl -sS -o "$TEMP_RESPONSE_FILE" -w "%{http_code}" -su "$auth" -X "$method" "$api_url")
     fi
 
-  bar "Merge commit"
+    body=$(cat "$TEMP_RESPONSE_FILE" 2>/dev/null || true)
 
-  local success_count=0
-  local fail_count=0
-  local commit_seq=0
-  declare -A global_seen_commits
-
-  while IFS= read -r change; do
-    [[ -z "$change" ]] && continue
-    # 이미 이전 그룹(관련 커밋 포함)에서 처리된 경우 건너뜀
-    [[ -n "${global_seen_commits[$change]}" ]] && continue
-
-    # 의존성 커밋 탐색 (patch_buffer는 함수 내부에서 전역처럼 동작)
-    patch_buffer=("${change}")
-    get_relate_changes "${change}"
-
-    # 이번 그룹의 모든 관련 커밋을 방문했다고 체크 (추후 캔디데이트 목록에서 다시 실행안되게 방지)
-    for c in "${patch_buffer[@]}"; do
-        global_seen_commits["$c"]="1"
-    done
-
-    commit_seq=$((commit_seq + 1))
-    local seq_str
-    seq_str=$(printf "%04d" "$commit_seq")
-
-    local group_has_error="False"
-    local fail_reason=""
-    local -a applied_paths=()
-    local -a applied_heads=()
-    local -a commit_statuses=()
-
-    # 의존성 커밋 순차 처리
-    for commit_to_apply in "${patch_buffer[@]}"; do
-      #echo "[INFO] Applying: ${commit_to_apply}"
-
-      # 현재 프로젝트의 HEAD 정보 백업 (롤백용)
-      local c_info p_name p_path p_head
-      c_info=$(get_commit_info "${commit_to_apply}")
-      if [[ -n "$c_info" ]]; then
-          p_name=$(echo "$c_info" | jq -r '.[0].project' 2>/dev/null)
-          if [[ -n "$p_name" && "$p_name" != "null" ]]; then
-              p_path=$(repo list -r "$p_name" 2>/dev/null | grep -m1 ": $p_name" | cut -f1 -d':' | sed 's/[[:space:]]*$//')
-              if [[ -n "$p_path" && -d "$p_path" ]]; then
-                  p_head=$(git -C "$p_path" rev-parse HEAD 2>/dev/null)
-                  # 한 그룹 안에서 동일 레포지토리에 여러 개의 커밋이 들어갈 경우 최초 HEAD만 저장
-                  local already_saved="False"
-                  for ap in "${applied_paths[@]}"; do
-                      [[ "$ap" == "$p_path" ]] && already_saved="True"
-                  done
-                  if [[ "$already_saved" == "False" ]]; then
-                      applied_paths+=("$p_path")
-                      applied_heads+=("$p_head")
-                  fi
-              fi
-          fi
-      fi
-
-      # Pull & Merge 실행
-      local error_output pull_result
-      error_output=$(git_pull "${commit_to_apply}" 2>&1)
-      pull_result=$?
-
-      if [ $pull_result -ne 0 ]; then
-        group_has_error="True"
-        # 실제 git 에러 메세지(fatal, error, conflict)를 우선적으로 캡처
-        fail_reason=$(echo "$error_output" | grep -iE 'fatal:|error:|conflict' | head -1)
-        [[ -z "$fail_reason" ]] && fail_reason=$(echo "$error_output" | grep -oP 'Error: \K.*' | head -1)
-        [[ -z "$fail_reason" ]] && fail_reason="unknown error"
-
-        # 출력 가독성을 위해 불필요한 연속 공백 처리
-        fail_reason=$(echo "$fail_reason" | tr -s ' \t' ' ' | tr -d '\r\n')
-
-        commit_statuses+=("FAIL")
-        printf "[%04d]%b[FAIL]%b %s - %s\n" "$commit_seq" "${COLOR_RED}" "${COLOR_RESET}" "${commit_to_apply}" "${fail_reason}"
-        break  # 에러 발생 시 현재 그룹 중단
-      else
-        commit_statuses+=("OKAY")
-        printf "[%04d]%b[OKAY]%b %s\n" "$commit_seq" "${COLOR_GREEN}" "${COLOR_RESET}" "${commit_to_apply}"
-      fi
-    done
-
-    # 결과 및 롤백 처리
-    if [[ "$group_has_error" == "True" ]]; then
-      for (( i=0; i<${#applied_paths[@]}; i++ )); do
-          local r_path="${applied_paths[$i]}"
-          local r_head="${applied_heads[$i]}"
-          #printf "       [WARN] %s failed, reset %d projects to %s in %s\n" "$seq_str" "${#applied_paths[@]}" "${r_head:0:8}" "$r_path"
-          git -C "$r_path" merge --abort >/dev/null 2>&1 || true
-          git -C "$r_path" reset --hard "$r_head" >/dev/null 2>&1 || true
-      done
-      #[[ ${#applied_paths[@]} -eq 0 ]] && printf "       [WARN] %s failed, no projects to reset\n" "$seq_str"
-
-      # 모두 FAIL 또는 BACK으로 기록
-      for (( i=0; i<${#patch_buffer[@]}; i++ )); do
-        local c="${patch_buffer[$i]}"
-        local s="${commit_statuses[$i]}"
-
-        if [[ "$s" == "OKAY" ]]; then
-            # 이 커밋은 정상이었으나 롤백됨
-            echo "${seq_str}| BACK| ${c} | Rolled back due to related dependency failure" >> "${MERGE_RESULT_FILE}"
-            fail_count=$((fail_count + 1))
-        elif [[ "$s" == "FAIL" ]]; then
-            # 이 커밋 때문에 그룹이 실패함
-            echo "${seq_str}| FAIL| ${c} | ${fail_reason}" >> "${MERGE_RESULT_FILE}"
-            fail_count=$((fail_count + 1))
+    if [[ "$http_code" =~ ^2 ]]; then
+        if [[ "$cmd" == "read" ]]; then
+            normalize_gerrit_json "$body"
         else
-            # 시도조차 못함
-            echo "${seq_str}| FAIL| ${c} | Skipped due to previous dependency failure" >> "${MERGE_RESULT_FILE}"
-            fail_count=$((fail_count + 1))
+            echo -e "${COLOR_GREEN}[OKAY]${COLOR_RESET} $label success (HTTP $http_code)"
+            [[ -n "$body" ]] && normalize_gerrit_json "$body"
         fi
-      done
-    else
-      # 모두 성공 시 OKAY 기록
-      for (( i=0; i<${#patch_buffer[@]}; i++ )); do
-        local c="${patch_buffer[$i]}"
-        echo "${seq_str}| OKAY| ${c}" >> "${MERGE_RESULT_FILE}"
-        success_count=$((success_count + 1))
-      done
+        return 0
     fi
 
-  done < "${CANDIDATE_LIST_FILE}"
-
-  # 최종 통계 반영
-  echo "${total_commits} = ${success_count} + ${fail_count}" >> "${MERGE_RESULT_FILE}"
-  sort -r "${MERGE_RESULT_FILE}" -o "${MERGE_RESULT_FILE}"
-
-  set -x
+    echo -e "${COLOR_RED}[FAIL]${COLOR_RESET} $label failed (HTTP $http_code)" >&2
+    [[ -n "$body" ]] && normalize_gerrit_json "$body" >&2
+    return 1
 }
+
+#==================================================================================================================
+# 함수: 조용한 GET 호출로 Gerrit JSON 획득
+#==================================================================================================================
+get_gerrit_json() {
+    local api_url="$1"
+    local auth http_code body
+
+    auth=$(get_auth_info "$api_url") || return 1
+    http_code=$(curl -sS -o "$TEMP_RESPONSE_FILE" -w "%{http_code}" -su "$auth" -X GET "$api_url")
+    body=$(cat "$TEMP_RESPONSE_FILE" 2>/dev/null || true)
+
+    [[ "$http_code" =~ ^2 ]] || {
+        echo -e "${COLOR_RED}[FAIL]${COLOR_RESET} GET $api_url failed (HTTP $http_code)" >&2
+        [[ -n "$body" ]] && normalize_gerrit_json "$body" >&2
+        return 1
+    }
+
+    normalize_gerrit_json "$body"
+}
+
+#==================================================================================================================
+# 함수: JSON 입력 로딩
+#==================================================================================================================
+load_json_input() {
+    local input="$1"
+
+    if [[ -f "$input" ]]; then
+        cat "$input"
+    else
+        echo "$input"
+    fi
+}
+
+#==================================================================================================================
+# 함수: Change-Id footer가 포함된 commit message 생성
+#==================================================================================================================
+build_commit_message() {
+    local api_url="$1"
+    local requested_message="$2"
+    local auth http_code detail_body detail_json change_id_line
+
+    if grep -q '^Change-Id:' <<< "$requested_message"; then
+        echo "$requested_message"
+        return 0
+    fi
+
+    auth=$(get_auth_info "$api_url") || return 1
+    http_code=$(curl -sS -o "$TEMP_RESPONSE_FILE" -w "%{http_code}" -su "$auth" -X GET "$api_url/detail")
+    detail_body=$(cat "$TEMP_RESPONSE_FILE" 2>/dev/null || true)
+
+    [[ ! "$http_code" =~ ^2 ]] && {
+        echo -e "${COLOR_RED}[FAIL]${COLOR_RESET} message detail read failed (HTTP $http_code)" >&2
+        [[ -n "$detail_body" ]] && normalize_gerrit_json "$detail_body" >&2
+        return 1
+    }
+
+    detail_json=$(normalize_gerrit_json "$detail_body") || return 1
+    change_id_line=$(jq -r '.change_id // empty' <<< "$detail_json")
+
+    [[ -z "$change_id_line" || "$change_id_line" == "null" ]] && {
+        echo -e "${COLOR_RED}[ERROR]${COLOR_RESET} change_id 없음" >&2
+        return 1
+    }
+
+    printf '%s\n\nChange-Id: %s\n' "$requested_message" "$change_id_line"
+}
+
+#==================================================================================================================
+# 함수: 테스트 보조 함수
+#==================================================================================================================
+test_timestamp() {
+    date +%Y%m%d%H%M%S
+}
+
+test_require_target() {
+    [[ -n "$TEST_COMMIT_URL" ]] && return 0
+    echo -e "${COLOR_RED}[ERROR]${COLOR_RESET} GERRIT_TEST_COMMIT_URL is required for test mode" >&2
+    return 1
+}
+
+test_read_item() {
+    local item="$1"
+    local commit_url="${2:-$TEST_COMMIT_URL}"
+    local read_result
+
+    test_require_target || return 1
+    read_result=$(dispatch_item read "$commit_url" "$item" "") || return 1
+    echo "$read_result" | jq . >/dev/null 2>&1 || return 1
+    echo "$read_result"
+}
+
+test_write_item() {
+    local item="$1"
+    local commit_url="$2"
+    local json_data="$3"
+
+    dispatch_item write "$commit_url" "$item" "$json_data"
+}
+
+#==================================================================================================================
+# 함수: Commit 메시지 read/write/test/help
+#==================================================================================================================
+gerrit_message() {
+    local cmd="$1"
+    local commit_url="$2"
+    local json_data="${3:-}"
+    local parsed_info change_id gerrit_url message payload full_message
+    local before_json before_message after_json new_message restore_json
+
+    case "$cmd" in
+        write)
+            parsed_info=$(parse_commit_url "$commit_url") || return 1
+            change_id=$(jq -r '.change_id' <<< "$parsed_info")
+            gerrit_url=$(jq -r '.api_url' <<< "$parsed_info")
+            message=$(jq -r '.message // empty' <<< "$json_data")
+
+            [[ -z "$message" ]] && { echo -e "${COLOR_RED}[ERROR]${COLOR_RESET} message 없음"; return 1; }
+            full_message=$(build_commit_message "$gerrit_url" "$message") || return 1
+            payload=$(jq -cn --arg message "$full_message" '{message:$message}')
+
+            call_gerrit_api "$cmd" "message write" "PUT" "$gerrit_url/message" "$payload"
+        ;;
+        read)
+            parsed_info=$(parse_commit_url "$commit_url") || return 1
+            gerrit_url=$(jq -r '.api_url' <<< "$parsed_info")
+
+            call_gerrit_api "$cmd" "message read" "GET" "$gerrit_url/message" | jq '{message:(.subject // .full_message // null), subject:(.subject // null), full_message:(.full_message // null), footers:(.footers // {})}'
+        ;;
+        test)
+            commit_url="$TEST_COMMIT_URL"
+            before_json=$(test_read_item "message" "$commit_url") || return 1
+            before_message=$(jq -r '.message // empty' <<< "$before_json")
+            new_message="commit.sh test message $(test_timestamp)"
+
+            test_write_item "message" "$commit_url" "$(jq -cn --arg message "$new_message" '{message:$message}')" || return 1
+            after_json=$(test_read_item "message" "$commit_url") || return 1
+            [[ "$(jq -r '.message // empty' <<< "$after_json")" == "$new_message" ]] || return 1
+
+            [[ -n "$before_message" && "$before_message" != "$new_message" ]] && {
+                restore_json=$(jq -cn --arg message "$before_message" '{message:$message}')
+                test_write_item "message" "$commit_url" "$restore_json" || return 1
+            }
+
+            echo '{"item":"message","test":"ok","mode":"write-read"}'
+        ;;
+        help|*)
+            echo "usage) commit.sh write <url> message '{\"message\":\"New subject\"}'"
+            echo "usage) commit.sh read  <url> message"
+        ;;
+    esac
+}
+
+#==================================================================================================================
+# 함수: Topic read/write/test/help
+#==================================================================================================================
+gerrit_topic() {
+    local cmd="$1"
+    local commit_url="$2"
+    local json_data="${3:-}"
+    local parsed_info gerrit_url topic payload
+    local before_json before_topic after_json new_topic restore_json
+
+    case "$cmd" in
+        write)
+            parsed_info=$(parse_commit_url "$commit_url") || return 1
+            gerrit_url=$(jq -r '.api_url' <<< "$parsed_info")
+            topic=$(jq -r '.topic // empty' <<< "$json_data")
+
+            if [[ -z "$topic" ]]; then
+                call_gerrit_api "$cmd" "topic clear" "DELETE" "$gerrit_url/topic"
+            else
+                payload=$(jq -cn --arg topic "$topic" '{topic:$topic}')
+                call_gerrit_api "$cmd" "topic write" "PUT" "$gerrit_url/topic" "$payload"
+            fi
+        ;;
+        read)
+            parsed_info=$(parse_commit_url "$commit_url") || return 1
+            gerrit_url=$(jq -r '.api_url' <<< "$parsed_info")
+
+            call_gerrit_api "$cmd" "topic read" "GET" "$gerrit_url/topic" | jq 'if type=="string" then {topic:.} else {topic:(.topic // null)} end'
+        ;;
+        test)
+            commit_url="$TEST_COMMIT_URL"
+            before_json=$(test_read_item "topic" "$commit_url") || return 1
+            before_topic=$(jq -r '.topic // empty' <<< "$before_json")
+            new_topic="commit-sh-test-topic-$(test_timestamp)"
+
+            test_write_item "topic" "$commit_url" "$(jq -cn --arg topic "$new_topic" '{topic:$topic}')" || return 1
+            after_json=$(test_read_item "topic" "$commit_url") || return 1
+            [[ "$(jq -r '.topic // empty' <<< "$after_json")" == "$new_topic" ]] || return 1
+
+            restore_json=$(jq -cn --arg topic "$before_topic" '{topic:$topic}')
+            test_write_item "topic" "$commit_url" "$restore_json" || return 1
+
+            echo '{"item":"topic","test":"ok","mode":"write-read"}'
+        ;;
+        help|*)
+            echo "usage) commit.sh write <url> topic '{\"topic\":\"new-topic\"}'"
+            echo "usage) commit.sh read  <url> topic"
+        ;;
+    esac
+}
+
+#==================================================================================================================
+# 함수: Reviewer read/write/test/help
+#==================================================================================================================
+gerrit_reviewers() {
+    local cmd="$1"
+    local commit_url="$2"
+    local json_data="${3:-}"
+    local parsed_info gerrit_url reviewers_json single_reviewer item reviewer_value reviewer_payload
+    local read_json
+    local result=0
+
+    case "$cmd" in
+        write)
+            parsed_info=$(parse_commit_url "$commit_url") || return 1
+            gerrit_url=$(jq -r '.api_url' <<< "$parsed_info")
+            reviewers_json=$(jq -c '.reviewers // empty' <<< "$json_data")
+            single_reviewer=$(jq -r '.reviewer // empty' <<< "$json_data")
+
+            [[ -z "$reviewers_json" && -z "$single_reviewer" ]] && { echo -e "${COLOR_RED}[ERROR]${COLOR_RESET} reviewers/reviewer 없음"; return 1; }
+
+            if [[ -n "$reviewers_json" ]]; then
+                while IFS= read -r item; do
+                    [[ -z "$item" ]] && continue
+                    reviewer_value=$(jq -r 'if type=="object" then .reviewer // empty else . end' <<< "$item")
+                    [[ -z "$reviewer_value" || "$reviewer_value" == "null" ]] && continue
+
+                    reviewer_payload=$(jq -cn --arg reviewer "$reviewer_value" '{reviewer:$reviewer}')
+                    call_gerrit_api "$cmd" "reviewer write" "POST" "$gerrit_url/reviewers" "$reviewer_payload" || result=1
+                done < <(jq -c '.[]' <<< "$reviewers_json")
+            else
+                reviewer_payload=$(jq -cn --arg reviewer "$single_reviewer" '{reviewer:$reviewer}')
+                call_gerrit_api "$cmd" "reviewer write" "POST" "$gerrit_url/reviewers" "$reviewer_payload" || result=1
+            fi
+
+            return $result
+        ;;
+        read)
+            parsed_info=$(parse_commit_url "$commit_url") || return 1
+            gerrit_url=$(jq -r '.api_url' <<< "$parsed_info")
+
+            call_gerrit_api "$cmd" "reviewer read" "GET" "$gerrit_url/reviewers"
+        ;;
+        test)
+            commit_url="$TEST_COMMIT_URL"
+            test_write_item "reviewers" "$commit_url" "$(jq -cn --arg reviewer "$TEST_REVIEWER" '{reviewer:$reviewer}')" || true
+            read_json=$(test_read_item "reviewers" "$commit_url") || return 1
+            echo "$read_json" | jq -e --arg reviewer "$TEST_REVIEWER" 'tostring | contains($reviewer)' >/dev/null 2>&1 || return 1
+
+            echo '{"item":"reviewers","test":"ok","mode":"write-read"}'
+        ;;
+        help|*)
+            echo "usage) commit.sh write <url> reviewers '{\"reviewers\":[{\"reviewer\":\"vc.integrator\"}]}'"
+            echo "usage) commit.sh read  <url> reviewers"
+        ;;
+    esac
+}
+
+#==================================================================================================================
+# 함수: Label read/write/test/help
+#==================================================================================================================
+gerrit_labels() {
+    local cmd="$1"
+    local commit_url="$2"
+    local json_data="${3:-}"
+    local parsed_info gerrit_url labels message review_json
+    local label_key label_score payload read_json
+
+    case "$cmd" in
+        write)
+            parsed_info=$(parse_commit_url "$commit_url") || return 1
+            gerrit_url=$(jq -r '.api_url' <<< "$parsed_info")
+            labels=$(jq -c '.labels // empty' <<< "$json_data")
+            message=$(jq -r '.message // "Review completed"' <<< "$json_data")
+
+            [[ -z "$labels" ]] && { echo -e "${COLOR_RED}[ERROR]${COLOR_RESET} labels 없음"; return 1; }
+            review_json=$(jq -cn --argjson labels "$labels" --arg message "$message" '{labels:$labels,message:$message}')
+
+            call_gerrit_api "$cmd" "labels write" "POST" "$gerrit_url/revisions/current/review" "$review_json"
+        ;;
+        read)
+            parsed_info=$(parse_commit_url "$commit_url") || return 1
+            gerrit_url=$(jq -r '.api_url' <<< "$parsed_info")
+
+            call_gerrit_api "$cmd" "labels read" "GET" "$gerrit_url/detail" | jq '{labels:(.labels // {}), submit_type:(.submit_type // null)}'
+        ;;
+        test)
+            commit_url="$TEST_COMMIT_URL"
+            label_key=$(test_read_item "labels" "$commit_url" | jq -r '(.labels | keys[0]) // empty')
+            [[ -z "$label_key" ]] && label_key="Code-Review"
+            label_score=0
+            payload=$(jq -cn --arg label_key "$label_key" --arg message "commit.sh labels test $(test_timestamp)" --argjson label_score "$label_score" '{labels:{($label_key):$label_score},message:$message}')
+
+            test_write_item "labels" "$commit_url" "$payload" || return 1
+            read_json=$(test_read_item "labels" "$commit_url") || return 1
+            echo "$read_json" | jq -e '.labels | type == "object"' >/dev/null 2>&1 || return 1
+
+            echo '{"item":"labels","test":"ok","mode":"write-read"}'
+        ;;
+        help|*)
+            echo "usage) commit.sh write <url> labels '{\"labels\":{\"Code-Review\":1},\"message\":\"Looks good\"}'"
+            echo "usage) commit.sh read  <url> labels"
+        ;;
+    esac
+}
+
+#==================================================================================================================
+# 함수: Comment read/write/test/help
+#==================================================================================================================
+gerrit_comment() {
+    local cmd="$1"
+    local commit_url="$2"
+    local json_data="${3:-}"
+    local parsed_info gerrit_url message comments review_json
+    local test_message read_json
+
+    case "$cmd" in
+        write)
+            parsed_info=$(parse_commit_url "$commit_url") || return 1
+            gerrit_url=$(jq -r '.api_url' <<< "$parsed_info")
+            message=$(jq -r '.message // empty' <<< "$json_data")
+            comments=$(jq -c '.comments // empty' <<< "$json_data")
+
+            [[ -z "$message" ]] && { echo -e "${COLOR_RED}[ERROR]${COLOR_RESET} message 없음"; return 1; }
+
+            if [[ -n "$comments" ]]; then
+                review_json=$(jq -cn --arg message "$message" --argjson comments "$comments" '{message:$message,comments:$comments}')
+            else
+                review_json=$(jq -cn --arg message "$message" '{message:$message}')
+            fi
+
+            call_gerrit_api "$cmd" "comment write" "POST" "$gerrit_url/revisions/current/review" "$review_json"
+        ;;
+        read)
+            parsed_info=$(parse_commit_url "$commit_url") || return 1
+            gerrit_url=$(jq -r '.api_url' <<< "$parsed_info")
+
+            call_gerrit_api "$cmd" "comment read" "GET" "$gerrit_url/messages"
+        ;;
+        test)
+            commit_url="$TEST_COMMIT_URL"
+            test_message="commit.sh comment test $(test_timestamp)"
+            test_write_item "comment" "$commit_url" "$(jq -cn --arg message "$test_message" '{message:$message}')" || return 1
+            read_json=$(test_read_item "comment" "$commit_url") || return 1
+            echo "$read_json" | jq -e --arg message "$test_message" 'tostring | contains($message)' >/dev/null 2>&1 || return 1
+
+            echo '{"item":"comment","test":"ok","mode":"write-read"}'
+        ;;
+        help|*)
+            echo "usage) commit.sh write <url> comment '{\"message\":\"review comment\"}'"
+            echo "usage) commit.sh read  <url> comment"
+        ;;
+    esac
+}
+
+#==================================================================================================================
+# 함수: Private read/write/test/help
+#==================================================================================================================
+gerrit_private() {
+    local cmd="$1"
+    local commit_url="$2"
+    local json_data="${3:-}"
+    local parsed_info change_id gerrit_url is_private
+    local before_json before_flag target_flag after_json restore_json
+
+    case "$cmd" in
+        write)
+            parsed_info=$(parse_commit_url "$commit_url") || return 1
+            change_id=$(jq -r '.change_id' <<< "$parsed_info")
+            gerrit_url=$(jq -r '.api_url' <<< "$parsed_info")
+            is_private=$(jq -r 'if .private == false then "false" else "true" end' <<< "$json_data")
+
+            if [[ "$is_private" == "true" ]]; then
+                call_gerrit_api "$cmd" "private write" "POST" "$gerrit_url/private" '{"private":true}'
+            else
+                call_gerrit_api "$cmd" "private write" "DELETE" "$gerrit_url/private"
+            fi
+        ;;
+        read)
+            parsed_info=$(parse_commit_url "$commit_url") || return 1
+            change_id=$(jq -r '.change_id' <<< "$parsed_info")
+            gerrit_url=$(jq -r '.api_url' <<< "$parsed_info")
+
+            call_gerrit_api "$cmd" "private read" "GET" "$gerrit_url/detail" | jq -c --arg change_id "$change_id" '{change_id:$change_id, private:(.is_private // .private // false)}' | jq .
+        ;;
+        test)
+            commit_url="$TEST_COMMIT_URL"
+            before_json=$(test_read_item "private" "$commit_url") || return 1
+            before_flag=$(jq -r '.private // false' <<< "$before_json")
+
+            if [[ "$before_flag" == "true" ]]; then target_flag=false
+            else target_flag=true
+            fi
+
+            test_write_item "private" "$commit_url" "$(jq -cn --argjson private "$target_flag" '{private:$private}')" || return 1
+            after_json=$(test_read_item "private" "$commit_url") || return 1
+            [[ "$(jq -r '.private // false' <<< "$after_json")" == "$target_flag" ]] || return 1
+
+            restore_json=$(jq -cn --argjson private "$before_flag" '{private:$private}')
+            test_write_item "private" "$commit_url" "$restore_json" || return 1
+
+            echo '{"item":"private","test":"ok","mode":"write-read"}'
+        ;;
+        help|*)
+            echo "usage) commit.sh write <url> private '{\"private\":true}'"
+            echo "usage) commit.sh read  <url> private"
+        ;;
+    esac
+}
+
+#==================================================================================================================
+# 함수: WIP read/write/test/help
+#==================================================================================================================
+gerrit_wip() {
+    local cmd="$1"
+    local commit_url="$2"
+    local json_data="${3:-}"
+    local parsed_info change_id gerrit_url is_wip
+    local before_json before_flag target_flag after_json restore_json
+
+    case "$cmd" in
+        write)
+            parsed_info=$(parse_commit_url "$commit_url") || return 1
+            gerrit_url=$(jq -r '.api_url' <<< "$parsed_info")
+            is_wip=$(jq -r 'if .wip == false then "false" else "true" end' <<< "$json_data")
+
+            if [[ "$is_wip" == "true" ]]; then
+                call_gerrit_api "$cmd" "wip write" "POST" "$gerrit_url/wip"
+            else
+                call_gerrit_api "$cmd" "wip write" "POST" "$gerrit_url/ready"
+            fi
+        ;;
+        read)
+            parsed_info=$(parse_commit_url "$commit_url") || return 1
+            change_id=$(jq -r '.change_id' <<< "$parsed_info")
+            gerrit_url=$(jq -r '.api_url' <<< "$parsed_info")
+
+            call_gerrit_api "$cmd" "wip read" "GET" "$gerrit_url/detail" | jq -c --arg change_id "$change_id" '{change_id:$change_id, wip:(.work_in_progress // false)}' | jq .
+        ;;
+        test)
+            commit_url="$TEST_COMMIT_URL"
+            before_json=$(test_read_item "wip" "$commit_url") || return 1
+            before_flag=$(jq -r '.wip // false' <<< "$before_json")
+
+            if [[ "$before_flag" == "true" ]]; then target_flag=false
+            else target_flag=true
+            fi
+
+            test_write_item "wip" "$commit_url" "$(jq -cn --argjson wip "$target_flag" '{wip:$wip}')" || return 1
+            after_json=$(test_read_item "wip" "$commit_url") || return 1
+            [[ "$(jq -r '.wip // false' <<< "$after_json")" == "$target_flag" ]] || return 1
+
+            restore_json=$(jq -cn --argjson wip "$before_flag" '{wip:$wip}')
+            test_write_item "wip" "$commit_url" "$restore_json" || return 1
+
+            echo '{"item":"wip","test":"ok","mode":"write-read"}'
+        ;;
+        help|*)
+            echo "usage) commit.sh write <url> wip '{\"wip\":true}'"
+            echo "usage) commit.sh read  <url> wip"
+        ;;
+    esac
+}
+
+#==================================================================================================================
+# 함수: Hashtag read/write/test/help
+#==================================================================================================================
+gerrit_hashtags() {
+    local cmd="$1"
+    local commit_url="$2"
+    local json_data="${3:-}"
+    local parsed_info gerrit_url hashtags payload current_hashtags
+    local before_json before_tags_json after_json test_tag updated_tags_json restore_json
+
+    case "$cmd" in
+        write)
+            parsed_info=$(parse_commit_url "$commit_url") || return 1
+            gerrit_url=$(jq -r '.api_url' <<< "$parsed_info")
+            hashtags=$(jq -c '.hashtags // empty' <<< "$json_data")
+
+            [[ -z "$hashtags" ]] && { echo -e "${COLOR_RED}[ERROR]${COLOR_RESET} hashtags 없음"; return 1; }
+            current_hashtags=$(get_gerrit_json "$gerrit_url/hashtags") || return 1
+            payload=$(jq -cn --argjson current "$current_hashtags" --argjson desired "$hashtags" '{add:($desired - $current),remove:($current - $desired)}')
+
+            call_gerrit_api "$cmd" "hashtags write" "POST" "$gerrit_url/hashtags" "$payload"
+        ;;
+        read)
+            parsed_info=$(parse_commit_url "$commit_url") || return 1
+            gerrit_url=$(jq -r '.api_url' <<< "$parsed_info")
+
+            call_gerrit_api "$cmd" "hashtags read" "GET" "$gerrit_url/hashtags"
+        ;;
+        test)
+            commit_url="$TEST_COMMIT_URL"
+            before_json=$(test_read_item "hashtags" "$commit_url") || return 1
+            before_tags_json=$(echo "$before_json" | jq -c 'if type=="array" then . else .hashtags // [] end')
+            test_tag="commit-sh-test-$(test_timestamp)"
+            updated_tags_json=$(echo "$before_tags_json" | jq -c --arg tag "$test_tag" '. + [$tag] | unique')
+
+            test_write_item "hashtags" "$commit_url" "$(jq -cn --argjson hashtags "$updated_tags_json" '{hashtags:$hashtags}')" || return 1
+            after_json=$(test_read_item "hashtags" "$commit_url") || return 1
+            echo "$after_json" | jq -e --arg tag "$test_tag" 'if type=="array" then index($tag) != null else (.hashtags // []) | index($tag) != null end' >/dev/null 2>&1 || return 1
+
+            restore_json=$(jq -cn --argjson hashtags "$before_tags_json" '{hashtags:$hashtags}')
+            test_write_item "hashtags" "$commit_url" "$restore_json" || return 1
+
+            echo '{"item":"hashtags","test":"ok","mode":"write-read"}'
+        ;;
+        help|*)
+            echo "usage) commit.sh write <url> hashtags '{\"hashtags\":[\"tag1\",\"tag2\"]}'"
+            echo "usage) commit.sh read  <url> hashtags"
+        ;;
+    esac
+}
+
+#==================================================================================================================
+# 함수: Read-only 항목 read/write/test/help
+# write는 미지원이고 read만 제공
+#==================================================================================================================
+gerrit_read_only_item() {
+    local cmd="$1"
+    local commit_url="$2"
+    local item="$3"
+    local json_data="${4:-}"
+    local parsed_info gerrit_url
+
+    case "$cmd" in
+        write)
+            echo -e "${COLOR_RED}[ERROR]${COLOR_RESET} '$item' item is read-only in this script. Use read command."
+            return 1
+        ;;read)
+            parsed_info=$(parse_commit_url "$commit_url") || return 1
+            gerrit_url=$(jq -r '.api_url' <<< "$parsed_info")
+
+            case "$item" in
+                detail) call_gerrit_api "$cmd" "detail read" "GET" "$gerrit_url/detail"
+                ;;summary) call_gerrit_api "$cmd" "summary read" "GET" "$gerrit_url/detail" | jq '{change_id:(._number // null), project:(.project // null), branch:(.branch // null), status:(.status // null), subject:(.subject // null), topic:(.topic // null), private:(.is_private // .private // false), wip:(.work_in_progress // false), updated:(.updated // null)}'
+                ;;owner) call_gerrit_api "$cmd" "owner read" "GET" "$gerrit_url/detail" | jq '{owner:(.owner // null)}'
+                ;;assignee) call_gerrit_api "$cmd" "assignee read" "GET" "$gerrit_url/detail" | jq '{assignee:(.assignee // null)}'
+                ;;status) call_gerrit_api "$cmd" "status read" "GET" "$gerrit_url/detail" | jq '{status:(.status // null), private:(.is_private // .private // false), wip:(.work_in_progress // false), submittable:(.submittable // null), mergeable:(.mergeable // null)}'
+                ;;submit) call_gerrit_api "$cmd" "submit read" "GET" "$gerrit_url/detail" | jq '{submit_type:(.submit_type // null), submit_records:(.submit_records // []), requirements:(.requirements // []), labels:(.labels // {})}'
+                ;;attention) call_gerrit_api "$cmd" "attention read" "GET" "$gerrit_url/detail" | jq '{attention_set:(.attention_set // {})}'
+                ;;revision) call_gerrit_api "$cmd" "revision read" "GET" "$gerrit_url/detail?o=CURRENT_REVISION&o=CURRENT_COMMIT" | jq '{current_revision:(.current_revision // null), current_revision_number:(.current_revision_number // null), revision:(if .current_revision and .revisions then .revisions[.current_revision] else null end)}'
+                ;;revisions) call_gerrit_api "$cmd" "revisions read" "GET" "$gerrit_url/detail?o=ALL_REVISIONS&o=CURRENT_COMMIT" | jq '{current_revision:(.current_revision // null), current_revision_number:(.current_revision_number // null), revisions:(.revisions // {})}'
+                ;;files) call_gerrit_api "$cmd" "files read" "GET" "$gerrit_url/detail?o=CURRENT_REVISION&o=CURRENT_FILES" | jq '{current_revision:(.current_revision // null), files:(if .current_revision and .revisions then (.revisions[.current_revision].files // {}) else {} end)}'
+                ;;mergeable) call_gerrit_api "$cmd" "mergeable read" "GET" "$gerrit_url/detail" | jq '{mergeable:(.mergeable // null), submittable:(.submittable // null), status:(.status // null)}'
+                ;;*) echo -e "${COLOR_RED}[ERROR]${COLOR_RESET} Unsupported read-only item: $item"; return 1
+            esac
+        ;;test)
+            commit_url="$TEST_COMMIT_URL"
+            test_read_item "$item" "$commit_url" >/dev/null || return 1
+            echo "{\"item\":\"$item\",\"test\":\"ok\",\"mode\":\"read\"}"
+        ;;help|*)
+            echo "usage) commit.sh read <url> detail|summary|owner|assignee|status|submit|attention|revision|revisions|files|mergeable"
+    esac
+}
+
+#==================================================================================================================
+# 함수: item 라우팅
+#==================================================================================================================
+dispatch_item() {
+    local cmd="$1"
+    local commit_url="$2"
+    local item="$3"
+    local json_data="${4:-}"
+
+    case "$item" in
+            message) gerrit_message "$cmd" "$commit_url" "$json_data"
+        ;;       topic) gerrit_topic "$cmd" "$commit_url" "$json_data"
+        ;;   reviewers) gerrit_reviewers "$cmd" "$commit_url" "$json_data"
+        ;;      labels) gerrit_labels "$cmd" "$commit_url" "$json_data"
+        ;;     comment) gerrit_comment "$cmd" "$commit_url" "$json_data"
+        ;;     private) gerrit_private "$cmd" "$commit_url" "$json_data"
+        ;;         wip) gerrit_wip "$cmd" "$commit_url" "$json_data"
+        ;;    hashtags) gerrit_hashtags "$cmd" "$commit_url" "$json_data"
+        ;;      detail) gerrit_read_only_item "$cmd" "$commit_url" "$item" "$json_data"
+        ;;     summary) gerrit_read_only_item "$cmd" "$commit_url" "$item" "$json_data"
+        ;;       owner) gerrit_read_only_item "$cmd" "$commit_url" "$item" "$json_data"
+        ;;    assignee) gerrit_read_only_item "$cmd" "$commit_url" "$item" "$json_data"
+        ;;      status) gerrit_read_only_item "$cmd" "$commit_url" "$item" "$json_data"
+        ;;      submit) gerrit_read_only_item "$cmd" "$commit_url" "$item" "$json_data"
+        ;;   attention) gerrit_read_only_item "$cmd" "$commit_url" "$item" "$json_data"
+        ;;    revision) gerrit_read_only_item "$cmd" "$commit_url" "$item" "$json_data"
+        ;;   revisions) gerrit_read_only_item "$cmd" "$commit_url" "$item" "$json_data"
+        ;;       files) gerrit_read_only_item "$cmd" "$commit_url" "$item" "$json_data"
+        ;;   mergeable) gerrit_read_only_item "$cmd" "$commit_url" "$item" "$json_data"
+    ;;           *) echo -e "${COLOR_RED}[ERROR]${COLOR_RESET} Unsupported item: $item"; print_usage; return 1
+    esac
+}
+
+#==================================================================================================================
+# 테스트: 부작용 없는 테스트
+#==================================================================================================================
+run_all_tests() {
+    bar "Gerrit Commit read/write Test Suite"
+
+    gerrit_message test "" ""
+    gerrit_topic test "" ""
+    gerrit_reviewers test "" ""
+    gerrit_labels test "" ""
+    gerrit_comment test "" ""
+    gerrit_private test "" ""
+    gerrit_wip test "" ""
+    gerrit_hashtags test "" ""
+    gerrit_read_only_item test "" "detail" ""
+    gerrit_read_only_item test "" "summary" ""
+    gerrit_read_only_item test "" "owner" ""
+    gerrit_read_only_item test "" "assignee" ""
+    gerrit_read_only_item test "" "status" ""
+    gerrit_read_only_item test "" "submit" ""
+    gerrit_read_only_item test "" "attention" ""
+    gerrit_read_only_item test "" "revision" ""
+    gerrit_read_only_item test "" "revisions" ""
+    gerrit_read_only_item test "" "files" ""
+    gerrit_read_only_item test "" "mergeable" ""
+
+    bar "All tests passed"
+}
+
+#==================================================================================================================
+# 함수: 사용법 출력
+#==================================================================================================================
+print_usage() {
+    cat <<EOF
+${COLOR_YELLOW}Usage:${COLOR_RESET}
+    $0 <read|write|wirte|test|help> <url> <item> [json_file_or_json]
+
+${COLOR_YELLOW}Command:${COLOR_RESET}
+    - read   : Read Gerrit item and return JSON
+    - write  : Write Gerrit item using JSON payload
+    - wirte  : Alias of write (typo compatibility)
+    - test   : Run side-effect free tests
+    - help   : Show this help
+
+${COLOR_YELLOW}Item:${COLOR_RESET}
+    - message
+    - topic
+    - reviewers
+    - labels
+    - comment
+    - private
+    - wip
+    - hashtags
+    - detail     (read-only)
+    - summary    (read-only)
+    - owner      (read-only)
+    - assignee   (read-only)
+    - status     (read-only)
+    - submit     (read-only)
+    - attention  (read-only)
+    - revision   (read-only)
+    - revisions  (read-only)
+    - files      (read-only)
+    - mergeable  (read-only)
+
+${COLOR_YELLOW}Examples:${COLOR_RESET}
+    $0 write https://vgit.lge.com/na/c/project/+/1306464 message '{"change_id":1306464,"message":"New subject"}'
+    $0 read  https://vgit.lge.com/na/c/project/+/1306464 message
+    $0 read  https://vgit.lge.com/na/c/project/+/1306464 assignee
+    $0 read  https://vgit.lge.com/na/c/project/+/1306464 detail
+    $0 test
+EOF
+}
+
+#==================================================================================================================
+# 메인 함수
+#==================================================================================================================
+main() {
+    local cmd="${1:-help}"
+    local commit_url="${2:-}"
+    local item="${3:-}"
+    local json_input="${4:-}"
+
+    case "$cmd" in
+          help|-h|--help) print_usage;  return 0
+    ;;             test) run_all_tests; return 0
+    ;;            wirte) cmd="write"
+    ;;       read|write) :
+    ;;                *) echo -e "${COLOR_RED}[ERROR]${COLOR_RESET} Unsupported command: $cmd"; print_usage; return 1
+    esac
+
+    [[ -z "$commit_url" || -z "$item" ]] && {
+        echo -e "${COLOR_RED}[ERROR]${COLOR_RESET} url/item is required"
+        print_usage
+        return 1
+    }
+
+    if [[ "$cmd" == "write" ]]; then
+        [[ -z "$json_input" ]] && {
+            echo -e "${COLOR_RED}[ERROR]${COLOR_RESET} write mode requires JSON input"
+            print_usage
+            return 1
+        }
+        json_input=$(load_json_input "$json_input")
+    fi
+
+    dispatch_item "$cmd" "$commit_url" "$item" "$json_input"
+}
+
+#==================================================================================================================
+# 메인 진입점
+#==================================================================================================================
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    require_commands
+
+    main "$@"
+    cleanup_temp_file
+fi
