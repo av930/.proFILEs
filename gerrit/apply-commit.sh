@@ -1,6 +1,7 @@
 # Result path
 CANDIDATE_LIST_FILE="candidate_list_file.txt"
 MERGE_RESULT_FILE="out_mergelist"
+RET_NO_CHANGES=10
 
 COLOR_GREEN="\033[92m\033[1m"
 COLOR_RED="\033[91m\033[1m"
@@ -210,16 +211,17 @@ function get_commit_and_merge() {
 
 
     local total_commits=0
-    if [[ -f "${CANDIDATE_LIST_FILE}" ]]; then
-      total_commits=$(wc -l < "${CANDIDATE_LIST_FILE}")
+    if [[ -s "${CANDIDATE_LIST_FILE}" ]]; then
+      total_commits=$(grep -cve '^[[:space:]]*$' "${CANDIDATE_LIST_FILE}")
     fi
     
     bar "List Changes: $total_commits"
-    if [[ -f "${CANDIDATE_LIST_FILE}" ]]; then
+    if [[ -s "${CANDIDATE_LIST_FILE}" && "$total_commits" -gt 0 ]]; then
       cat "${CANDIDATE_LIST_FILE}"
     else
       echo "We have no changes"
-      return 0
+      rm -f "${CANDIDATE_LIST_FILE}"
+      return "$RET_NO_CHANGES"
     fi
 
   bar "Merge commit"
@@ -349,6 +351,7 @@ function get_commit_and_merge() {
   sort -r "${MERGE_RESULT_FILE}" -o "${MERGE_RESULT_FILE}"
 
   set -x
+  return 0
 }
 
 
