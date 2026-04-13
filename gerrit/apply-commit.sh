@@ -1,7 +1,7 @@
 # Result path
 CANDIDATE_LIST_FILE="candidate_list_file.txt"
 MERGE_RESULT_FILE="out_mergelist"
-RET_NO_CHANGES=10
+RET_NO_CHANGES=0
 
 COLOR_GREEN="\033[92m\033[1m"
 COLOR_RED="\033[91m\033[1m"
