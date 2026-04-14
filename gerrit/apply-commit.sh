@@ -1,3 +1,27 @@
+#!/bin/bash
+# 용도:
+#   Gerrit 원격 저장소에서 submittable 상태의 커밋들을 조회하고 현재 manifest 기반 로컬 저장소로 병합합니다.
+#   의존성이 있는 커밋들은 [+] 패턴을 파싱하여 재귀적으로 탐색하고 그룹화하여 순차 병합하며,
+#   하나라도 실패하면 전체 그룹을 롤백합니다. 최종 결과는 out_mergelist 파일에 기록됩니다.
+#
+# 사용법:
+#   source apply-commit.sh
+#   get_commit_and_merge [gerrit_query]
+#
+#   gerrit_query (선택): Gerrit 조회 쿼리 문자열
+#                        기본값: status:open+-label:verified%2B1+label:Code-Review%2B2+branch:connect_w_event_jg_p2_a2_260224
+#
+# 환경 변수:
+#   USER         : Gerrit 인증 사용자명
+#   TOKEN_VGIT   : vgit.lge.com Gerrit API 토큰
+#   TOKEN_LAMP   : lamp.lge.com Gerrit API 토큰
+#
+# 출력 파일:
+#   candidate_list_file.txt : 조회된 후보 커밋 URL 목록
+#   out_mergelist          : 병합 결과 (OKAY/FAIL/BACK)
+#   manifest_formatted.json: manifest JSON 형식
+#==========================================================================================================
+
 # Result path
 CANDIDATE_LIST_FILE="candidate_list_file.txt"
 MERGE_RESULT_FILE="out_mergelist"
@@ -14,7 +38,8 @@ bar() { printf "\n\n\e[1;36m%s%s \e[0m\n" "${1:+[$1] }" "${line:(${1:+3} + ${#1}
 
 function get_commit_info() {
 #----------------------------------------------------------------------------------------------------------
-# Gerrit commit URL로부터 commit 정보 조회
+# Gerrit commit URL로부터 commit 정보를 JSON 형식으로 조회합니다.
+# Gerrit API를 사용하여 변경 번호로 git 프로젝트명, 리비전, 다운로드 명령어 등 상세 정보를 추출합니다.
 # 입력: Gerrit commit URL
 # 출력: commit info JSON
 
@@ -39,49 +64,79 @@ function get_commit_info() {
 }
 
 
+function resolve_changeid_to_url() {
+#----------------------------------------------------------------------------------------------------------
+# 숫자 change ID를 lamp.lge.com Gerrit API로 조회하여 full URL 형식으로 변환합니다.
+# 조회 성공 시 "http://lamp.lge.com/review/c/{project}/+/{change_id}" 형태의 URL을 출력합니다.
+# 입력: change ID (숫자)
+# 출력: Gerrit full URL (실패 시 빈 문자열)
+
+    local change_id="$1"
+    [[ "$change_id" =~ ^[0-9]+$ ]] || return 1
+
+    local auth_string="${USER}:${TOKEN_LAMP}"
+    local api_result project_name
+
+    api_result="$(curl -fsSu "$auth_string" \
+        "http://lamp.lge.com/review/a/changes/?q=${change_id}&n=1" 2>/dev/null | sed '1d')" || return 1
+
+    project_name="$(echo "$api_result" | jq -r '.[0].project // empty' 2>/dev/null)"
+    [[ -z "$project_name" ]] && return 1
+
+    echo "http://lamp.lge.com/review/c/${project_name}/+/${change_id}"
+}
+
+
 function get_relate_changes() {
 #----------------------------------------------------------------------------------------------------------
-# 커밋의 의존성 체인 재귀 탐색
+# 커밋 메시지에서 줄처음의 [+] 패턴을 파싱하여 관련 의존성 커밋을 재귀적으로 탐색합니다.
+# [+] 뒤에 full URL이 오는 경우와 쉼표/공백으로 구분된 change ID 숫자가 오는 경우를 모두 처리하며,
+# 숫자 ID는 lamp.lge.com Gerrit API로 조회하여 URL로 변환한 뒤 patch_buffer에 누적합니다.
 # 입력: commit URL
 # 출력: patch_buffer 배열에 의존성 커밋 추가 (전역 변수 기반 작동)
 
-    local commit="$1"
-    local commit_message
-    local -a working_r_changes=()
+    local commit="$1" msg content url
 
-    commit_message="$(get_commit_info "${commit}" | jq -r '.[0].revisions[].commit.message' 2>/dev/null)" || return 0
-
-    # lamp.lge.com이 아니고 [DESC][+] 패턴이 없으면 의존성 없음
-    if [[ ! "$commit" =~ "lamp.lge.com" ]] && ! echo "$commit_message" | grep -qi "\[DESC\]\[+\]"; then
-        return 0
-    fi
+    msg="$(get_commit_info "${commit}" | jq -r '.[0].revisions[].commit.message' 2>/dev/null)" || return 0
 
     while IFS= read -r line; do
-        [[ "$line" == "[+]"* ]] && working_r_changes+=("$(echo "$line" | awk '{print $2}')")
-    done <<< "${commit_message}"
+        # [+]가 줄 처음에 있는 경우만 처리
+        [[ "$line" =~ ^\[+\][[:space:]]*(.*) ]] || continue
+        content="${BASH_REMATCH[1]}"
 
-    for r_change in "${working_r_changes[@]}"; do
-        [[ -z "$r_change" ]] && continue
-
-        local is_new_changes="True"
-        for change in "${patch_buffer[@]}"; do
-            [[ "$r_change" == "$change" ]] && { is_new_changes="False"; break; }
-        done
-
-        if [[ "$is_new_changes" == "True" ]]; then
-            echo "[CHECK----------------------------] Found related change: $r_change" >&2
-            patch_buffer+=("${r_change}")
-            get_relate_changes "$r_change"
+        if [[ "$content" =~ ^https?:// ]]; then
+            # Full URL → 직접 추가
+            url="$content"
+        else
+            # Change ID 숫자들 → lamp.lge.com 조회
+            for token in ${content//,/ }; do
+                token="${token//[[:space:]]/}"
+                [[ "$token" =~ ^[0-9]+$ ]] || continue
+                url="$(resolve_changeid_to_url "$token")"
+                [[ -z "$url" ]] && { echo "[WARN] Failed to resolve change ID: $token" >&2; continue; }
+                echo "[CHECK] Resolved ID $token -> $url" >&2
+                
+                # 중복 체크 및 재귀 호출
+                [[ " ${patch_buffer[*]} " =~ " ${url} " ]] && continue
+                patch_buffer+=("$url")
+                get_relate_changes "$url"
+            done
+            continue
         fi
-    done
 
-    return 0
+        # URL 중복 체크 및 재귀 호출
+        [[ " ${patch_buffer[*]} " =~ " ${url} " ]] && continue
+        echo "[CHECK] Found related change: $url" >&2
+        patch_buffer+=("$url")
+        get_relate_changes "$url"
+    done <<< "$msg"
 }
 
 
 function git_pull() {
 #----------------------------------------------------------------------------------------------------------
-# Gerrit commit URL로부터 commit을 manifest 경로로 pull
+# Gerrit commit 정보를 기반으로 해당 프로젝트의 git 디렉토리를 찾아 안전한 풀 명령을 실행합니다.
+# divergent branches 충돌을 피하기 위해 pull.rebase=false 옵션을 적용(ff로 try후 안되면 merge하는 방식), 실패시 에러 출력.
 # 입력: Gerrit commit URL
 # 출력: 성공 시 0, 실패 시 1 반환
 
@@ -123,17 +178,14 @@ function git_pull() {
 
 function get_commit_and_merge() {
   #------------------------------------------
-  #- Replace flow for 2 steps below:
-  #- 1. python3 sc-infra/script/integration.py -p $TARGET_PROJECT -m AUTOSTEP1 -d T -l GET_COMMITS
-  #- 2. python3 sc-infra/script/integration.py -p $TARGET_PROJECT -m AUTOSTEP1 -d T -l MERGE_COMMITS
-  #------------------------------------------
-  #- output: get all candidate commits and merge to local
-  #- its hard to follow all check from sc-infa, just assume simple case
-  # get and merge only list commit with status "ready to submit" / "is:submittable"
-  # do not support check outdate (relation change outdate)
-  # do not support check child manifest
-  # do not support check relate/parent changes is invalid
-  # do not support AOSP commit valid (commit need review by Architect)
+  # 현재 manifest의 리뷰 원격 저장소(Gerrit)에서 submittable 상태의 모든 후보 커밋을 조회하고 로컬 프로젝트로 병합합니다.
+  # 각 후보 커밋은 manifest 등록 프로젝트와 매칭 검증을 거치며, 의존성이 있는 경우 재귀 탐색으로 관련 커밋들을 그룹화합니다.
+  # 총 10개 commit이 있고 그중에 2개의 commit이 각각 related change가 2개라면, 총 6개(3개1그룹+3개1그룹+4그룹)의 group이 된다.
+  # 그룹 내 모든 커밋을 순차 병합하며, 하나라도 실패하면 전체 그룹을 롤백하고 결과를 out_mergelist 파일에 기록합니다.
+  # 입력: gerrit_query (선택) - Gerrit API 쿼리 문자열 (기본값: status:open+-label:verified%2B1+label:Code-Review%2B2+branch:connect_w_event_jg_p2_a2_260224)
+  # 출력: 성공 시 0, 변경 없음 시 RET_NO_CHANGES 반환
+
+  local GERRIT_QUERY="${1:-status:open+-label:verified%2B1+label:Code-Review%2B2+branch:connect_w_event_jg_p2_a2_260224}"
   set +x
   
   manifest_formatted="manifest_formatted.json"
@@ -164,7 +216,7 @@ function get_commit_and_merge() {
 
       # 전체 커밋 조회 (프로젝트 필터 없이) - sed '1d' 로 )]}' 제거
       all_commits="$(curl -fsSu "$auth_string" \
-        "$remote_url/a/changes/?q=status:open+-label:verified%2B1+label:Code-Review%2B2+branch:connect_w_event_jg_p2_a2_260224" \
+        "$remote_url/a/changes/?q=${GERRIT_QUERY}" \
         2>/dev/null | sed '1d')" || { echo -e " -> ${COLOR_YELLOW}[WARN]${COLOR_RESET} Failed"; continue; }
 
       commit_count=$(echo "$all_commits" | jq -r 'length // 0' 2>/dev/null)

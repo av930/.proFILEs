@@ -1,19 +1,25 @@
 #!/bin/bash
-# Usage: feedback_commit.sh <group> <candidate_list_file> [item] [grade] [text...]
-#
+# 용도:
+#   gerrit commit url에 점수와 comment를 남기는 기능
+#   
+# 사용법: 
+#   feedback_commit.sh <group> <candidate_list_file> [item] [grade] [text...]
 #   <group>               : repo list group name (e.g. amss)
 #   <candidate_list_file> : file containing Gerrit commit URLs (one per line)
 #   [item]                : verified|verfied|review|ai-review
 #   [grade]               : label score (e.g. +1, -1, 0)
 #   [text...]             : message line shown below "Build Successful" (used only when item exists)
 #
-# This script finds one URL per repo in group and then calls commit.sh:
-#   commit.sh write <url> labels '{"labels":{"<Label>":<grade>},"message":"..."}'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMMIT_SH="${SCRIPT_DIR}/commit.sh"
 
-usage() {
+function usage() {
+#----------------------------------------------------------------------------------------------------------
+# 스크립트 사용법을 출력합니다.
+# 입력: 없음
+# 출력: 사용법 메시지 (stdout)
+
     echo "Usage: $0 <group> <candidate_list_file> [item] [grade] [text...]"
     echo "  item: verified|verfied|review|ai-review"
     echo "  grade: +1|-1|0 ..."
@@ -76,7 +82,14 @@ mapfile -t git_names < <(repo list -g "$GROUP" -n 2>/dev/null)
 
 matched_urls=()
 
-extract_gitname_from_url() {
+function extract_gitname_from_url() {
+#----------------------------------------------------------------------------------------------------------
+# Gerrit URL에서 git 프로젝트명을 추출합니다.
+# URL 형식: http(s)://<host>/<prefix>/c/<gitname>/+/<change_number>
+# sed 정규식으로 <gitname> 부분만 파싱하여 반환합니다.
+# 입력: Gerrit commit URL
+# 출력: git 프로젝트명 (추출 실패 시 빈 문자열)
+
     local url="$1"
     sed -n 's#^https\?://[^/]\+/[^/]\+/c/\(.*\)/+/[0-9][0-9]*$#\1#p' <<< "$url"
 }
