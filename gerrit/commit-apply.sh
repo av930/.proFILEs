@@ -179,10 +179,20 @@ function get_commit() {
   #------------------------------------------
   # 현재 manifest의 리뷰 원격 저장소(Gerrit)에서 submittable 상태의 모든 후보 커밋을 조회하여
   # 목록을 $CANDIDATE_LIST_FILE 파일에 기록합니다. (병합 제외)
-  # 입력: gerrit_query - Gerrit API 쿼리 문자열
+  # 입력: gerrit_query - Gerrit API 쿼리 문자열 또는 웹 브라우저 검색 URL
   # 출력: 성공 시 0, 변경 없음 시 RET_NO_CHANGES 반환
 
-  local GERRIT_QUERY="${1:?"You must provide a Gerrit query string as the first argument"}"
+  local raw_input="${1:?"You must provide a Gerrit query string as the first argument"}"
+  local GERRIT_QUERY="$raw_input"
+
+  # URL 형태(예: https://.../q/...)로 입력된 경우 /q/ 이후의 쿼리 문자열만 추출
+  if [[ "$raw_input" == *"/q/"* ]]; then
+      GERRIT_QUERY="${raw_input#*/q/}"
+  fi
+
+  # 브라우저 주소에서 복사 시 발생하는 이중 URL 인코딩(%252B 등)을 %2B로 정상화
+  GERRIT_QUERY="${GERRIT_QUERY//%25/%}"
+
   set +x
   
   manifest_formatted="manifest_formatted.json"
