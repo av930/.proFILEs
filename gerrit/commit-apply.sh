@@ -175,6 +175,50 @@ function git_pull() {
 }
 
 
+function check_commit() {
+#----------------------------------------------------------------------------------------------------------
+# Gerrit URL 기반으로 커밋이 원격 서버에 존재하는지 확인합니다. (repo 미사용)
+# 입력: Gerrit commit URL 또는 Query URL
+# 반환: 존재하면 0 (true), 존재하지 않거나 에러 시 1 (false)
+
+    local raw_input="${1:?"You must provide a Gerrit commit URL or query URL"}"
+    local commit_url="$(echo -e "${raw_input}" | tr -d '\r\n ')"
+
+    local gerrit_query=""
+    local base_url=""
+
+    # URL 형태 분석 (Query URL vs Commit URL)
+    if [[ "$commit_url" == *"/q/"* ]]; then
+        gerrit_query="${commit_url#*/q/}"
+        gerrit_query="${gerrit_query//%25/%}"
+        base_url="${commit_url%%/q/*}"
+    elif [[ "$commit_url" == *"/c/"* ]]; then
+        gerrit_query="${commit_url##*/}"
+        base_url="${commit_url%%/c/*}"
+    else
+        # 기본 처리
+        gerrit_query="${commit_url##*/}"
+        base_url="$(echo "$commit_url" | grep -oP '^https?://[^/]+')"
+        [[ -z "$base_url" ]] && return 1
+    fi
+
+    local auth_string="${USER}:${TOKEN_VGIT}"
+    [[ "$commit_url" == *"lamp.lge.com"* ]] && auth_string="${USER}:${TOKEN_LAMP}"
+
+    local api_result
+    api_result="$(curl -fsSu "$auth_string" "${base_url}/a/changes/?q=${gerrit_query}" 2>/dev/null | sed '1d')" || return 1
+
+    local commit_count
+    commit_count=$(echo "$api_result" | jq -r 'length // 0' 2>/dev/null)
+
+    if [[ "$commit_count" -gt 0 ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+
 function get_commit() {
   #------------------------------------------
   # 현재 manifest의 리뷰 원격 저장소(Gerrit)에서 submittable 상태의 모든 후보 커밋을 조회하여
