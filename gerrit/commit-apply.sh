@@ -181,7 +181,11 @@ function check_commit() {
 # 입력: Gerrit commit URL 또는 Query URL
 # 반환: 존재하면 0 (true), 존재하지 않거나 에러 시 1 (false)
 
-    local raw_input="${1:?"You must provide a Gerrit commit URL or query URL"}"
+    if [[ -z "$1" ]]; then
+        echo "Error: You must provide a Gerrit commit URL or query URL" >&2
+        return 1
+    fi
+    local raw_input="$1"
     local commit_url="$(echo -e "${raw_input}" | tr -d '\r\n ')"
 
     local gerrit_query=""
@@ -211,11 +215,8 @@ function check_commit() {
     local commit_count
     commit_count=$(echo "$api_result" | jq -r 'length // 0' 2>/dev/null)
 
-    if [[ "$commit_count" -gt 0 ]]; then
-        return 0
-    else
-        return 1
-    fi
+    [[ "$commit_count" -gt 0 ]] && return 0 || return 1
+
 }
 
 
@@ -226,7 +227,11 @@ function get_commit() {
   # 입력: gerrit_query - Gerrit API 쿼리 문자열 또는 웹 브라우저 검색 URL
   # 출력: 성공 시 0, 변경 없음 시 RET_NO_CHANGES 반환
 
-  local raw_input="${1:?"You must provide a Gerrit query string as the first argument"}"
+  if [[ -z "$1" ]]; then
+      echo "Error: You must provide a Gerrit query string as the first argument" >&2
+      return 1
+  fi
+  local raw_input="$1"
   local GERRIT_QUERY="$raw_input"
 
   # URL 형태(예: https://.../q/...)로 입력된 경우 /q/ 이후의 쿼리 문자열만 추출
