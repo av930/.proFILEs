@@ -4,13 +4,12 @@
 #   의존성이 있는 커밋들은 [+] 패턴을 파싱하여 재귀적으로 탐색하고 그룹화하여 순차 병합하며,
 #   하나라도 실패하면 전체 그룹을 롤백합니다. 최종 결과는 out_mergelist 파일에 기록됩니다.
 #
-# 사용법:
-#   source apply-commit.sh
-#   get_commit_and_merge [gerrit_query]
-#
-#   gerrit_query (선택): Gerrit 조회 쿼리 문자열
-#                        기본값: status:open+-label:verified%2B1+label:Code-Review%2B2+branch:connect_w_event_jg_p2_a2_260224
-#
+# 사용법: source apply-commit.sh
+
+#   get_commit [gerrit_query]
+#   gerrit_query 기본값: status:open+-label:verified%2B1+label:Code-Review%2B2+branch:connect_w_event_jg_p2_a2_260224
+#   apply_commit candidate_list_file.txt
+
 # 환경 변수:
 #   USER         : Gerrit 인증 사용자명
 #   TOKEN_VGIT   : vgit.lge.com Gerrit API 토큰
@@ -176,16 +175,14 @@ function git_pull() {
 }
 
 
-function get_commit_and_merge() {
+function get_commit() {
   #------------------------------------------
-  # 현재 manifest의 리뷰 원격 저장소(Gerrit)에서 submittable 상태의 모든 후보 커밋을 조회하고 로컬 프로젝트로 병합합니다.
-  # 각 후보 커밋은 manifest 등록 프로젝트와 매칭 검증을 거치며, 의존성이 있는 경우 재귀 탐색으로 관련 커밋들을 그룹화합니다.
-  # 총 10개 commit이 있고 그중에 2개의 commit이 각각 related change가 2개라면, 총 6개(3개1그룹+3개1그룹+4그룹)의 group이 된다.
-  # 그룹 내 모든 커밋을 순차 병합하며, 하나라도 실패하면 전체 그룹을 롤백하고 결과를 out_mergelist 파일에 기록합니다.
-  # 입력: gerrit_query (선택) - Gerrit API 쿼리 문자열 (기본값: status:open+-label:verified%2B1+label:Code-Review%2B2+branch:connect_w_event_jg_p2_a2_260224)
+  # 현재 manifest의 리뷰 원격 저장소(Gerrit)에서 submittable 상태의 모든 후보 커밋을 조회하여
+  # 목록을 $CANDIDATE_LIST_FILE 파일에 기록합니다. (병합 제외)
+  # 입력: gerrit_query - Gerrit API 쿼리 문자열
   # 출력: 성공 시 0, 변경 없음 시 RET_NO_CHANGES 반환
 
-  local GERRIT_QUERY="${1:-status:open+-label:verified%2B1+label:Code-Review%2B2+branch:connect_w_event_jg_p2_a2_260224}"
+  local GERRIT_QUERY="${1:?"You must provide a Gerrit query string as the first argument"}"
   set +x
   
   manifest_formatted="manifest_formatted.json"
@@ -275,6 +272,26 @@ function get_commit_and_merge() {
       rm -f "${CANDIDATE_LIST_FILE}"
       return "$RET_NO_CHANGES"
     fi
+    return 0
+}
+
+
+function apply_commit() {
+  #------------------------------------------
+  # get_commit으로 추출된 후보 커밋 목록을 로컬 프로젝트로 병합합니다.
+  # 의존성이 있는 경우 재귀 탐색으로 관련 커밋들을 그룹화합니다.
+  # 그룹 내 모든 커밋을 순차 병합하며, 하나라도 실패하면 전체 그룹을 롤백하고 결과를 out_mergelist 파일에 기록합니다.
+  # 입력: list_file - 후보 커밋 목록 파일 경로 (기본값: CANDIDATE_LIST_FILE)
+
+  local list_file="${1:-$CANDIDATE_LIST_FILE}"
+  
+  if [[ ! -s "${list_file}" ]]; then
+    echo "No candidate list file found: ${list_file}"
+    return "$RET_NO_CHANGES"
+  fi
+
+  local total_commits=0
+  total_commits=$(grep -cve '^[[:space:]]*$' "${list_file}")
 
   bar "Merge commit"
 
@@ -396,7 +413,7 @@ function get_commit_and_merge() {
       done
     fi
 
-  done < "${CANDIDATE_LIST_FILE}"
+  done < "${list_file}"
 
   # 최종 통계 반영
   echo "${total_commits} = ${success_count} + ${fail_count}" >> "${MERGE_RESULT_FILE}"
@@ -405,7 +422,3 @@ function get_commit_and_merge() {
   set -x
   return 0
 }
-
-
-
-
