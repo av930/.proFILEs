@@ -40,6 +40,7 @@ get_commit_info() {
     local commit_url="$1"
     [[ -z "$commit_url" ]] && { echo "Error: commit URL required" >&2; return 1; }
     commit_url="$(echo -e "${commit_url}" | tr -d '\r\n ')"
+
     
     local change_number="${commit_url##*/}" base_url="${commit_url%%/c/*}"
     local auth_string="${USER}:${TOKEN_VGIT}"
@@ -132,13 +133,13 @@ git_pull() {
 
 check_commit() {
 #----------------------------------------------------------------------------------------------------------
-# Gerrit URL 기반으로 커밋이 원격 서버에 존재하는지 확인 (repo 미사용)
+# 입력한 Gerrit URL에 대해서 gerrit에 commit이 존재하는지 확인 (repo 미사용, 단순 error check및 실행여부 확인용)
 # Query URL, Commit URL, 또는 숫자 ID 형태 모두 처리 가능
 # 입력: Gerrit commit URL 또는 Query URL
 # 출력: 존재하면 0 (true), 존재하지 않거나 에러 시 1 (false)
 
     [[ -z "$1" ]] && { echo "Error: You must provide a Gerrit commit URL or query URL" >&2; return 1; }
-    local raw_input="$1" commit_url gerrit_query base_url auth_string raw_json api_result commit_count
+    local raw_input="$1" commit_url gerrit_query base_url auth_string raw_json commit_count
     commit_url="$(echo -e "${raw_input}" | tr -d '\r\n ')"
     
     if   [[ "$commit_url" == *"/q/"* ]]; then gerrit_query="${commit_url#*/q/}"; gerrit_query="${gerrit_query//%25/%}"; base_url="${commit_url%%/q/*}"
@@ -149,9 +150,8 @@ check_commit() {
     auth_string="${USER}:${TOKEN_VGIT}"
     [[ "$commit_url" == *"lamp.lge.com"* ]] && auth_string="${USER}:${TOKEN_LAMP}"
     
-    raw_json="$(curl -fsSk -u "$auth_string" "${base_url}/a/changes/?q=${gerrit_query}" 2>/dev/null)" || return 1
-    api_result="$(echo "$raw_json" | sed '1d')"
-    commit_count=$(echo "$api_result" | jq -r 'length // 0' 2>/dev/null)
+    raw_json="$(curl -fsSk -u "$auth_string" "${base_url}/a/changes/?q=${gerrit_query}" 2>/dev/null | sed '1d')" || return 1
+    commit_count=$(echo "$raw_json" | jq -r 'length // 0' 2>/dev/null)
     [[ "$commit_count" -gt 0 ]];  return $?
 }
 
