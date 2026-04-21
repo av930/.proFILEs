@@ -36,6 +36,7 @@ get_commit_info() {
 # Gerrit API를 사용하여 변경 번호로 git 프로젝트명, 리비전, 다운로드 명령어 등 상세 정보 추출
 # 입력: Gerrit commit URL
 # 출력: commit info JSON
+    { set +x; } 2>/dev/null
     local commit_url="$1"
     # 입력 URL 유효성을 먼저 검증
     [[ -z "$commit_url" ]] && { echo "Error: commit URL required" >&2; return 1; }
@@ -58,6 +59,7 @@ change_changeid_to_url() {
 # 입력: change ID (숫자)
 # 출력: Gerrit full URL (실패 시 빈 문자열)
 
+    { set +x; } 2>/dev/null
     local change_id="$1"
     # change ID는 숫자만 허용
     [[ "$change_id" =~ ^[0-9]+$ ]] || return 1
@@ -68,7 +70,7 @@ change_changeid_to_url() {
     project_name="$(echo "$api_result" | jq -r '.[0].project // empty' 2>/dev/null)"
     # project가 없으면 URL 생성 불가
     [[ -z "$project_name" ]] && return 1
-    
+
     # Gerrit 웹 URL 형태로 반환
     echo "http://lamp.lge.com/review/c/${project_name}/+/${change_id}"
 }
@@ -97,7 +99,9 @@ get_relate_changes() {
             for token in ${content//,/ }; do
                 token="${token//[[:space:]]/}"
                 [[ "$token" =~ ^[0-9]+$ ]] || continue
+                set +x
                 url="$(change_changeid_to_url "$token")"
+                set -x
                 [[ -z "$url" ]] && { echo "[WARN] Failed to resolve change ID: $token" >&2; continue; }
                 echo "[CHECK] Resolved ID $token -> $url" >&2
                 # 중복 의존성은 건너뛰고 신규만 재귀 처리
@@ -155,6 +159,7 @@ check_commit() {
 # 입력: Gerrit commit URL 또는 Query URL
 # 출력: 존재하면 0 (true), 존재하지 않거나 에러 시 1 (false)
 
+    { set +x; } 2>/dev/null
     [[ -z "$1" ]] && { echo "Error: You must provide a Gerrit commit URL or query URL" >&2; return 1; }
     local raw_input="$1" commit_url gerrit_query base_url auth_string raw_json commit_count
     # 입력 문자열의 공백/개행을 제거
@@ -194,8 +199,10 @@ process_remote_commits() {
     [[ "$remote_url" == *"lamp.lge.com"* ]] && auth_string="${USER}:${TOKEN_LAMP}"
     
     # Gerrit 쿼리 실행 후 결과 개수를 확인
-    all_commits="$(curl -fsSk -u "$auth_string" "$remote_url/a/changes/?q=${GERRIT_QUERY}" 2>/dev/null | sed '1d')" || { echo -e " -> ${COLOR_YELLOW}[WARN]${COLOR_RESET} Failed"; return 1; }
+    { set +x; } 2>/dev/null
+    all_commits="$(curl -fsSk -u "$auth_string" "$remote_url/a/changes/?q=${GERRIT_QUERY}" 2>/dev/null | sed '1d')" || { set -x; echo -e " -> ${COLOR_YELLOW}[WARN]${COLOR_RESET} Failed"; return 1; }
     commit_count=$(echo "$all_commits" | jq -r 'length // 0' 2>/dev/null)
+    { set -x; } 2>/dev/null
     [[ "$commit_count" -eq 0 ]] && { echo ""; return 0; }
     
     # 원격 커밋을 순회하면서 manifest 프로젝트와 매칭
@@ -217,6 +224,7 @@ process_remote_commits() {
             fi
         fi
     done <<< "$(echo "$all_commits" | jq -r '.[] | "\(._number)|\(.project)"')"
+    { set -x; } 2>/dev/null
     
     # 매칭 통계 요약을 출력
     if [[ $matched -gt 0 ]]; then
@@ -243,6 +251,7 @@ get_commit() {
     
     # manifest를 JSON 파일로 저장
     local manifest_formatted="manifest_formatted.json"
+    { set +x; } 2>/dev/null
     repo manifest --json -o "$manifest_formatted"
     
     # 원격 목록과 프로젝트 목록을 manifest에서 추출
@@ -250,12 +259,15 @@ get_commit() {
     default_remote="$(jq .default.remote "$manifest_formatted")"
     remote_list="$(jq .remote "$manifest_formatted")"
     remote_count=$(echo "$remote_list" | jq -r '.[] | select(.review != null) | .review' | sort -u | wc -l)
+    { set -x; } 2>/dev/null
     
     bar "remote list: $remote_count"
     rm -rf "${COMMIT_CANDIDATE}" "${COMMIT_RESULT}"
     
     # manifest 프로젝트명을 정리해 매칭 기준 목록 생성
+    { set +x; } 2>/dev/null
     project_names="$(jq -r '.project | .[] | .name' "$manifest_formatted" | sed 's/\.git$//')"
+    { set -x; } 2>/dev/null
     echo -e "${COLOR_GREEN} Total projects in manifest: $(echo "$project_names" | wc -l)"
     
     # 리뷰 가능한 모든 원격에 대해 커밋 조회 수행
