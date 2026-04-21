@@ -36,7 +36,6 @@ get_commit_info() {
 # Gerrit API를 사용하여 변경 번호로 git 프로젝트명, 리비전, 다운로드 명령어 등 상세 정보 추출
 # 입력: Gerrit commit URL
 # 출력: commit info JSON
-    { set +x; } 2>/dev/null
     local commit_url="$1"
     # 입력 URL 유효성을 먼저 검증
     [[ -z "$commit_url" ]] && { echo "Error: commit URL required" >&2; return 1; }
@@ -59,7 +58,6 @@ change_changeid_to_url() {
 # 입력: change ID (숫자)
 # 출력: Gerrit full URL (실패 시 빈 문자열)
 
-    { set +x; } 2>/dev/null
     local change_id="$1"
     # change ID는 숫자만 허용
     [[ "$change_id" =~ ^[0-9]+$ ]] || return 1
@@ -81,12 +79,9 @@ get_relate_changes() {
 # [+] 뒤에 full URL이 오는 경우와 쉼표/공백으로 구분된 change ID 숫자가 오는 경우를 모두 처리
 # 입력: commit URL
 # 출력: patch_buffer 배열에 의존성 커밋 추가 (전역 변수 기반 작동)
-
     local commit="$1" msg content url token
     # 커밋 메시지에서 의존성 힌트 라인을 읽어옴
-    { set +x; } 2>/dev/null
-    msg="$(get_commit_info "${commit}" | jq -r '.[0].revisions[].commit.message' 2>/dev/null)" || { set -x; return 0; }
-    { set -x; } 2>/dev/null
+    msg="$(get_commit_info "${commit}" | jq -r '.[0].revisions[].commit.message' 2>/dev/null)" || return 0
     
     # 각 라인에서 [+] 접두 패턴만 처리
     while IFS= read -r line; do
@@ -101,9 +96,7 @@ get_relate_changes() {
             for token in ${content//,/ }; do
                 token="${token//[[:space:]]/}"
                 [[ "$token" =~ ^[0-9]+$ ]] || continue
-                set +x
                 url="$(change_changeid_to_url "$token")"
-                set -x
                 [[ -z "$url" ]] && { echo "[WARN] Failed to resolve change ID: $token" >&2; continue; }
                 echo "[CHECK] Resolved ID $token -> $url" >&2
                 # 중복 의존성은 건너뛰고 신규만 재귀 처리
@@ -128,7 +121,6 @@ git_pull() {
 # divergent branches 충돌을 피하기 위해 pull.rebase=false 옵션 적용 (ff로 try 후 안되면 merge)
 # 입력: Gerrit commit URL
 # 출력: 성공 시 0, 실패 시 1 반환 (에러 메시지 stderr 출력)
-
     local commit_url="$1"
     # 커밋 URL 필수 입력 확인
     [[ -z "$commit_url" ]] && { echo "Error: commit URL required" >&2; return 1; }
@@ -136,14 +128,12 @@ git_pull() {
     
     # 커밋 메타정보를 조회하고 pull 명령을 추출
     local commit_info project_info project_name cmt_pull_cmd project_path safe_pull_cmd
-    { set +x; } 2>/dev/null
-    commit_info="$(get_commit_info "${commit_url}")" || { set -x; echo -e "${COLOR_RED}[FAIL]${COLOR_RESET} Error: failed to fetch commit info" >&2; return 1; }
-    project_info="$(echo "$commit_info" | jq -r '.[0] | "\(.project)|\(.revisions[].fetch.ssh.commands.Pull)"' 2>/dev/null)" || { set -x; echo "Error: failed to parse commit JSON" >&2; return 1; }
+    commit_info="$(get_commit_info "${commit_url}")" || { echo -e "${COLOR_RED}[FAIL]${COLOR_RESET} Error: failed to fetch commit info" >&2; return 1; }
+    project_info="$(echo "$commit_info" | jq -r '.[0] | "\(.project)|\(.revisions[].fetch.ssh.commands.Pull)"' 2>/dev/null)" || { echo "Error: failed to parse commit JSON" >&2; return 1; }
     project_name="${project_info%%|*}"
     cmt_pull_cmd="${project_info#*|}"
     [[ "$project_name" == "null" ]] && project_name=""
-    project_path="$(repo list -r "$project_name" 2>/dev/null | grep -m1 ": $project_name" | cut -f1 -d':' | sed 's/[[:space:]]*$//')" || { set -x; echo "Error: project '$project_name' not found in manifest" >&2; return 1; }
-    { set -x; } 2>/dev/null
+    project_path="$(repo list -r "$project_name" 2>/dev/null | grep -m1 ": $project_name" | cut -f1 -d':' | sed 's/[[:space:]]*$//')" || { echo "Error: project '$project_name' not found in manifest" >&2; return 1; }
     [[ -z "$project_path" || -z "$cmt_pull_cmd" ]] && { echo "Error: incomplete commit info" >&2; return 1; }
     
     # rebase 충돌을 줄이기 위해 안전 pull 옵션을 강제
@@ -159,7 +149,6 @@ check_commit() {
 # 입력: Gerrit commit URL 또는 Query URL
 # 출력: 존재하면 0 (true), 존재하지 않거나 에러 시 1 (false)
 
-    { set +x; } 2>/dev/null
     [[ -z "$1" ]] && { echo "Error: You must provide a Gerrit commit URL or query URL" >&2; return 1; }
     local raw_input="$1" commit_url gerrit_query base_url auth_string raw_json commit_count
     # 입력 문자열의 공백/개행을 제거
@@ -187,7 +176,6 @@ process_remote_commits() {
 # 매칭된 커밋은 COMMIT_CANDIDATE에 추가, 불일치 시 최대 10개까지 경고 출력
 # 입력: remote_url, GERRIT_QUERY, project_names
 # 출력: 매칭된 커밋 수와 상태 메시지 (stdout), COMMIT_CANDIDATE 파일 업데이트
-
     local remote_url="$1" GERRIT_QUERY="$2" project_names="$3"
     local auth_string all_commits commit_count matched sample_idx change_number project_name sample_manifest_match
     
@@ -199,14 +187,11 @@ process_remote_commits() {
     [[ "$remote_url" == *"lamp.lge.com"* ]] && auth_string="${USER}:${TOKEN_LAMP}"
     
     # Gerrit 쿼리 실행 후 결과 개수를 확인
-    { set +x; } 2>/dev/null
-    all_commits="$(curl -fsSk -u "$auth_string" "$remote_url/a/changes/?q=${GERRIT_QUERY}" 2>/dev/null | sed '1d')" || { set -x; echo -e " -> ${COLOR_YELLOW}[WARN]${COLOR_RESET} Failed"; return 1; }
+    all_commits="$(curl -fsSk -u "$auth_string" "$remote_url/a/changes/?q=${GERRIT_QUERY}" 2>/dev/null | sed '1d')" || { echo -e " -> ${COLOR_YELLOW}[WARN]${COLOR_RESET} Failed"; return 1; }
     commit_count=$(echo "$all_commits" | jq -r 'length // 0' 2>/dev/null)
-    { set -x; } 2>/dev/null
     [[ "$commit_count" -eq 0 ]] && { echo ""; return 0; }
     
     # 원격 커밋을 순회하면서 manifest 프로젝트와 매칭
-    { set +x; } 2>/dev/null
     matched=0 sample_idx=0
     while IFS='|' read -r change_number project_name; do
         project_name="$(echo "$project_name" | tr -d '\r\n ')"
@@ -225,7 +210,6 @@ process_remote_commits() {
             fi
         fi
     done <<< "$(echo "$all_commits" | jq -r '.[] | "\(._number)|\(.project)"')"
-    { set -x; } 2>/dev/null
     
     # 매칭 통계 요약을 출력
     if [[ $matched -gt 0 ]]; then
@@ -243,18 +227,15 @@ get_commit() {
 # 입력: gerrit_query - Gerrit API 쿼리 문자열 또는 웹 브라우저 검색 URL
 # 출력: 성공 시 commit갯수 반환및 commit파일 출력, 없는경우 We have no changes출력및 0 return
 
-    { set +x; } 2>/dev/null
     [[ -z "$1" ]] && { echo "Error: You must provide a Gerrit query string as the first argument" >&2; return 1; }
     local raw_input="$1" GERRIT_QUERY="$raw_input"
     
     # 웹 URL 입력이면 /q/ 이후를 query로 변환
     [[ "$raw_input" == *"/q/"* ]] && GERRIT_QUERY="${raw_input#*/q/}"
     GERRIT_QUERY="${GERRIT_QUERY//%25/%}"
-    { set -x; } 2>/dev/null
     
     # manifest를 JSON 파일로 저장
     local manifest_formatted="manifest_formatted.json"
-    { set +x; } 2>/dev/null
     repo manifest --json -o "$manifest_formatted"
     
     # 원격 목록과 프로젝트 목록을 manifest에서 추출
@@ -262,15 +243,12 @@ get_commit() {
     default_remote="$(jq .default.remote "$manifest_formatted")"
     remote_list="$(jq .remote "$manifest_formatted")"
     remote_count=$(echo "$remote_list" | jq -r '.[] | select(.review != null) | .review' | sort -u | wc -l)
-    { set -x; } 2>/dev/null
     
     bar "remote list: $remote_count"
     rm -rf "${COMMIT_CANDIDATE}" "${COMMIT_RESULT}"
     
     # manifest 프로젝트명을 정리해 매칭 기준 목록 생성
-    { set +x; } 2>/dev/null
     project_names="$(jq -r '.project | .[] | .name' "$manifest_formatted" | sed 's/\.git$//')"
-    { set -x; } 2>/dev/null
     echo -e "${COLOR_GREEN} Total projects in manifest: $(echo "$project_names" | wc -l)"
     
     # 리뷰 가능한 모든 원격에 대해 커밋 조회 수행
@@ -306,17 +284,15 @@ backup_project_head() {
 
     local commit_url="$1" c_info p_name p_path p_head
     # 커밋으로부터 대상 프로젝트를 조회
-    { set +x; } 2>/dev/null
-    c_info=$(get_commit_info "${commit_url}") || { set -x; return 0; }
+    c_info=$(get_commit_info "${commit_url}") || return 0
     p_name=$(echo "$c_info" | jq -r '.[0].project' 2>/dev/null)
-    [[ -z "$p_name" || "$p_name" == "null" ]] && { set -x; return 0; }
+    [[ -z "$p_name" || "$p_name" == "null" ]] && return 0
     
     # manifest 기준 로컬 경로와 현재 HEAD를 확보
     p_path=$(repo list -r "$p_name" 2>/dev/null | grep -m1 ": $p_name" | cut -f1 -d':' | sed 's/[[:space:]]*$//')
-    [[ -z "$p_path" || ! -d "$p_path" ]] && { set -x; return 0; }
+    [[ -z "$p_path" || ! -d "$p_path" ]] && return 0
     
-    p_head=$(git -C "$p_path" rev-parse HEAD 2>/dev/null) || { set -x; return 0; }
-    { set -x; } 2>/dev/null
+    p_head=$(git -C "$p_path" rev-parse HEAD 2>/dev/null) || return 0
     
     # 동일 프로젝트는 최초 1회만 백업 저장
     [[ ! " ${applied_paths[*]} " =~ " ${p_path} " ]] && { applied_paths+=("$p_path"); applied_heads+=("$p_head"); }
@@ -328,7 +304,6 @@ rollback_group() {
 # merge 중단 후 hard reset으로 원상 복구
 # 입력: 없음 (applied_paths, applied_heads 전역 변수 사용)
 # 출력: 없음 (git 상태 변경)
-
     local i r_path r_head
     # 그룹 내 프로젝트를 백업 HEAD로 순차 복구
     for (( i=0; i<${#applied_paths[@]}; i++ )); do
@@ -347,7 +322,6 @@ record_results() {
 # OKAY/FAIL 상태와 함께 실패 사유를 함께 기록
 # 입력: seq_str, group_has_error, fail_reason
 # 출력: COMMIT_MERGED, COMMIT_CANCELED, COMMIT_RESULT 파일 업데이트, success_count/fail_count 증가
-
     local seq_str="$1" group_has_error="$2" fail_reason="$3"
     local i c s
     
@@ -383,7 +357,6 @@ apply_commit() {
 # 의존성이 있는 경우 재귀 탐색으로 관련 커밋들을 그룹화하여 순차 병합, 하나라도 실패하면 전체 그룹 롤백
 # 입력: list_file - 후보 커밋 목록 파일 경로 (기본값: COMMIT_CANDIDATE)
 # 출력: 병합 결과를 COMMIT_RESULT, COMMIT_MERGED, COMMIT_CANCELED에 기록, 성공 시 0 반환
-
     local list_file="${1:-$COMMIT_CANDIDATE}"
     # 후보 파일이 비어있으면 바로 종료
     [[ ! -s "${list_file}" ]] && { echo "No candidate list file found: ${list_file}"; return "$RET_NO_CHANGES"; }
