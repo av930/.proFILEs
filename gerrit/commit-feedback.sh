@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -ex
 # 용도:
 #   gerrit commit url에 점수와 comment를 남기는 기능
 #   
@@ -70,18 +70,7 @@ if [[ -n "$item_input" ]]; then
     [[ -z "$FEEDBACK_TEXT" ]] && { echo "Error: feedback text required when item is set" >&2; exit 1; }
 fi
 
-# ── 1. repo list로 git name 목록 추출 ───────────────────────────────────────
-mapfile -t git_names < <(repo list -g "$GROUP" -n 2>/dev/null)
-
-[[ ${#git_names[@]} -eq 0 ]] && exit 0
-
-# ── 2. 각 git name에 대해 candidate_list_file에서 URL 매칭 ──────────────────
-#   match 조건: URL 안에 /c/<gitname>/+ 가 포함 (gitname 뒤에 바로 /+ 가 와야 함)
-#   → grep -F 로 고정문자열 검색 시 /c/hkmc/build-poip/+ 는
-#     /c/hkmc/build-poip/gen/+/... URL과 매칭되지 않음 (올바른 동작)
-
-matched_urls=()
-
+# ── 1. candidate URLs에서 gitname 추출하여 맵 구성 (성능 최적화) ─────────
 function extract_gitname_from_url() {
 #----------------------------------------------------------------------------------------------------------
 # Gerrit URL에서 git 프로젝트명을 추출합니다.
@@ -94,22 +83,30 @@ function extract_gitname_from_url() {
     sed -n 's#^https\?://[^/]\+/[^/]\+/c/\(.*\)/+/[0-9][0-9]*$#\1#p' <<< "$url"
 }
 
+# URL을 gitname으로 인덱싱 (한 gitname에 여러 URL 가능)
+declare -A url_map
+while IFS= read -r url; do
+    [[ -z "$url" ]] && continue
+    url="$(echo "$url" | tr -d '\r\n ')"
+    gitname="$(extract_gitname_from_url "$url")"
+    if [[ -n "$gitname" ]]; then
+        # 구분자(newline)로 URL 추가
+        url_map["$gitname"]+="${url}"$'\n'
+    fi
+done < "$CANDIDATE_LIST_FILE"
+
+# ── 2. repo list로 git name 목록 추출하여 매칭 ────────────────────────────
+mapfile -t git_names < <(repo list -g "$GROUP" -n 2>/dev/null)
+
+[[ ${#git_names[@]} -eq 0 ]] && exit 0
+
+matched_urls=()
 for gitname in "${git_names[@]}"; do
-    matches=()
-    while IFS= read -r url; do
-        [[ -z "$url" ]] && continue
-        url="$(echo "$url" | tr -d '\r\n ')"
-        url_gitname="$(extract_gitname_from_url "$url")"
-        [[ -z "$url_gitname" ]] && continue
-        [[ "$url_gitname" == "$gitname" ]] && matches+=("$url")
-    done < "$CANDIDATE_LIST_FILE"
-
-    count=${#matches[@]}
-
-    if [[ $count -gt 0 ]]; then
-        for m in "${matches[@]}"; do
-            matched_urls+=("$m")
-        done
+    if [[ -n "${url_map[$gitname]}" ]]; then
+        # newline으로 구분된 URL들을 배열에 추가
+        while IFS= read -r url; do
+            [[ -n "$url" ]] && matched_urls+=("$url")
+        done <<< "${url_map[$gitname]}"
     fi
 done
 

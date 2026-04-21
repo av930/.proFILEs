@@ -5,31 +5,30 @@
 # 사용법: source commit-apply.sh
 #   get_commit [gerrit_query]
 #   check_commit [gerrit_url]
-#   apply_commit [candidate_list_file.txt]
+#   apply_commit [commit_candidate.txt]
 #
 # 환경변수: USER, TOKEN_VGIT, TOKEN_LAMP
-# 출력파일: candidate_list_file.txt, out_mergelist, manifest_formatted.json
+# 출력파일: commit_candidate.txt, out_mergelist, manifest_formatted.json
 
-CANDIDATE_LIST_FILE="candidate_list_file.txt"
-MERGE_RESULT_FILE="out_mergelist"
+COMMIT_CANDIDATE="commit_candidate.txt"
+COMMIT_RESULT="commit_report.txt"
+COMMIT_CANCELED="commit_canceled.txt"
+COMMIT_MERGED="commit_merged.txt"
+
 RET_NO_CHANGES=0
-
 COLOR_GREEN="\033[92m\033[1m"
 COLOR_RED="\033[91m\033[1m"
 COLOR_YELLOW="\033[93m\033[1m"
 COLOR_RESET="\033[0m"
 
+
+if [[ -z "$TOKEN_VGIT" || -z "$TOKEN_LAMP" ]]; then
+    echo "Error: You must set TOKEN_VGIT, and TOKEN_LAMP environment variables"
+    exit 1
+fi
+
 line="---------------------------------------------------------------------------------------------------------------------------------"
-
-bar() {
-#----------------------------------------------------------------------------------------------------------
-# 구분선과 함께 섹션 제목을 출력하는 헬퍼 함수
-# 화면에 강조된 구분선 표시
-# 입력: 섹션 제목 문자열 (선택)
-# 출력: 색상이 적용된 구분선과 제목
-
-    printf "\n\n\e[1;36m%s%s \e[0m\n" "${1:+[$1] }" "${line:(${1:+3} + ${#1})}"
-}
+bar() { printf "\n\n\e[1;36m%s%s \e[0m\n" "${1:+[$1] }" "${line:(${1:+3} + ${#1})}"; }
 
 get_commit_info() {
 #----------------------------------------------------------------------------------------------------------
@@ -38,18 +37,21 @@ get_commit_info() {
 # 입력: Gerrit commit URL
 # 출력: commit info JSON
     local commit_url="$1"
+    # 입력 URL 유효성을 먼저 검증
     [[ -z "$commit_url" ]] && { echo "Error: commit URL required" >&2; return 1; }
     commit_url="$(echo -e "${commit_url}" | tr -d '\r\n ')"
 
-    
+    # URL에서 change 번호와 base URL을 분리
     local change_number="${commit_url##*/}" base_url="${commit_url%%/c/*}"
     local auth_string="${USER}:${TOKEN_VGIT}"
+    # 도메인에 따라 인증 토큰을 선택
     [[ "$commit_url" == *"lamp.lge.com"* ]] && auth_string="${USER}:${TOKEN_LAMP}"
     
+    # Gerrit API 호출 후 JSON 가드라인 제거
     curl -fsSk -u "$auth_string" "${base_url}/a/changes/?q=${change_number}&o=CURRENT_REVISION&o=DOWNLOAD_COMMANDS&o=CURRENT_COMMIT&n=1" 2>/dev/null | sed '1d'
 }
 
-resolve_changeid_to_url() {
+change_changeid_to_url() {
 #----------------------------------------------------------------------------------------------------------
 # 숫자 change ID를 lamp.lge.com Gerrit API로 조회하여 full URL 형식으로 변환
 # 조회 성공 시 http://lamp.lge.com/review/c/{project}/+/{change_id} 형태의 URL 출력
@@ -57,13 +59,17 @@ resolve_changeid_to_url() {
 # 출력: Gerrit full URL (실패 시 빈 문자열)
 
     local change_id="$1"
+    # change ID는 숫자만 허용
     [[ "$change_id" =~ ^[0-9]+$ ]] || return 1
     
+    # ID 조회 후 project명을 추출
     local api_result project_name
     api_result="$(curl -fsSk -u "${USER}:${TOKEN_LAMP}" "http://lamp.lge.com/review/a/changes/?q=${change_id}&n=1" 2>/dev/null | sed '1d')" || return 1
     project_name="$(echo "$api_result" | jq -r '.[0].project // empty' 2>/dev/null)"
+    # project가 없으면 URL 생성 불가
     [[ -z "$project_name" ]] && return 1
     
+    # Gerrit 웹 URL 형태로 반환
     echo "http://lamp.lge.com/review/c/${project_name}/+/${change_id}"
 }
 
@@ -75,21 +81,26 @@ get_relate_changes() {
 # 출력: patch_buffer 배열에 의존성 커밋 추가 (전역 변수 기반 작동)
 
     local commit="$1" msg content url token
+    # 커밋 메시지에서 의존성 힌트 라인을 읽어옴
     msg="$(get_commit_info "${commit}" | jq -r '.[0].revisions[].commit.message' 2>/dev/null)" || return 0
     
+    # 각 라인에서 [+] 접두 패턴만 처리
     while IFS= read -r line; do
-        [[ "$line" =~ ^\[+\][[:space:]]*(.*) ]] || continue
+        [[ "$line" =~ ^\[[+]\][[:space:]]*(.*) ]] || continue
         content="${BASH_REMATCH[1]}"
         
+        # [+] 뒤가 URL이면 바로 사용
         if [[ "$content" =~ ^https?:// ]]; then
             url="$content"
         else
+            # 숫자 ID 목록이면 URL로 변환 후 재귀 확장
             for token in ${content//,/ }; do
                 token="${token//[[:space:]]/}"
                 [[ "$token" =~ ^[0-9]+$ ]] || continue
-                url="$(resolve_changeid_to_url "$token")"
+                url="$(change_changeid_to_url "$token")"
                 [[ -z "$url" ]] && { echo "[WARN] Failed to resolve change ID: $token" >&2; continue; }
                 echo "[CHECK] Resolved ID $token -> $url" >&2
+                # 중복 의존성은 건너뛰고 신규만 재귀 처리
                 [[ " ${patch_buffer[*]} " =~ " ${url} " ]] && continue
                 patch_buffer+=("$url")
                 get_relate_changes "$url"
@@ -97,6 +108,7 @@ get_relate_changes() {
             continue
         fi
         
+        # URL 케이스도 중복 제외 후 재귀 처리
         [[ " ${patch_buffer[*]} " =~ " ${url} " ]] && continue
         echo "[CHECK] Found related change: $url" >&2
         patch_buffer+=("$url")
@@ -112,20 +124,25 @@ git_pull() {
 # 출력: 성공 시 0, 실패 시 1 반환 (에러 메시지 stderr 출력)
 
     local commit_url="$1"
+    # 커밋 URL 필수 입력 확인
     [[ -z "$commit_url" ]] && { echo "Error: commit URL required" >&2; return 1; }
     commit_url="$(echo -e "${commit_url}" | tr -d '\r\n ')"
     
+    # 커밋 메타정보를 조회하고 pull 명령을 추출
     local commit_info project_info project_name cmt_pull_cmd project_path safe_pull_cmd
     commit_info="$(get_commit_info "${commit_url}")" || { echo -e "${COLOR_RED}[FAIL]${COLOR_RESET} Error: failed to fetch commit info" >&2; return 1; }
     project_info="$(echo "$commit_info" | jq -r '.[0] | "\(.project)|\(.revisions[].fetch.ssh.commands.Pull)"' 2>/dev/null)" || { echo "Error: failed to parse commit JSON" >&2; return 1; }
     
+    # project명과 pull 명령을 분리
     project_name="${project_info%%|*}"
     cmt_pull_cmd="${project_info#*|}"
     [[ "$project_name" == "null" ]] && project_name=""
     
+    # manifest 기준 실제 로컬 프로젝트 경로를 찾음
     project_path="$(repo list -r "$project_name" 2>/dev/null | grep -m1 ": $project_name" | cut -f1 -d':' | sed 's/[[:space:]]*$//')" || { echo "Error: project '$project_name' not found in manifest" >&2; return 1; }
     [[ -z "$project_path" || -z "$cmt_pull_cmd" ]] && { echo "Error: incomplete commit info" >&2; return 1; }
     
+    # rebase 충돌을 줄이기 위해 안전 pull 옵션을 강제
     safe_pull_cmd="${cmt_pull_cmd/git pull /git -c pull.rebase=false pull }"
     ( cd "$project_path" || return 1; eval "$safe_pull_cmd" ) || { echo "Error: failed to pull in $project_path" >&2; return 1; }
     echo "[OKAY] Successfully pulled commit to $project_path"
@@ -133,23 +150,27 @@ git_pull() {
 
 check_commit() {
 #----------------------------------------------------------------------------------------------------------
-# 입력한 Gerrit URL에 대해서 gerrit에 commit이 존재하는지 확인 (repo 미사용, 단순 error check및 실행여부 확인용)
+# 단순히 입력한 Gerrit URL에 대해서 gerrit에 commit이 존재하는지 확인 (repo 미사용, 단순 error check및 실행여부 확인용)
 # Query URL, Commit URL, 또는 숫자 ID 형태 모두 처리 가능
 # 입력: Gerrit commit URL 또는 Query URL
 # 출력: 존재하면 0 (true), 존재하지 않거나 에러 시 1 (false)
 
     [[ -z "$1" ]] && { echo "Error: You must provide a Gerrit commit URL or query URL" >&2; return 1; }
     local raw_input="$1" commit_url gerrit_query base_url auth_string raw_json commit_count
+    # 입력 문자열의 공백/개행을 제거
     commit_url="$(echo -e "${raw_input}" | tr -d '\r\n ')"
     
+    # URL 형태에 맞게 query와 base URL을 분리
     if   [[ "$commit_url" == *"/q/"* ]]; then gerrit_query="${commit_url#*/q/}"; gerrit_query="${gerrit_query//%25/%}"; base_url="${commit_url%%/q/*}"
     elif [[ "$commit_url" == *"/c/"* ]]; then gerrit_query="${commit_url##*/}"; base_url="${commit_url%%/c/*}"
     else gerrit_query="${commit_url##*/}"; base_url="$(echo "$commit_url" | grep -oP '^https?://[^/]+')"; [[ -z "$base_url" ]] && return 1
     fi
     
+    # 도메인별 인증 계정을 선택
     auth_string="${USER}:${TOKEN_VGIT}"
     [[ "$commit_url" == *"lamp.lge.com"* ]] && auth_string="${USER}:${TOKEN_LAMP}"
     
+    # 조회 결과 길이로 존재 여부를 판단
     raw_json="$(curl -fsSk -u "$auth_string" "${base_url}/a/changes/?q=${gerrit_query}" 2>/dev/null | sed '1d')" || return 1
     commit_count=$(echo "$raw_json" | jq -r 'length // 0' 2>/dev/null)
     [[ "$commit_count" -gt 0 ]];  return $?
@@ -157,30 +178,36 @@ check_commit() {
 
 process_remote_commits() {
 #----------------------------------------------------------------------------------------------------------
-# 특정 remote URL에서 Gerrit 쿼리로 커밋을 조회하고 manifest의 프로젝트 목록과 매칭
-# 매칭된 커밋은 CANDIDATE_LIST_FILE에 추가, 불일치 시 최대 10개까지 경고 출력
+# 특정 remote URL에서 Gerrit 쿼리로 커밋을 조회하고 manifest의 프로젝트 목록에 포함되는지 매칭
+# 매칭된 커밋은 COMMIT_CANDIDATE에 추가, 불일치 시 최대 10개까지 경고 출력
 # 입력: remote_url, GERRIT_QUERY, project_names
-# 출력: 매칭된 커밋 수와 상태 메시지 (stdout), CANDIDATE_LIST_FILE 파일 업데이트
+# 출력: 매칭된 커밋 수와 상태 메시지 (stdout), COMMIT_CANDIDATE 파일 업데이트
 
     local remote_url="$1" GERRIT_QUERY="$2" project_names="$3"
     local auth_string all_commits commit_count matched sample_idx change_number project_name sample_manifest_match
     
+    # 현재 원격 조회 시작 메시지 출력
     echo -ne "${COLOR_GREEN}[OKAY]${COLOR_RESET} Querying remote URL: $remote_url"
     
+    # 원격 도메인에 맞는 인증 토큰 선택
     auth_string="${USER}:${TOKEN_VGIT}"
     [[ "$remote_url" == *"lamp.lge.com"* ]] && auth_string="${USER}:${TOKEN_LAMP}"
     
+    # Gerrit 쿼리 실행 후 결과 개수를 확인
     all_commits="$(curl -fsSk -u "$auth_string" "$remote_url/a/changes/?q=${GERRIT_QUERY}" 2>/dev/null | sed '1d')" || { echo -e " -> ${COLOR_YELLOW}[WARN]${COLOR_RESET} Failed"; return 1; }
     commit_count=$(echo "$all_commits" | jq -r 'length // 0' 2>/dev/null)
     [[ "$commit_count" -eq 0 ]] && { echo ""; return 0; }
     
+    # 원격 커밋을 순회하면서 manifest 프로젝트와 매칭
     matched=0 sample_idx=0
     while IFS='|' read -r change_number project_name; do
         project_name="$(echo "$project_name" | tr -d '\r\n ')"
+        # 완전 일치하는 프로젝트만 후보 목록에 추가
         if echo "$project_names" | grep -q "^${project_name}$"; then
-            echo "$remote_url/c/${project_name}/+/$change_number" >>"$CANDIDATE_LIST_FILE"
+            echo "$remote_url/c/${project_name}/+/$change_number" >>"$COMMIT_CANDIDATE"
             matched=$((matched + 1))
         else
+            # 매칭 실패는 최대 10건까지만 샘플 경고 출력
             if [[ $sample_idx -lt 10 ]]; then
                 [[ $sample_idx -eq 0 ]] && echo ""
                 sample_manifest_match=$(echo "$project_names" | grep "$project_name" | head -1 || echo "NO_MATCH")
@@ -191,6 +218,7 @@ process_remote_commits() {
         fi
     done <<< "$(echo "$all_commits" | jq -r '.[] | "\(._number)|\(.project)"')"
     
+    # 매칭 통계 요약을 출력
     if [[ $matched -gt 0 ]]; then
         [[ $sample_idx -gt 0 ]] && echo -ne "${COLOR_GREEN}[OKAY]${COLOR_RESET} Querying remote URL: $remote_url"
         echo -e ": matched commits:${matched}"
@@ -202,46 +230,57 @@ process_remote_commits() {
 get_commit() {
 #----------------------------------------------------------------------------------------------------------
 # 현재 manifest의 리뷰 원격 저장소(Gerrit)에서 submittable 상태의 모든 후보 커밋을 조회
-# 목록을 CANDIDATE_LIST_FILE 파일에 기록 (병합 제외)
+# 목록을 COMMIT_CANDIDATE 파일에 기록 (병합 제외)
 # 입력: gerrit_query - Gerrit API 쿼리 문자열 또는 웹 브라우저 검색 URL
-# 출력: 성공 시 0, 변경 없음 시 RET_NO_CHANGES 반환
+# 출력: 성공 시 commit갯수 반환및 commit파일 출력, 없는경우 We have no changes출력및 0 return
 
     [[ -z "$1" ]] && { echo "Error: You must provide a Gerrit query string as the first argument" >&2; return 1; }
     local raw_input="$1" GERRIT_QUERY="$raw_input"
     
+    # 웹 URL 입력이면 /q/ 이후를 query로 변환
     [[ "$raw_input" == *"/q/"* ]] && GERRIT_QUERY="${raw_input#*/q/}"
     GERRIT_QUERY="${GERRIT_QUERY//%25/%}"
     
-    set +x
+    # manifest를 JSON 파일로 저장
     local manifest_formatted="manifest_formatted.json"
-    repo manifest --json -o $manifest_formatted
+    repo manifest --json -o "$manifest_formatted"
     
+    # 원격 목록과 프로젝트 목록을 manifest에서 추출
     local default_remote remote_list remote_count project_names total_commits
-    default_remote="$(cat $manifest_formatted | jq .default.remote)"
-    remote_list="$(cat $manifest_formatted | jq .remote)"
+    default_remote="$(jq .default.remote "$manifest_formatted")"
+    remote_list="$(jq .remote "$manifest_formatted")"
     remote_count=$(echo "$remote_list" | jq -r '.[] | select(.review != null) | .review' | sort -u | wc -l)
     
     bar "remote list: $remote_count"
-    rm -rf "${CANDIDATE_LIST_FILE}" "${MERGE_RESULT_FILE}"
+    rm -rf "${COMMIT_CANDIDATE}" "${COMMIT_RESULT}"
     
-    project_names="$(cat $manifest_formatted | jq -r '.project | .[] | .name' | sed 's/\.git$//')"
+    # manifest 프로젝트명을 정리해 매칭 기준 목록 생성
+    project_names="$(jq -r '.project | .[] | .name' "$manifest_formatted" | sed 's/\.git$//')"
     echo -e "${COLOR_GREEN} Total projects in manifest: $(echo "$project_names" | wc -l)"
     
+    # 리뷰 가능한 모든 원격에 대해 커밋 조회 수행
     while read -r remote_url; do
         process_remote_commits "$remote_url" "$GERRIT_QUERY" "$project_names"
     done < <(echo "$remote_list" | jq -r '.[] | select(.review != null) | .review' | sort -u)
     
-    [[ -f "$CANDIDATE_LIST_FILE" ]] && sort -u -o "$CANDIDATE_LIST_FILE" "$CANDIDATE_LIST_FILE"
+    # 후보 목록은 중복 제거 후 카운트 계산
+    echo "[DEBUG] Before sort: file_exists=$([[ -f "$COMMIT_CANDIDATE" ]] && echo YES || echo NO)"
+    [[ -f "$COMMIT_CANDIDATE" ]] && sort -u -o "$COMMIT_CANDIDATE" "$COMMIT_CANDIDATE"
+    echo "[DEBUG] After sort: file_readable=$([[ -r "$COMMIT_CANDIDATE" ]] && echo YES || echo NO)"
     
     total_commits=0
-    [[ -s "${CANDIDATE_LIST_FILE}" ]] && total_commits=$(grep -cve '^[[:space:]]*$' "${CANDIDATE_LIST_FILE}")
+    [[ -s "${COMMIT_CANDIDATE}" ]] && total_commits=$(grep -cve '^[[:space:]]*$' "${COMMIT_CANDIDATE}" 2>/dev/null) || echo "[DEBUG] grep failed or file empty"
     
+    # 최종 후보가 없으면 무변경 코드로 반환
     bar "List Changes: $total_commits"
-    if [[ -s "${CANDIDATE_LIST_FILE}" && "$total_commits" -gt 0 ]]; then
-        cat "${CANDIDATE_LIST_FILE}"
+    if [[ -s "${COMMIT_CANDIDATE}" && "$total_commits" -gt 0 ]]; then
+        cat "${COMMIT_CANDIDATE}"
+        echo "Total commits: $total_commits"
+        # Bash return 범위(0~255)를 넘어가면 최대값으로 제한
+        [[ "$total_commits" -gt 255 ]] && return 255 || return "$total_commits"
     else
         echo "We have no changes"
-        rm -f "${CANDIDATE_LIST_FILE}";  return "$RET_NO_CHANGES"
+        rm -f "${COMMIT_CANDIDATE}";  return 0
     fi
 }
 
@@ -253,20 +292,19 @@ backup_project_head() {
 # 출력: applied_paths, applied_heads 배열 업데이트 (전역 변수)
 
     local commit_url="$1" c_info p_name p_path p_head
+    # 커밋으로부터 대상 프로젝트를 조회
     c_info=$(get_commit_info "${commit_url}") || return 0
     p_name=$(echo "$c_info" | jq -r '.[0].project' 2>/dev/null)
     [[ -z "$p_name" || "$p_name" == "null" ]] && return 0
     
+    # manifest 기준 로컬 경로와 현재 HEAD를 확보
     p_path=$(repo list -r "$p_name" 2>/dev/null | grep -m1 ": $p_name" | cut -f1 -d':' | sed 's/[[:space:]]*$//')
     [[ -z "$p_path" || ! -d "$p_path" ]] && return 0
     
     p_head=$(git -C "$p_path" rev-parse HEAD 2>/dev/null) || return 0
     
-    local already_saved="False" ap
-    for ap in "${applied_paths[@]}"; do
-        [[ "$ap" == "$p_path" ]] && already_saved="True"
-    done
-    [[ "$already_saved" == "False" ]] && { applied_paths+=("$p_path"); applied_heads+=("$p_head"); }
+    # 동일 프로젝트는 최초 1회만 백업 저장
+    [[ ! " ${applied_paths[*]} " =~ " ${p_path} " ]] && { applied_paths+=("$p_path"); applied_heads+=("$p_head"); }
 }
 
 rollback_group() {
@@ -277,9 +315,11 @@ rollback_group() {
 # 출력: 없음 (git 상태 변경)
 
     local i r_path r_head
+    # 그룹 내 프로젝트를 백업 HEAD로 순차 복구
     for (( i=0; i<${#applied_paths[@]}; i++ )); do
         r_path="${applied_paths[$i]}"
         r_head="${applied_heads[$i]}"
+        # 진행 중인 merge 중단 후 강제 원복
         git -C "$r_path" merge --abort >/dev/null 2>&1 || true
         git -C "$r_path" reset --hard "$r_head" >/dev/null 2>&1 || true
     done
@@ -287,27 +327,36 @@ rollback_group() {
 
 record_results() {
 #----------------------------------------------------------------------------------------------------------
-# 커밋 그룹의 병합 결과를 MERGE_RESULT_FILE에 기록
-# OKAY/FAIL/BACK 상태와 함께 실패 사유를 함께 기록
+# 커밋 그룹의 병합 결과를 파일에 기록
+# 성공한 커밋은 COMMIT_MERGED에, 실패/롤백은 COMMIT_CANCELED에 기록
+# OKAY/FAIL 상태와 함께 실패 사유를 함께 기록
 # 입력: seq_str, group_has_error, fail_reason
-# 출력: MERGE_RESULT_FILE 파일 업데이트, success_count/fail_count 증가
+# 출력: COMMIT_MERGED, COMMIT_CANCELED, COMMIT_RESULT 파일 업데이트, success_count/fail_count 증가
 
     local seq_str="$1" group_has_error="$2" fail_reason="$3"
     local i c s
     
+    # 그룹 실패 시 상태별 사유를 canceled 목록에 기록
     if [[ "$group_has_error" == "True" ]]; then
         for (( i=0; i<${#patch_buffer[@]}; i++ )); do
             c="${patch_buffer[$i]}"
             s="${commit_statuses[$i]}"
-            if   [[ "$s" == "OKAY" ]]; then echo "${seq_str}| BACK| ${c} | Rolled back due to related dependency failure" >> "${MERGE_RESULT_FILE}"; fail_count=$((fail_count + 1))
-            elif [[ "$s" == "FAIL" ]]; then echo "${seq_str}| FAIL| ${c} | ${fail_reason}" >> "${MERGE_RESULT_FILE}"; fail_count=$((fail_count + 1))
-            else echo "${seq_str}| FAIL| ${c} | Skipped due to previous dependency failure" >> "${MERGE_RESULT_FILE}"; fail_count=$((fail_count + 1))
-            fi
+            # 적용 결과 상태를 case로 분기 기록
+            case "$s" in
+                OKAY) echo "${seq_str}| BACK| ${c} | Rolled back due to related dependency failure" >> "${COMMIT_RESULT}"
+            ;;  FAIL) echo "${seq_str}| FAIL| ${c} | ${fail_reason}" >> "${COMMIT_RESULT}"
+            ;;     *) echo "${seq_str}| FAIL| ${c} | Skipped due to previous dependency failure" >> "${COMMIT_RESULT}"
+            esac
+            # 실패 그룹의 모든 커밋을 canceled로 집계
+            echo "${c}" >> "${COMMIT_CANCELED}"
+            fail_count=$((fail_count + 1))
         done
     else
+        # 그룹 성공 시 merged 목록과 성공 카운트를 누적
         for (( i=0; i<${#patch_buffer[@]}; i++ )); do
             c="${patch_buffer[$i]}"
-            echo "${seq_str}| OKAY| ${c}" >> "${MERGE_RESULT_FILE}"
+            echo "${seq_str}| OKAY| ${c}" >> "${COMMIT_RESULT}"
+            echo "${c}" >> "${COMMIT_MERGED}"
             success_count=$((success_count + 1))
         done
     fi
@@ -317,40 +366,52 @@ apply_commit() {
 #----------------------------------------------------------------------------------------------------------
 # get_commit으로 추출된 후보 커밋 목록을 로컬 프로젝트로 병합
 # 의존성이 있는 경우 재귀 탐색으로 관련 커밋들을 그룹화하여 순차 병합, 하나라도 실패하면 전체 그룹 롤백
-# 입력: list_file - 후보 커밋 목록 파일 경로 (기본값: CANDIDATE_LIST_FILE)
-# 출력: 병합 결과를 MERGE_RESULT_FILE에 기록, 성공 시 0 반환
+# 입력: list_file - 후보 커밋 목록 파일 경로 (기본값: COMMIT_CANDIDATE)
+# 출력: 병합 결과를 COMMIT_RESULT, COMMIT_MERGED, COMMIT_CANCELED에 기록, 성공 시 0 반환
 
-    local list_file="${1:-$CANDIDATE_LIST_FILE}"
+    local list_file="${1:-$COMMIT_CANDIDATE}"
+    # 후보 파일이 비어있으면 바로 종료
     [[ ! -s "${list_file}" ]] && { echo "No candidate list file found: ${list_file}"; return "$RET_NO_CHANGES"; }
     
+    # 전체 커밋 수를 계산하고 결과 파일을 초기화
     local total_commits change commit_seq seq_str group_has_error fail_reason error_output pull_result commit_to_apply
     total_commits=$(grep -cve '^[[:space:]]*$' "${list_file}")
     bar "Merge commit"
     
+    # 결과 파일 초기화
+    rm -f "${COMMIT_MERGED}" "${COMMIT_CANCELED}"
+    
+    # 전체 실행 상태 변수를 준비
     success_count=0 fail_count=0 commit_seq=0
     declare -A global_seen_commits
     
+    # 후보 파일을 순회하며 의존성 그룹 단위로 처리
     while IFS= read -r change; do
         [[ -z "$change" || -n "${global_seen_commits[$change]}" ]] && continue
         
+        # 시작 커밋에 의존성 커밋을 확장
         patch_buffer=("${change}")
         get_relate_changes "${change}"
         
+        # 이번 그룹 커밋은 전역 중복 방지 집합에 표시
         for c in "${patch_buffer[@]}"; do
             global_seen_commits["$c"]="1"
         done
         
+        # 그룹 단위 결과 상태를 초기화
         commit_seq=$((commit_seq + 1))
         seq_str=$(printf "%04d" "$commit_seq")
         group_has_error="False" fail_reason=""
         applied_paths=() applied_heads=() commit_statuses=()
         
+        # 그룹 내 커밋을 순차 pull하고 실패 시 즉시 중단
         for commit_to_apply in "${patch_buffer[@]}"; do
             backup_project_head "${commit_to_apply}"
             
             error_output=$(git_pull "${commit_to_apply}" 2>&1)
             pull_result=$?
             
+            # 실패 사유를 정리하여 보고 가능한 문자열로 축약
             if [[ $pull_result -ne 0 ]]; then
                 group_has_error="True"
                 fail_reason=$(echo "$error_output" | grep -iE 'fatal:|error:|conflict' | head -1)
@@ -361,16 +422,18 @@ apply_commit() {
                 printf "[%04d]%b[FAIL]%b %s - %s\n" "$commit_seq" "${COLOR_RED}" "${COLOR_RESET}" "${commit_to_apply}" "${fail_reason}"
                 break
             else
+                # 성공 커밋은 상태와 로그를 즉시 기록
                 commit_statuses+=("OKAY")
                 printf "[%04d]%b[OKAY]%b %s\n" "$commit_seq" "${COLOR_GREEN}" "${COLOR_RESET}" "${commit_to_apply}"
             fi
         done
         
+        # 그룹 실패 시 롤백 후 결과 파일로 집계
         [[ "$group_has_error" == "True" ]] && rollback_group
         record_results "$seq_str" "$group_has_error" "$fail_reason"
     done < "${list_file}"
     
-    echo "${total_commits} = ${success_count} + ${fail_count}" >> "${MERGE_RESULT_FILE}"
-    sort -r "${MERGE_RESULT_FILE}" -o "${MERGE_RESULT_FILE}"
-    set -x
+    # 전체 합계를 결과 파일에 남기고 정렬
+    echo "${total_commits} = ${success_count} + ${fail_count}" >> "${COMMIT_RESULT}"
+    sort -r "${COMMIT_RESULT}" -o "${COMMIT_RESULT}"
 }
