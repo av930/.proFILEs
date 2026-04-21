@@ -109,7 +109,8 @@ get_relate_changes() {
         
         # URL 케이스도 중복 제외 후 재귀 처리
         [[ " ${patch_buffer[*]} " =~ " ${url} " ]] && continue
-        echo "[CHECK] Found related change: $url" >&2
+        local parent_change="${commit##*/}"
+        echo "[ADD] related change from $parent_change: $url" >&2
         patch_buffer+=("$url")
         get_relate_changes "$url"
     done <<< "$msg"
