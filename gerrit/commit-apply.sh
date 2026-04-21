@@ -84,7 +84,9 @@ get_relate_changes() {
 
     local commit="$1" msg content url token
     # 커밋 메시지에서 의존성 힌트 라인을 읽어옴
-    msg="$(get_commit_info "${commit}" | jq -r '.[0].revisions[].commit.message' 2>/dev/null)" || return 0
+    { set +x; } 2>/dev/null
+    msg="$(get_commit_info "${commit}" | jq -r '.[0].revisions[].commit.message' 2>/dev/null)" || { set -x; return 0; }
+    { set -x; } 2>/dev/null
     
     # 각 라인에서 [+] 접두 패턴만 처리
     while IFS= read -r line; do
@@ -134,16 +136,14 @@ git_pull() {
     
     # 커밋 메타정보를 조회하고 pull 명령을 추출
     local commit_info project_info project_name cmt_pull_cmd project_path safe_pull_cmd
-    commit_info="$(get_commit_info "${commit_url}")" || { echo -e "${COLOR_RED}[FAIL]${COLOR_RESET} Error: failed to fetch commit info" >&2; return 1; }
-    project_info="$(echo "$commit_info" | jq -r '.[0] | "\(.project)|\(.revisions[].fetch.ssh.commands.Pull)"' 2>/dev/null)" || { echo "Error: failed to parse commit JSON" >&2; return 1; }
-    
-    # project명과 pull 명령을 분리
+    { set +x; } 2>/dev/null
+    commit_info="$(get_commit_info "${commit_url}")" || { set -x; echo -e "${COLOR_RED}[FAIL]${COLOR_RESET} Error: failed to fetch commit info" >&2; return 1; }
+    project_info="$(echo "$commit_info" | jq -r '.[0] | "\(.project)|\(.revisions[].fetch.ssh.commands.Pull)"' 2>/dev/null)" || { set -x; echo "Error: failed to parse commit JSON" >&2; return 1; }
     project_name="${project_info%%|*}"
     cmt_pull_cmd="${project_info#*|}"
     [[ "$project_name" == "null" ]] && project_name=""
-    
-    # manifest 기준 실제 로컬 프로젝트 경로를 찾음
-    project_path="$(repo list -r "$project_name" 2>/dev/null | grep -m1 ": $project_name" | cut -f1 -d':' | sed 's/[[:space:]]*$//')" || { echo "Error: project '$project_name' not found in manifest" >&2; return 1; }
+    project_path="$(repo list -r "$project_name" 2>/dev/null | grep -m1 ": $project_name" | cut -f1 -d':' | sed 's/[[:space:]]*$//')" || { set -x; echo "Error: project '$project_name' not found in manifest" >&2; return 1; }
+    { set -x; } 2>/dev/null
     [[ -z "$project_path" || -z "$cmt_pull_cmd" ]] && { echo "Error: incomplete commit info" >&2; return 1; }
     
     # rebase 충돌을 줄이기 위해 안전 pull 옵션을 강제
@@ -206,6 +206,7 @@ process_remote_commits() {
     [[ "$commit_count" -eq 0 ]] && { echo ""; return 0; }
     
     # 원격 커밋을 순회하면서 manifest 프로젝트와 매칭
+    { set +x; } 2>/dev/null
     matched=0 sample_idx=0
     while IFS='|' read -r change_number project_name; do
         project_name="$(echo "$project_name" | tr -d '\r\n ')"
@@ -242,12 +243,14 @@ get_commit() {
 # 입력: gerrit_query - Gerrit API 쿼리 문자열 또는 웹 브라우저 검색 URL
 # 출력: 성공 시 commit갯수 반환및 commit파일 출력, 없는경우 We have no changes출력및 0 return
 
+    { set +x; } 2>/dev/null
     [[ -z "$1" ]] && { echo "Error: You must provide a Gerrit query string as the first argument" >&2; return 1; }
     local raw_input="$1" GERRIT_QUERY="$raw_input"
     
     # 웹 URL 입력이면 /q/ 이후를 query로 변환
     [[ "$raw_input" == *"/q/"* ]] && GERRIT_QUERY="${raw_input#*/q/}"
     GERRIT_QUERY="${GERRIT_QUERY//%25/%}"
+    { set -x; } 2>/dev/null
     
     # manifest를 JSON 파일로 저장
     local manifest_formatted="manifest_formatted.json"
@@ -276,12 +279,10 @@ get_commit() {
     done < <(echo "$remote_list" | jq -r '.[] | select(.review != null) | .review' | sort -u)
     
     # 후보 목록은 중복 제거 후 카운트 계산
-    echo "[DEBUG] Before sort: file_exists=$([[ -f "$COMMIT_CANDIDATE" ]] && echo YES || echo NO)"
     [[ -f "$COMMIT_CANDIDATE" ]] && sort -u -o "$COMMIT_CANDIDATE" "$COMMIT_CANDIDATE"
-    echo "[DEBUG] After sort: file_readable=$([[ -r "$COMMIT_CANDIDATE" ]] && echo YES || echo NO)"
     
     total_commits=0
-    [[ -s "${COMMIT_CANDIDATE}" ]] && total_commits=$(grep -cve '^[[:space:]]*$' "${COMMIT_CANDIDATE}" 2>/dev/null) || echo "[DEBUG] grep failed or file empty"
+    [[ -s "${COMMIT_CANDIDATE}" ]] && total_commits=$(grep -cve '^[[:space:]]*$' "${COMMIT_CANDIDATE}" 2>/dev/null)
     
     # 최종 후보가 없으면 무변경 코드로 반환
     bar "List Changes: $total_commits"
@@ -305,15 +306,17 @@ backup_project_head() {
 
     local commit_url="$1" c_info p_name p_path p_head
     # 커밋으로부터 대상 프로젝트를 조회
-    c_info=$(get_commit_info "${commit_url}") || return 0
+    { set +x; } 2>/dev/null
+    c_info=$(get_commit_info "${commit_url}") || { set -x; return 0; }
     p_name=$(echo "$c_info" | jq -r '.[0].project' 2>/dev/null)
-    [[ -z "$p_name" || "$p_name" == "null" ]] && return 0
+    [[ -z "$p_name" || "$p_name" == "null" ]] && { set -x; return 0; }
     
     # manifest 기준 로컬 경로와 현재 HEAD를 확보
     p_path=$(repo list -r "$p_name" 2>/dev/null | grep -m1 ": $p_name" | cut -f1 -d':' | sed 's/[[:space:]]*$//')
-    [[ -z "$p_path" || ! -d "$p_path" ]] && return 0
+    [[ -z "$p_path" || ! -d "$p_path" ]] && { set -x; return 0; }
     
-    p_head=$(git -C "$p_path" rev-parse HEAD 2>/dev/null) || return 0
+    p_head=$(git -C "$p_path" rev-parse HEAD 2>/dev/null) || { set -x; return 0; }
+    { set -x; } 2>/dev/null
     
     # 동일 프로젝트는 최초 1회만 백업 저장
     [[ ! " ${applied_paths[*]} " =~ " ${p_path} " ]] && { applied_paths+=("$p_path"); applied_heads+=("$p_head"); }
