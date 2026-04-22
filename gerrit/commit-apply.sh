@@ -235,9 +235,12 @@ get_commit() {
     [[ "$raw_input" == *"/q/"* ]] && GERRIT_QUERY="${raw_input#*/q/}"
     GERRIT_QUERY="${GERRIT_QUERY//%25/%}"
     
+    # repo 초기화 여부를 먼저 확인
+    [[ ! -d ".repo" ]] && { echo "Error: repo not initialized. Run 'repo init' first" >&2; return 1; }
+    
     # manifest를 JSON 파일로 저장
     local manifest_formatted="manifest_formatted.json"
-    repo manifest --json -o "$manifest_formatted"
+    repo manifest --json -o "$manifest_formatted" || { echo "Error: failed to generate manifest JSON" >&2; return 1; }
     
     # 원격 목록과 프로젝트 목록을 manifest에서 추출
     local default_remote remote_list remote_count project_names total_commits
