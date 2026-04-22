@@ -1,6 +1,7 @@
-#!/bin/bash -ex
+#!/bin/bash -e
 # 용도:
-#   gerrit commit url에 점수와 comment를 남기는 기능
+#   1. Gerrit commit URL을 넣으면 해당그룹에 대한 url만 출력 (3번째이상 파라미터 없을때)
+#   2. 추출된 url에 대해서 특정 field에 label 점수와 코멘트 전송 (3번째이상 파라미터 있을때)
 #   
 # 사용법: 
 #   feedback_commit.sh <group> <candidate_list_file> [item] [grade] [text...]
@@ -14,22 +15,15 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMMIT_SH="${SCRIPT_DIR}/commit.sh"
 
-function usage() {
-#----------------------------------------------------------------------------------------------------------
-# 스크립트 사용법을 출력합니다.
-# 입력: 없음
-# 출력: 사용법 메시지 (stdout)
-
+[[ $# -lt 2 ]] && {
     echo "Usage: $0 <group> <candidate_list_file> [item] [grade] [text...]"
     echo "  item: verified|verfied|review|ai-review"
     echo "  grade: +1|-1|0 ..."
-    echo "  if item is omitted, script only prints matched URLs and exits"
+    exit 1
 }
 
-[[ $# -lt 2 ]] && { usage; exit 1; }
-
 GROUP="$1"
-CANDIDATE_LIST_FILE="$2"
+COMMIT_CANDIDATE="$2"
 item_input="${3:-}"
 grade_input="${4:-}"
 FEEDBACK_TEXT="${*:5}"
@@ -39,49 +33,25 @@ COLOR_RED="\033[91m\033[1m"
 COLOR_YELLOW="\033[93m\033[1m"
 COLOR_RESET="\033[0m"
 
-[[ ! -f "$CANDIDATE_LIST_FILE" ]] && { echo "Error: file not found: $CANDIDATE_LIST_FILE" >&2; exit 1; }
-[[ ! -x "$COMMIT_SH" ]]           && { echo "Error: commit.sh not executable: $COMMIT_SH" >&2; exit 1; }
+[[ ! -f "$COMMIT_CANDIDATE" ]] && { echo "Error: file not found: $COMMIT_CANDIDATE" >&2; exit 1; }
+[[ ! -x "$COMMIT_SH" ]] && { echo "Error: commit.sh not executable: $COMMIT_SH" >&2; exit 1; }
 
-write_mode="false"
 if [[ -n "$item_input" ]]; then
-    write_mode="true"
-
     case "${item_input,,}" in
-        verified|verfied) label_name="Verified"
-        ;;
-        review) label_name="Code-Review"
-        ;;
-        ai-review) label_name="AI-Review"
-        ;;
-        *)
-            echo "Error: unsupported item '$item_input'" >&2
-            usage
-            exit 1
-        ;;
+        verified|verfied) label_name="Verified" ;;
+        review) label_name="Code-Review" ;;
+        ai-review) label_name="AI-Review" ;;
+        *) echo "Error: unsupported item '$item_input'" >&2; exit 1 ;;
     esac
 
-    if [[ "$grade_input" =~ ^[+-]?[0-9]+$ ]]; then
-        label_grade="$grade_input"
-    else
-        echo "Error: invalid grade '$grade_input' (expected integer like +1, -1, 0)" >&2
-        exit 1
-    fi
+    [[ ! "$grade_input" =~ ^[+-]?[0-9]+$ ]] && { echo "Error: invalid grade '$grade_input' (expected integer like +1, -1, 0)" >&2; exit 1; }
+    label_grade="$grade_input"
 
     [[ -z "$FEEDBACK_TEXT" ]] && { echo "Error: feedback text required when item is set" >&2; exit 1; }
 fi
 
-# ── 1. candidate URLs에서 gitname 추출하여 맵 구성 (성능 최적화) ─────────
-function extract_gitname_from_url() {
-#----------------------------------------------------------------------------------------------------------
-# Gerrit URL에서 git 프로젝트명을 추출합니다.
-# URL 형식: http(s)://<host>/<prefix>/c/<gitname>/+/<change_number>
-# sed 정규식으로 <gitname> 부분만 파싱하여 반환합니다.
-# 입력: Gerrit commit URL
-# 출력: git 프로젝트명 (추출 실패 시 빈 문자열)
-
-    local url="$1"
-    sed -n 's#^https\?://[^/]\+/[^/]\+/c/\(.*\)/+/[0-9][0-9]*$#\1#p' <<< "$url"
-}
+## Gerrit URL에서 git 프로젝트명을 추출합니다.
+function extract_gitname_from_url() { sed -n 's#^https\?://[^/]\+/[^/]\+/c/\(.*\)/+/[0-9][0-9]*$#\1#p' <<< "$1"; }
 
 # URL을 gitname으로 인덱싱 (한 gitname에 여러 URL 가능)
 declare -A url_map
@@ -93,7 +63,7 @@ while IFS= read -r url; do
         # 구분자(newline)로 URL 추가
         url_map["$gitname"]+="${url}"$'\n'
     fi
-done < "$CANDIDATE_LIST_FILE"
+done < "$COMMIT_CANDIDATE"
 
 # ── 2. repo list로 git name 목록 추출하여 매칭 ────────────────────────────
 mapfile -t git_names < <(repo list -g "$GROUP" -n 2>/dev/null)
@@ -110,14 +80,8 @@ for gitname in "${git_names[@]}"; do
     fi
 done
 
-if [[ ${#matched_urls[@]} -eq 0 ]]; then
-    exit 0
-fi
-
-if [[ "$write_mode" != "true" ]]; then
-    printf "%s\n" "${matched_urls[@]}" | awk '!seen[$0]++'
-    exit 0
-fi
+[[ ${#matched_urls[@]} -eq 0 ]] && { echo "no matched commit urls for this [$GROUP]"; exit 0; }
+[[ -z "$label_name" ]] && { printf "%s\n" "${matched_urls[@]}" | awk '!seen[$0]++'; exit 0; }
 
 # ── 3. 매칭된 URL에 label 점수 및 코멘트 전송 (commit.sh 경유) ───────────────
 echo ""
