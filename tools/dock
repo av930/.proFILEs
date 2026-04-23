@@ -28,7 +28,7 @@ PATH_FULL=$(realpath "${BASH_SOURCE:-dock}")
 PATH_DIR="${PATH_FULL%/*}"
 
 #user setting
-account=vc.integrator
+account=${USER} #vc.integrator
 home_dir="/data001/${account}"
 user_id=$(id -u ${account})
 group_id=$user_id
@@ -58,14 +58,21 @@ local cmd=$1 tag=$2 key=$3
             declare -g "ENCODE_$tag=$( echo $key | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey )"
        ;; en) #encrypt to ~/.key_$tag
             echo $( echo $key | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey ) > $HOME/.key_$tag
-       ;; de) #decrypt from ENCODE_$tag, if error, decrypt from ~/.key_$tag
+       ;; de) #decrypt from ENCODE_$tag, if error, decrypt from ~/.key_$tag or ~/.key_server.en
             temp=ENCODE_$tag; temp_var=${!temp} #must be indirect reference
             if (( 40 < ${#temp_var} )); then
                 echo ${temp_var}| openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 2> /dev/null
             else
-                if [[ -f $HOME/.key_$tag ]]; then cat $HOME/.key_$tag | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey
-                else echo "key missing or server is incorrect";fi
-                declare -g "ENCODE_$tag=$( echo $key | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey )"
+                # Try individual key file first
+                if [[ -f $HOME/.key_$tag ]]; then 
+                    cat $HOME/.key_$tag | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey
+                # Fallback to central key_server.en file (case-insensitive match)
+                elif [[ -f $HOME/.key_server.en ]]; then
+                    cat $HOME/.key_server.en | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 2>/dev/null | \
+                    awk -v tag="$tag" 'BEGIN{IGNORECASE=1} $1 ~ "^"tag"[[:space:]]*$" {gsub(/^[[:space:]]+|[[:space:]]+$/,"",$4); print $4; exit}' FS='|'
+                else 
+                    echo "" >&2  # Return empty string silently if no key found
+                fi
             fi
        ;;list|debug)  #list up keycode for debugging
             declare -p |grep ENCODE
@@ -125,9 +132,12 @@ function dockdown(){
 function list_repo(){
 ## ---------------------------------------------------------------------------
     if [ -z "${KEY_ADMIN}" ]; then
-        echo "input artifactory password first !!!"
-        echo "permanant usage: 'dock key en  arti <KEY>' !!!"
-        echo "temporary usage: 'dock key env arti <KEY>' !!!"
+        printf "${red}ERROR: Artifactory API key not found!${NCOL}\n"
+        echo "Setup required:"
+        echo "  1. Permanent: 'dock key en arti <YOUR_PASSWORD>'"
+        echo "  2. Temporary: 'dock key env arti <YOUR_PASSWORD>'"
+        echo ""
+        echo "To verify existing keys: ls -la ~/.key_*"
         exit 1
     fi
 
@@ -138,7 +148,13 @@ function list_repo(){
     printlist=$(declare -p listimg | sed 's/.*(\(.*\)).*/\1/')
     printf "%s\n" ${printlist}
 
-    if [ "${listimg[0]}" = "errors" ];then echo "please verify your ID/PW"; exit 0;fi
+    if [ "${listimg[0]}" = "errors" ];then 
+        printf "${red}ERROR: Artifactory authentication failed!${NCOL}\n"
+        echo "The stored password appears to be incorrect or expired."
+        echo "Please update your password using:"
+        echo "  dock key en arti <YOUR_NEW_PASSWORD>"
+        exit 1
+    fi
 }
 
 
