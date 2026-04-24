@@ -765,10 +765,14 @@ $'\n\e[00;35m=== Please input command! [Number:menu, Ctrl+c:exit] === : \e[0;36m
     PS3="$ASK"
     select CHOICE in "${MENU[@]}"
     do
-        dockmenu "${CHOICE%%(*}";
+        dockmenu "${CHOICE%%(*}"
+        printf "${cyan}"  #반복할때마다 color값 reset방지
+        #select는 기본적으로 REPLY값을 있으면 메뉴를 한 번만 보여주고, 이후에는 prompt만 보여줌. 계속보여주기 위해서는 초기화 필요
+        REPLY=""  # Clear REPLY to redisplay menu
         PS3="$ASK"
     done
     PS3=$'\e[0m'
+    printf "${NCOL}"
 }
 
 
