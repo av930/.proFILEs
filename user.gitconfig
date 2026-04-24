@@ -4,8 +4,8 @@
 
 ### user specific setting
 [user]
-     name = user.name
-    email = user.name@lge.com
+     name = av9300
+    email = joongkeun.kim@lge.com
 
 ### ignore color prompt for repo init prompting
 [color]
