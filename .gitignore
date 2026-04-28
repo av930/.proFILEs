@@ -5,6 +5,9 @@ tempdir/*
 bin/*
 bin/TRACE_FILE
 
+# Private files #
+###################
+.sshconfig
 
 # Compiled source #
 ###################
