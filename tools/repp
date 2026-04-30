@@ -2768,7 +2768,7 @@ function gittreset(){
 # $1 target
 
     local cmd=$1
-    case ${cmd} in
+    case ${cmd} in"GitHub와 함께 Copilot 초급 교육"
         clear)   showRUNQ y "git reset --hard @{upstream} && git clean -xdf"
 
     ;; help|*)   cat <<-EOF

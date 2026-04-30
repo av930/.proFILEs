@@ -8,7 +8,7 @@ set -euo pipefail
 # ========================================
 JENKINS_URL="${JENKINS_URL:-http://vjenkins.lge.com/jenkins03}"
 JENKINS_USER="${JENKINS_USER:-joongkeun.kim}"
-JENKINS_TOKEN="${JENKINS_TOKEN:-11ab112cf452ffb160bdb000b29c9395e2}"
+JENKINS_TOKEN="${JENKINS_TOKEN}"
 OUT_DIR="${OUT_DIR:-./jenkins_export}"
 
 # ========================================

@@ -8,16 +8,24 @@ log() { echo -e "${!1} $2 ${NC}"; }
 
 PARAM1=${PARAM1:=$1}
 PARAM1="${PARAM1%/}"
+PARAM1="${PARAM1%/consoleText}"
+PARAM1="${PARAM1%/console}"
+PARAM1="${PARAM1%/consoleFull}"
+PARAM1="${PARAM1%/}"
 
 # Jenkins 서버 URL 검증 및 서버명 추출
 [ -z "${PARAM1}" ] && { log RED "Error: URL required"; exit 1; }
-[[ "${PARAM1}" =~ ^https?://[^/]+/(jenkins[0-9]+)/.*job/.*/[0-9]+$ ]] || { log RED "Invalid URL format"; exit 1; }
+[[ "${PARAM1}" =~ ^https?://[^/]+/(jenkins[0-9]+)/.*job/.*/[0-9]+/?$ ]] || { log RED "Invalid URL format"; exit 1; }
 
 
 ## 빌드 로그 다운로드 (타임스탬프 포함)
 LOG_FILE="/tmp/console_${BUILD_NUMBER}.txt"
 log BLUE "Processing: ${PARAM1}/console"
-wget --no-check-certificate -q -O "${LOG_FILE}" "${PARAM1}/timestamps/?time=HH:mm:ss&timeZone=GMT+9&appendLog" || { bar RED "Download failed"; exit 1; }
+
+if ! wget --no-check-certificate -q -O "${LOG_FILE}" "${PARAM1}/timestamps/?time=HH:mm:ss&timeZone=GMT+9&appendLog"; then
+    log YELLOW "Timestamps download failed. Trying consoleText fallback..."
+    bar RED "Download failed (404 Not Found or Unreachable)"; exit 1;
+fi
 [ -s "${LOG_FILE}" ] || { bar RED "Empty log"; exit 1; }
 log GREEN "Downloaded $(wc -l < "${LOG_FILE}" | tr -d ' ') lines"
 

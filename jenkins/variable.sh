@@ -29,15 +29,6 @@ function download_from_jenkins(){
     fi
     
     local jenkins_server=$(echo "${JOB_URL}" | grep -oP 'jenkins\d+')
-    # local auth_key=""
-
-    # case "$jenkins_server" in
-    #     jenkins01) auth_key="118d9b5fb8fd571a0b710e7121152a4c41" ;;
-    #     jenkins02) auth_key="11cec21c35fb88f5d9abc591d844e22532" ;;
-    #     jenkins03) auth_key="1115aa9663a20801980e2ab969028d3b46" ;;
-    #     jenkins06) auth_key="11cec21c35fb88f5d9abc591d844e22532" ;;
-    #     *) return 1 ;;
-    # esac
 
     local job_name="${BUILTIN_JOB_NAME}"
     local url="http://vjenkins.lge.com/${jenkins_server}/job/${job_name}/ws/${BUILTIN_JOB_NAME}"
