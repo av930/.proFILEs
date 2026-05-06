@@ -114,6 +114,62 @@ check_server_spec() {
     echo "Overall Build Score: $score"
 }
 
+
+# ------------------------------------------------------------------------------
+# 2. 소요 시간 파싱
+# ------------------------------------------------------------------------------
+# 로그에서 빌드 시작/종료 시간 추출 및 각 Yocto Task별 수행 시간 분석
+# 파라미터: $1=log_file (분석 대상 로그 파일 경로)
+analyze_time() {
+    local log_file="$1"
+    echo -e "\n${COLOR_CYAN}=== 2. Time Analysis ===${COLOR_RESET}"
+
+    local start_time end_time total_duration s_sec=0 e_sec=0 total_diff=0
+
+    # 로그 시작/종료 시간 추출 (타임스탬프 있는/없는 로그 모두 지원)
+    # 로그 앞부분 50줄과 뒷부분 100줄에서 HH:MM:SS 패턴 검색
+    start_time=$(head -n 50 "$log_file" | grep -Eo "${TIMESTAMP_OPTIONAL}[0-9]{2}:[0-9]{2}:[0-9]{2}" | grep -Eo "[0-9]{2}:[0-9]{2}:[0-9]{2}" | head -1 || echo "Unknown")
+    end_time=$(tail -n 100 "$log_file" | grep -Eo "${TIMESTAMP_OPTIONAL}[0-9]{2}:[0-9]{2}:[0-9]{2}" | grep -Eo "[0-9]{2}:[0-9]{2}:[0-9]{2}" | tail -1 || echo "Unknown")
+
+    # 전체 빌드 소요 시간 계산 및 출력
+    if [[ "$start_time" != "Unknown" && "$end_time" != "Unknown" ]]; then
+        total_duration=$(calc_duration "$start_time" "$end_time")
+        echo -e "${COLOR_GREEN}Overall Start Time ~ Overall End Time:${COLOR_RESET} ($start_time ~ $end_time) = $total_duration"
+
+        # 시간차를 초 단위로 변환 (Task 비율 계산용)
+        s_sec=$(date -u -d "1970-01-01 $start_time" +"%s" 2>/dev/null || echo 0)
+        e_sec=$(date -u -d "1970-01-01 $end_time" +"%s" 2>/dev/null || echo 0)
+        (( e_sec < s_sec )) && e_sec=$((e_sec + 86400))  # 자정 넘김 보정
+        total_diff=$((e_sec - s_sec))
+    else
+        echo "Overall Start Time ~ Overall End Time: ($start_time ~ $end_time)"
+    fi
+
+    # Yocto Tasks 카운팅 및 첫 등장 시간 비율 계산
+    # 각 Task가 로그에 몇 번 등장했는지, 전체 빌드 시간 중 몇 %에 첫 등장했는지 분석
+    echo -e "\n- Task Extracted Count (1st hit time ratio):"
+    for task in do_fetch do_unpack do_patch do_configure do_compile do_install do_package do_rootfs do_image; do
+        local count pct_str="" t_hit t_sec pct
+        count=$(grep -a -c "$task" "$log_file" || true)
+
+        if [[ "$count" -gt 0 && "$total_diff" -gt 0 ]]; then
+            # 해당 Task의 첫 등장 시간 추출
+            t_hit=$(grep -a -m1 "$task" "$log_file" | grep -Eo "${TIMESTAMP_OPTIONAL}[0-9]{2}:[0-9]{2}:[0-9]{2}" | grep -Eo "[0-9]{2}:[0-9]{2}:[0-9]{2}" | head -1 || true)
+            if [[ -n "$t_hit" ]]; then
+                # 첫 등장 시간이 전체 빌드 시간의 몇 %인지 계산
+                t_sec=$(date -u -d "1970-01-01 $t_hit" +"%s" 2>/dev/null || echo 0)
+                (( t_sec < s_sec )) && (( t_sec += 86400 ))  # 자정 넘김 보정
+                pct=$(( (t_sec - s_sec) * 100 / total_diff ))
+                [[ $pct -lt 0 ]] && pct=0 || { [[ $pct -gt 100 ]] && pct=100; }
+                pct_str="(${pct}%)"
+            fi
+        fi
+
+        printf "  - %-13s : %5s hits  %s\n" "$task" "$count" "$pct_str"
+    done
+}
+
+
 # ------------------------------------------------------------------------------
 # 3. Yocto 설정 및 캐시 분석
 # ------------------------------------------------------------------------------
@@ -387,88 +443,63 @@ analyze_config_and_cache() {
     set -e  # 오류 모드 복원
 }
 
-# ------------------------------------------------------------------------------
-# 2. 소요 시간 파싱
-# ------------------------------------------------------------------------------
-# 로그에서 빌드 시작/종료 시간 추출 및 각 Yocto Task별 수행 시간 분석
-# 파라미터: $1=log_file (분석 대상 로그 파일 경로)
-analyze_time() {
-    local log_file="$1"
-    echo -e "\n${COLOR_CYAN}=== 2. Time Analysis ===${COLOR_RESET}"
-
-    local start_time end_time total_duration s_sec=0 e_sec=0 total_diff=0
-
-    # 로그 시작/종료 시간 추출 (타임스탬프 있는/없는 로그 모두 지원)
-    # 로그 앞부분 50줄과 뒷부분 100줄에서 HH:MM:SS 패턴 검색
-    start_time=$(head -n 50 "$log_file" | grep -Eo "${TIMESTAMP_OPTIONAL}[0-9]{2}:[0-9]{2}:[0-9]{2}" | grep -Eo "[0-9]{2}:[0-9]{2}:[0-9]{2}" | head -1 || echo "Unknown")
-    end_time=$(tail -n 100 "$log_file" | grep -Eo "${TIMESTAMP_OPTIONAL}[0-9]{2}:[0-9]{2}:[0-9]{2}" | grep -Eo "[0-9]{2}:[0-9]{2}:[0-9]{2}" | tail -1 || echo "Unknown")
-
-    # 전체 빌드 소요 시간 계산 및 출력
-    if [[ "$start_time" != "Unknown" && "$end_time" != "Unknown" ]]; then
-        total_duration=$(calc_duration "$start_time" "$end_time")
-        echo -e "${COLOR_GREEN}Overall Start Time ~ Overall End Time:${COLOR_RESET} ($start_time ~ $end_time) = $total_duration"
-
-        # 시간차를 초 단위로 변환 (Task 비율 계산용)
-        s_sec=$(date -u -d "1970-01-01 $start_time" +"%s" 2>/dev/null || echo 0)
-        e_sec=$(date -u -d "1970-01-01 $end_time" +"%s" 2>/dev/null || echo 0)
-        (( e_sec < s_sec )) && e_sec=$((e_sec + 86400))  # 자정 넘김 보정
-        total_diff=$((e_sec - s_sec))
-    else
-        echo "Overall Start Time ~ Overall End Time: ($start_time ~ $end_time)"
-    fi
-
-    # Yocto Tasks 카운팅 및 첫 등장 시간 비율 계산
-    # 각 Task가 로그에 몇 번 등장했는지, 전체 빌드 시간 중 몇 %에 첫 등장했는지 분석
-    echo -e "\n- Task Extracted Count (1st hit time ratio):"
-    for task in do_fetch do_unpack do_patch do_configure do_compile do_install do_package do_rootfs do_image; do
-        local count pct_str="" t_hit t_sec pct
-        count=$(grep -a -c "$task" "$log_file" || true)
-
-        if [[ "$count" -gt 0 && "$total_diff" -gt 0 ]]; then
-            # 해당 Task의 첫 등장 시간 추출
-            t_hit=$(grep -a -m1 "$task" "$log_file" | grep -Eo "${TIMESTAMP_OPTIONAL}[0-9]{2}:[0-9]{2}:[0-9]{2}" | grep -Eo "[0-9]{2}:[0-9]{2}:[0-9]{2}" | head -1 || true)
-            if [[ -n "$t_hit" ]]; then
-                # 첫 등장 시간이 전체 빌드 시간의 몇 %인지 계산
-                t_sec=$(date -u -d "1970-01-01 $t_hit" +"%s" 2>/dev/null || echo 0)
-                (( t_sec < s_sec )) && (( t_sec += 86400 ))  # 자정 넘김 보정
-                pct=$(( (t_sec - s_sec) * 100 / total_diff ))
-                [[ $pct -lt 0 ]] && pct=0 || { [[ $pct -gt 100 ]] && pct=100; }
-                pct_str="(${pct}%)"
-            fi
-        fi
-
-        printf "  - %-13s : %5s hits  %s\n" "$task" "$count" "$pct_str"
-    done
-}
 
 # ------------------------------------------------------------------------------
 # 4. 거대 이미지 도출
 # ------------------------------------------------------------------------------
-# 빌드 결과물 중 큰 파일(2GB 이상) 탐색 및 출력
-# 파라미터: $1=log_file, $2=use_ssh (원격 접속 여부), $3=target_ip (원격 서버 IP)
+# 빌드 결과물 중 큰 파일(100MB 이상) 탐색 및 출력
+# 파라미터: $1=log_file (분석 대상 로그 파일 경로), $2=target_ip (원격 서버 IP)
 find_large_outputs() {
-    local log_file="$1" use_ssh="$2" target_ip="$3" path_src find_cmd result
-    readonly FILESIZE=2G
+    local log_file="$1" target_ip="$2"
+    local FILESIZE="100M"
 
     echo -e "\n${COLOR_CYAN}=== 4. Large Output Files (> $FILESIZE) ===${COLOR_RESET}"
 
-    # 로그에서 소스 경로(PATH_SRC) 추출
-    path_src=$(grep -E -m1 "PATH_SRC=.*" "$log_file" | cut -d= -f2 | tr -d '"\n\r' || echo ".")
-    [[ -z "${path_src:-}" ]] && { echo -e "${COLOR_YELLOW}[WARN] PATH_SRC not found in log. ${COLOR_RESET}"; return 0; }
+    set +e  # 명령 실패 허용
 
-    # find 명령 생성: 지정된 크기 이상 파일 검색 후 크기순 정렬하여 상위 5개 추출
-    find_cmd="find \"${path_src:-.}\" -type f -size +$FILESIZE -exec ls -lh {} + 2>/dev/null | awk '{print \$5, \$6, \$7, \$8, \$9}' | sort -hr | head -n 5"
-
-    # 로컬/원격 서버 선택하여 find 명령 실행
-    if   [[ "$use_ssh" -eq 1 && -n "$target_ip" ]]; then echo "Searching via SSH on $target_ip in ${path_src:-.}...";  result=$(ssh -q -o BatchMode=yes -o ConnectTimeout=5 "$target_ip" "$find_cmd" 2>/dev/null || echo "FAILED")
-    else                                                  echo "Searching locally in ${path_src:-.}...";               result=$(eval "$find_cmd" 2>/dev/null || true)
+    # 빌드 디렉토리 추출 (3번 항목과 동일한 방식)
+    local PATH_REMOTESRC=$(grep -a -B1 "SUCCESS: yocto build" "$log_file" | head -1 | grep -oP '[0-9]{2}:[0-9]{2}:[0-9]{2}\s+\K/.*' 2>/dev/null || echo "")
+    
+    if [[ -z "$PATH_REMOTESRC" ]]; then
+        echo -e "${COLOR_YELLOW}[WARN] Build directory not found in log.${COLOR_RESET}"
+        set -e
+        return 0
     fi
 
-    # 검색 결과 출력 (실패/성공/결과없음)
-    if   [[ "$result" == "FAILED" ]]; then echo -e "${COLOR_RED}[FAIL] Failed to execute find via SSH.${COLOR_RESET}"
-    elif [[ -n "$result" ]];       then echo "$result"
-    else                                echo "No files larger than $FILESIZE were found."
+    # tmp*/deploy/images 디렉토리 패턴 (tmp, tmp-glibc 등 지원)
+    local deploy_pattern="$PATH_REMOTESRC/tmp*/deploy/images"
+    
+    echo -e "${COLOR_GREEN}[Build Directory]${COLOR_RESET}"
+    echo "  - Build path: $PATH_REMOTESRC"
+    echo "  - Search pattern: $deploy_pattern"
+    
+    # find 명령 생성: 지정된 크기 이상 파일 검색 후 크기순 정렬하여 상위 10개 추출
+    local find_cmd="find $deploy_pattern -type f -size +$FILESIZE 2>/dev/null | xargs ls -lh 2>/dev/null | awk '{print \$5, \$9}' | sort -hr | head -n 10"
+    
+    echo -e "\n${COLOR_GREEN}[Large Files (Top 10)]${COLOR_RESET}"
+    
+    local result=""
+    if [[ -n "$target_ip" ]]; then
+        # 원격 서버에서 검색
+        result=$(ssh -q -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 "$target_ip" "$find_cmd" 2>/dev/null || echo "")
+    else
+        # 로컬에서 검색
+        result=$(eval "$find_cmd" 2>/dev/null || echo "")
     fi
+    
+    # 검색 결과 출력
+    if [[ -z "$result" ]]; then
+        echo "  - No files larger than $FILESIZE were found"
+    else
+        echo "$result" | while IFS= read -r line; do
+            local size=$(echo "$line" | awk '{print $1}')
+            local filepath=$(echo "$line" | awk '{$1=""; print $0}' | sed 's/^ //')
+            local filename=$(basename "$filepath")
+            echo "  - [$size] $filename"
+        done
+    fi
+    
+    set -e  # 오류 모드 복원
 }
 
 # ------------------------------------------------------------------------------
@@ -487,7 +518,7 @@ main() {
     fi
     
     # 첫 번째 인자만 사용 (URL이 & 문자로 shell에서 분리되어도 기본 URL만 필요)
-    local input target_log_ip local_ips use_ssh=0
+    local input target_log_ip local_ips
     input="$1"
 
     # 입력이 URL인 경우 로그 다운로드 처리
@@ -532,13 +563,13 @@ main() {
     # 로그에서 "Building remotely on" 문구 검색하여 IP 주소 추출
     target_log_ip=$(head -n 25 "$PATH_TEMP_LOG" | grep -Ei "Building remotely on" | grep -Eo "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+" | head -1 || echo "")
     local_ips=$(hostname -I 2>/dev/null || echo "127.0.0.1")
-    [[ -n "$target_log_ip" ]] && [[ ! "$local_ips" =~ $target_log_ip ]] && { echo -e "${COLOR_YELLOW}[WARN] Script runs locally but log generated on remote server: ${target_log_ip}${COLOR_RESET}"; use_ssh=1; }
+    [[ -n "$target_log_ip" ]] && [[ ! "$local_ips" =~ $target_log_ip ]] && echo -e "${COLOR_YELLOW}[WARN] Script runs locally but log generated on remote server: ${target_log_ip}${COLOR_RESET}"
 
-    # 분석 함수 순차 실행: 서버 사양 → 시간 분석 → 설정 및 캐시 분석
+    # 분석 함수 순차 실행: 서버 사양 → 시간 분석 → 설정 및 캐시 분석 → 대용량 파일 검색
     check_server_spec "$target_log_ip"
     analyze_time "$PATH_TEMP_LOG"
     analyze_config_and_cache "$PATH_TEMP_LOG" "$target_log_ip"
-    #find_large_outputs "$PATH_TEMP_LOG" "$use_ssh" "$target_log_ip"
+    find_large_outputs "$PATH_TEMP_LOG" "$target_log_ip"
 
     echo -e "\n$TAG_OK Analysis Complete!"
 }
