@@ -244,12 +244,13 @@ analyze_time() {
     # 각 Task가 로그에 몇 번 등장했는지, 전체 빌드 시간 중 몇 %에 첫 등장했는지 분석
     echo -e "\n- Task Extracted Count (1st hit time ratio):"
     for task in do_fetch do_unpack do_patch do_configure do_compile do_install do_package do_rootfs do_image; do
-        local count pct_str="" t_hit t_sec pct
-        count=$(grep -a -c "$task" "$log_file" || true)
+        local count pct_str="" t_hit t_sec pct task_started_pattern
+        task_started_pattern="task $task: Started"
+        count=$(grep -a -F -c "$task_started_pattern" "$log_file" || true)
 
         if [[ "$count" -gt 0 && "$total_diff" -gt 0 ]]; then
             # 해당 Task의 첫 등장 시간 추출
-            t_hit=$(grep -a -m1 "$task" "$log_file" | grep -Eo "${TIMESTAMP_OPTIONAL}[0-9]{2}:[0-9]{2}:[0-9]{2}" | grep -Eo "[0-9]{2}:[0-9]{2}:[0-9]{2}" | head -1 || true)
+            t_hit=$(grep -a -F -m1 "$task_started_pattern" "$log_file" | grep -Eo "${TIMESTAMP_OPTIONAL}[0-9]{2}:[0-9]{2}:[0-9]{2}" | grep -Eo "[0-9]{2}:[0-9]{2}:[0-9]{2}" | head -1 || true)
             if [[ -n "$t_hit" ]]; then
                 # 첫 등장 시간이 전체 빌드 시간의 몇 %인지 계산
                 t_sec=$(date -u -d "1970-01-01 $t_hit" +"%s" 2>/dev/null || echo 0)
