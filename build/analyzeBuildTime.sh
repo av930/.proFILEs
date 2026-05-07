@@ -427,7 +427,8 @@ analyze_config_and_cache() {
     
     ## source path의 정보를 출력할지 여부
     [[ "$skip_details" -eq 1 ]] && 
-    echo -e "${RED}[WARN]${NCOL} local.conf is newer than build end time ($CHECK_TIMESTAMP); source-based config lookup skipped"
+    echo -e "${RED}[WARN]${NCOL} local.conf is modified after build ($CHECK_TIMESTAMP); 
+             That means this build log is old, therefore current source-based info skipped."
     
     # ========== SSTATE-CACHE 세부 정보 ==========
     echo -e "\n${BLUE}--- 3.1. Sstate-cache Details ---${NCOL}"
@@ -471,37 +472,14 @@ analyze_config_and_cache() {
         fi
     fi
     
+    # fetch_lines를 먼저 추출 (3번 항목에서 필요)
+    local fetch_lines=$(grep -a "recipe.*do_fetch.*Started" "$log_file" 2>/dev/null || echo "")
+    
     # Cache miss된 task들 (실제로 rebuild된 것들)
     local missed_tasks=$(grep -aE "recipe.*: task do_(populate_sysroot|package|packagedata|package_write_[a-z]+|deploy|populate_lic|rootfs|image|makeboot|create_spdx|create_runtime_spdx|package_qa|flush_pseudodb|deploy_fixup|image_qa|makesystem_ubi|image_debugfs_tar|image_complete|populate_lic_deploy): Started" "$log_file" 2>/dev/null | grep -v setscene || echo "")
-    if [[ -n "$missed_tasks" ]]; then
-        # 모듈별 요약 (첫 번째 발견 시간 포함)
-        echo -e "  ${green}- [Missed] Modules that were rebuilt: (some ${NCOL}"
-        # full recipe 이름 추출 (버전 포함)
-        echo "$missed_tasks" | grep -oP 'recipe \K[^:]+' | sort -u | while IFS= read -r full_recipe; do
-            # 첫 번째 발견 시간 찾기
-            local first_line=$(echo "$missed_tasks" | grep -F "recipe $full_recipe:" | head -1 || echo "")
-            local timestamp=$(echo "$first_line" | grep -oE '^[0-9]{2}:[0-9]{2}:[0-9]{2}' || echo "")
-            if [[ -n "$full_recipe" ]]; then
-                [[ -n "$timestamp" ]] && echo "    [$timestamp] $full_recipe" || echo "    • $full_recipe"
-            fi
-        done
-
-        ## 실제 build된 task를 찾아 보여준다.
-        # echo ""
-        # echo "  - Detailed task list (all tasks that were rebuilt):"
-        # echo "$missed_tasks" | while IFS= read -r line; do
-        #     local timestamp=$(echo "$line" | grep -oE '^[0-9]{2}:[0-9]{2}:[0-9]{2}' || echo "")
-        #     local recipe=$(echo "$line" | grep -oP 'recipe \K[^:]+' || echo "")
-        #     local task=$(echo "$line" | grep -oP 'task \K[^:]+' || echo "")
-        #     if [[ -n "$recipe" && -n "$task" ]]; then
-        #         [[ -n "$timestamp" ]] && echo "    [$timestamp] $recipe -> $task" || echo "    • $recipe -> $task"
-        #     fi
-        # done
-    else
-        echo "    (None - all tasks restored from cache)"
-    fi
     
-    # sstate cache hit된 task들만 보여준다. (참고용, 처음 10개만)
+    # 1. [Hit] Tasks restored from cache (first 10 examples, image related task always need to be rebuilt)
+    ## sstate-cache에서 hit된 task들, image 관련 task는 캐싱 불가능하여 여기 나오지 않음.
     local setscene_tasks=$(grep -a "Running setscene task" "$log_file" 2>/dev/null | head -10 || echo "")
     if [[ -n "$setscene_tasks" ]]; then
         echo -e "  ${green}- [Hit] Tasks restored from cache (first 10 examples, image related task always need to be rebuilt):${NCOL}"
@@ -513,6 +491,67 @@ analyze_config_and_cache() {
                 [[ -n "$timestamp" ]] && echo "    [$timestamp] $recipe (task: do_$task)" || echo "    • $recipe (task: do_$task)"
             fi
         done
+    fi
+    
+    # 2. [Missed] Modules rebuilt without fetch 
+    ## fetch 없이 rebuild된 모듈들 (fetch 단계는 없었지만 실제로는 rebuild된 task들, 즉 sstate-cache에 없거나 hash값이 맞지 않아 rebuild되어야 하는 모듈
+    if [[ -n "$missed_tasks" ]]; then
+        echo -e "  ${green}- [Missed] Modules rebuilt without fetch, All source already exists:${NCOL}"
+        # rebuild된 모듈 리스트
+        local rebuilt_modules=$(echo "$missed_tasks" | grep -oP 'recipe \K[^:]+' | sort -u)
+        # fetch된 모듈 리스트
+        local fetched_modules=$(echo "$fetch_lines" | grep -oP 'recipe \K[^:]+' | sort -u)
+        
+        # rebuild되었지만 fetch되지 않은 모듈 찾기
+        local no_fetch_count=0
+        while IFS= read -r full_recipe; do
+            # 이 모듈이 fetch 리스트에 없는지 확인
+            if ! echo "$fetched_modules" | grep -qF "$full_recipe"; then
+                # 첫 번째 발견 시간 찾기
+                local first_line=$(echo "$missed_tasks" | grep -F "recipe $full_recipe:" | head -1 || echo "")
+                local timestamp=$(echo "$first_line" | grep -oE '^[0-9]{2}:[0-9]{2}:[0-9]{2}' || echo "")
+                if [[ -n "$full_recipe" ]]; then
+                    [[ -n "$timestamp" ]] && echo "    [$timestamp] $full_recipe" || echo "    • $full_recipe"
+                    no_fetch_count=$((no_fetch_count + 1))
+                fi
+            fi
+        done <<< "$rebuilt_modules"
+        
+        if [[ $no_fetch_count -eq 0 ]]; then
+            echo "    (None - all rebuilt modules had fetch tasks)"
+        fi
+    fi
+    
+    # 3. [Missed] Modules that were rebuilt from DL_DIR, PREMIRROR
+    ## rebuild로 인해 src fetch가 필요해, 먼저 DL_DIR, PREMIRROR에 존재하는지 확인한다.
+    if [[ -n "$missed_tasks" ]]; then
+        echo -e "  ${green}- [Missed] Modules that were rebuilt from DL_DIR, PREMIRROR or Internet:${NCOL}"
+        # rebuild된 모듈 리스트
+        local rebuilt_modules=$(echo "$missed_tasks" | grep -oP 'recipe \K[^:]+' | sort -u)
+        # fetch된 모듈 리스트
+        local fetched_modules=$(echo "$fetch_lines" | grep -oP 'recipe \K[^:]+' | sort -u)
+        
+        # rebuild되고 fetch도 있는 모듈만 찾기
+        local with_fetch_count=0
+        while IFS= read -r full_recipe; do
+            # 이 모듈이 fetch 리스트에 있는지 확인
+            if echo "$fetched_modules" | grep -qF "$full_recipe"; then
+                # 첫 번째 발견 시간 찾기
+                local first_line=$(echo "$missed_tasks" | grep -F "recipe $full_recipe:" | head -1 || echo "")
+                local timestamp=$(echo "$first_line" | grep -oE '^[0-9]{2}:[0-9]{2}:[0-9]{2}' || echo "")
+                if [[ -n "$full_recipe" ]]; then
+                    [[ -n "$timestamp" ]] && echo "    [$timestamp] $full_recipe" || echo "    • $full_recipe"
+                    with_fetch_count=$((with_fetch_count + 1))
+                fi
+            fi
+        done <<< "$rebuilt_modules"
+        
+        if [[ $with_fetch_count -eq 0 ]]; then
+            echo "    (None - all tasks restored from cache)"
+        fi
+    else
+        echo -e "  ${green}- [Missed] Modules that were rebuilt from DL_DIR, PREMIRROR:${NCOL}"
+        echo "    (None - all tasks restored from cache)"
     fi
     
     # ========== PREMIRRORS 세부 정보 ==========
@@ -544,10 +583,47 @@ analyze_config_and_cache() {
         fi
     fi
     
+    # 먼저 인터넷에서 다운로드된 recipe 목록 추출 (Fetching http 전후 20줄 내에 있는 recipe)
+    local internet_recipes=$(grep -a -B 20 "Fetching.*http" "$log_file" 2>/dev/null | grep "recipe.*do_fetch.*Started" | grep -oP 'recipe \K[^:]+' | sort -u || echo "")
+    
+    # 4. [Hit] Module list fetched from DL_DIR or PREMIRRORS (cached, no internet download)
+    ## DL_DIR 또는 PREMIRRORS에서 캐시 hit된 모듈들 (인터넷 다운로드 없음)
+    if [[ -n "$fetch_lines" ]]; then
+        echo -e "  ${green}- [Hit] Modules fetched from DL_DIR or PREMIRRORS (cached):${NCOL}"
+        # fetch_lines에서 internet_recipes를 제외한 모듈만 출력
+        local cached_modules=""
+        while IFS= read -r full_recipe; do
+            # 이 모듈이 인터넷 다운로드 목록에 없는지 확인
+            if ! echo "$internet_recipes" | grep -qF "$full_recipe"; then
+                # 첫 번째 발견 시간 찾기
+                local first_line=$(echo "$fetch_lines" | grep -F "recipe $full_recipe:" | head -1 || echo "")
+                local timestamp=$(echo "$first_line" | grep -oE '^[0-9]{2}:[0-9]{2}:[0-9]{2}' || echo "")
+                if [[ -n "$full_recipe" ]]; then
+                    if [[ -n "$timestamp" ]]; then
+                        cached_modules="${cached_modules}    [$timestamp] $full_recipe"$'\n'
+                    else
+                        cached_modules="${cached_modules}    • $full_recipe"$'\n'
+                    fi
+                fi
+            fi
+        done <<< "$(echo "$fetch_lines" | grep -oP 'recipe \K[^:]+' | sort -u)"
+        
+        if [[ -z "$cached_modules" ]]; then
+            echo "    (None - all fetched modules required internet download)"
+        else
+            echo -n "$cached_modules"
+        fi
+    else
+        echo -e "  ${green}- [Hit] Modules fetched from DL_DIR or PREMIRRORS (cached):${NCOL}"
+        echo "    (None - no fetch tasks executed)"
+    fi
+    
+    # 5. [Missed] All files downloaded from Internet (recipes + BitBake system files)
+    ## 인터넷에서 다운로드된 모든 파일 (recipe 소스 do_fetch + BitBake의 buildtools과 uninative)
+    ## bitbake에서 uninative는 host의 gcc버전에 상관없이 동일한 sstate-cache를 생성하는 library, buildtools는 gcc,make,python등등 build기본 toolchain
     local fetching_lines=$(grep -a "Fetching.*http" "$log_file" 2>/dev/null || echo "")
     if [[ -n "$fetching_lines" ]]; then
-        # 모듈별 요약 (unique list)
-        echo -e "  ${green}- [Missed] Module list (not in DL_DIR or PREMIRRORS, from Internet):${NCOL}"
+        echo -e "  ${green}- [Missed] Files downloaded from Internet (recipes do_fetch + system bitbake):${NCOL}"
         echo "$fetching_lines" | while IFS= read -r line; do
             local url=$(echo "$line" | grep -oP 'http[s]?://[^\s;]+' | head -1)
             local file=$(basename "$url" | cut -d'?' -f1 | cut -d';' -f1)
@@ -564,23 +640,6 @@ analyze_config_and_cache() {
         done
     else
         echo -e "  ${green}- [Hit] None (all sources were cached in DL_DIR or PREMIRRORS):${NCOL}"
-    fi
-    
-    local fetch_lines=$(grep -a "recipe.*do_fetch.*Started" "$log_file" 2>/dev/null || echo "")
-    if [[ -n "$fetch_lines" ]]; then
-        # 모듈별 요약 (unique list with first occurrence time)
-        echo -e "  ${green}- [Hit] Module list (had fetch task executed, may be from DL_DIR or PREMIRRORS):${NCOL}"
-        # full recipe 이름 추출하여 unique하게 만들기
-        echo "$fetch_lines" | grep -oP 'recipe \K[^:]+' | sort -u | while IFS= read -r full_recipe; do
-            # 첫 번째 발견 시간 찾기
-            local first_line=$(echo "$fetch_lines" | grep -F "recipe $full_recipe:" | head -1 || echo "")
-            local timestamp=$(echo "$first_line" | grep -oE '^[0-9]{2}:[0-9]{2}:[0-9]{2}' || echo "")
-            if [[ -n "$full_recipe" ]]; then
-                [[ -n "$timestamp" ]] && echo "    [$timestamp] $full_recipe" || echo "    • $full_recipe"
-            fi
-        done
-    else
-        echo -e "  ${green}- [Missed] All need to fetch from Internet:${NCOL}"
     fi
     
     set -e  # 오류 모드 복원
