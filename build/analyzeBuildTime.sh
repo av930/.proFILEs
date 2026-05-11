@@ -314,7 +314,6 @@ analyze_config_and_cache() {
     [[ -z "$premirrors" ]] && premirrors=$(extract_val PREMIRRORS)
     local mirrors=$(extract_val MIRRORS)
     local sstate_mirrors=$(extract_val SSTATE_MIRRORS)
-    [[ -z "$sstate_mirrors" ]] && sstate_mirrors=$(extract_val SSTATE_LOCAL_MIRROR)
     
     # 간접 증거 감지
     [[ -z "$premirrors" ]] && grep -aq "will check PREMIRRORS\|from PREMIRRORS\|Trying PREMIRROR" "$log_file" 2>/dev/null && premirrors="CONFIGURED (detected from log-message)"
@@ -334,10 +333,10 @@ analyze_config_and_cache() {
         if   [[ "$skip_details" -eq 1 ]]; then :
         elif [[ -n "$target_ip" ]] && run_io test "$target_ip" "$local_conf" f; then
             premirrors_from_conf=$(run_io ssh "$target_ip" "grep -E 'SOURCE_MIRROR_URL|PREMIRRORS' '$local_conf' | head -1" | sed 's/.*=[[:space:]]*//;s/^"//;s/"$//;s/'\''//g' || echo "")
-            sstate_mirrors_from_conf=$(run_io ssh "$target_ip" "grep -E 'SSTATE_MIRRORS|SSTATE_LOCAL_MIRROR' '$local_conf' | head -1" | sed 's/.*=[[:space:]]*//;s/^"//;s/"$//;s/'\''//g' || echo "")
+            sstate_mirrors_from_conf=$(run_io ssh "$target_ip" "grep -E 'SSTATE_MIRRORS' '$local_conf' | head -1" | sed 's/.*=[[:space:]]*//;s/^"//;s/"$//;s/'\''//g' || echo "")
         elif [[ -f "$local_conf" ]]; then
             premirrors_from_conf=$(run_io grep "" 'SOURCE_MIRROR_URL|PREMIRRORS' "$local_conf" || echo "")
-            sstate_mirrors_from_conf=$(run_io grep "" 'SSTATE_MIRRORS|SSTATE_LOCAL_MIRROR' "$local_conf" || echo "")
+            sstate_mirrors_from_conf=$(run_io grep "" 'SSTATE_MIRRORS' "$local_conf" || echo "")
         fi
         
         # 결과값이 있으면 업데이트 (detected from source 태그 추가)

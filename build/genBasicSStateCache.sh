@@ -1,8 +1,10 @@
 #!/bin/bash
 set -e
 # --------------------------------------------------
-# 사용법: source generate_basic_sstate.sh <yocto-build-dir> <sstate-base-dir> [project-prefix]
-# 예제: source genBasicSStateCache.sh /SRC/nad/sa515m/SA515M_apps/apps_proc/build /data001/vc.integrator/mirror/tsu_26my_release/sstate-cache/BASIC 26tsu
+# 용도: Yocto 빌드에서 Image build후 basic library와 toolchain, cross/native tool들에 대한 sstate-cache만 추출하여 별도 디렉토리에 저장하는 스크립트
+#      전체 sstate-cache에서 필요한 항목만 선별하여 daily나 event build에서 이용가능하도록 BASIC sstate-cache만 추출하는 기능
+# 사용법: source generate_basic_sstate.sh <yocto-build-dir> <sstate-base-dir> [<prefix>-<machine>]
+# 예제: source genBasicSStateCache.sh /SRC/nad/sa515m/SA515M_apps/apps_proc/build /data001/vc.integrator/mirror/tsu_26my_release/sstate-cache/BASIC 26tsu-sa515m
 
 
 # --------------------------------------------------
@@ -10,12 +12,46 @@ set -e
 # --------------------------------------------------
 PATH_BUILD_INPUT="$1"
 SSTATE_BASE="$2"
-PRJ_PREFIX="${3:-26tsu}"
+ARG_VARIANT="$3"
+ARG_EXTRA="$4"
+
+# prefix-machine 문자열에서 값 추출
+parse_variant() {
+    local variant="$1"
+
+    [[ "$variant" == *-* ]] || return 1
+
+    PRJ_PREFIX="${variant%-*}"
+    MACHINE="${variant##*-}"
+    [[ -n "$PRJ_PREFIX" && -n "$MACHINE" ]] || return 1
+    return 0
+}
 
 [ -z "$PATH_BUILD_INPUT" ] || [ -z "$SSTATE_BASE" ] && {
-    echo "Usage: source generate_basic_sstate.sh <yocto-build-dir> <sstate-base-dir> [project-prefix]"
+    echo "Usage: source generate_basic_sstate.sh <yocto-build-dir> <sstate-base-dir> <prefix>-<machine>"
     return 1 2>/dev/null || exit 1
 }
+
+[ -n "$ARG_EXTRA" ] && {
+    echo "Usage: source generate_basic_sstate.sh <yocto-build-dir> <sstate-base-dir> [<prefix>-<machine>]"
+    return 1 2>/dev/null || exit 1
+}
+
+if   [[ -n "$ARG_VARIANT" ]]; then
+    parse_variant "$ARG_VARIANT" || {
+        echo "Error: invalid manual input: $ARG_VARIANT"
+        echo "Manual input required: source generate_basic_sstate.sh <yocto-build-dir> <sstate-base-dir> <prefix>-<machine>"
+        echo "Example: source generate_basic_sstate.sh $PATH_BUILD_INPUT $SSTATE_BASE 26tsu-sa515m"
+        return 1 2>/dev/null || exit 1
+    }
+elif parse_variant "$BUILD_TARGET_VARIANT";              then :
+elif [[ "$PATH_OUT" =~ /upload_images/([^/]+-[^/]+)/ ]]; then parse_variant "${BASH_REMATCH[1]}"
+else
+    echo "Error: failed to detect <prefix>-<machine> from BUILD_TARGET_VARIANT or PATH_OUT"
+    echo "Manual input required: source generate_basic_sstate.sh <yocto-build-dir> <sstate-base-dir> <prefix>-<machine>"
+    echo "Example: source generate_basic_sstate.sh $PATH_BUILD_INPUT $SSTATE_BASE 26tsu-sa515m"
+    return 1 2>/dev/null || exit 1
+fi
 
 PATH_BUILD=$(cd "$PATH_BUILD_INPUT" 2>/dev/null && pwd -P) || {
     echo "Error: invalid build dir path: $PATH_BUILD_INPUT"
