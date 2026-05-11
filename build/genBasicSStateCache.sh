@@ -27,6 +27,15 @@ parse_variant() {
     return 0
 }
 
+# tmp 출력 루트 자동 탐색
+detect_tmp_base() {
+    local path_build="$1"
+
+    [[ -d "$path_build/tmp-glibc/pkgdata" ]] && { echo "$path_build/tmp-glibc"; return 0; }
+    [[ -d "$path_build/tmp/pkgdata" ]]       && { echo "$path_build/tmp";       return 0; }
+    return 1
+}
+
 [ -z "$PATH_BUILD_INPUT" ] || [ -z "$SSTATE_BASE" ] && {
     echo "Usage: source generate_basic_sstate.sh <yocto-build-dir> <sstate-base-dir> <prefix>-<machine>"
     return 1 2>/dev/null || exit 1
@@ -63,7 +72,7 @@ PATH_BUILD=$(cd "$PATH_BUILD_INPUT" 2>/dev/null && pwd -P) || {
     return 1 2>/dev/null || exit 1
 }
 
-BASIC_DIR="${SSTATE_BASE}/BASIC"
+[[ "${SSTATE_BASE##*/}" == "BASIC" ]] && BASIC_DIR="$SSTATE_BASE" || BASIC_DIR="${SSTATE_BASE}/BASIC"
 
 # --------------------------------------------------
 # 2. BASIC sstate 저장 디렉토리 생성
@@ -80,8 +89,14 @@ echo "================================================="
 # --------------------------------------------------
 # 3. 기본 경로 설정 (manifest / pkgdata)
 # --------------------------------------------------
-IMAGE_MANIFEST="${PATH_BUILD}/tmp-glibc/deploy/images/${MACHINE}/${PRJ_PREFIX}-${MACHINE}-${MACHINE}.manifest"
-PKGDATA_BASE="${PATH_BUILD}/tmp/pkgdata"
+TMP_BASE=$(detect_tmp_base "$PATH_BUILD") || {
+    echo "Error: failed to detect tmp output dir under $PATH_BUILD"
+    echo "Expected one of: $PATH_BUILD/tmp-glibc/pkgdata or $PATH_BUILD/tmp/pkgdata"
+    return 1 2>/dev/null || exit 1
+}
+
+IMAGE_MANIFEST="${TMP_BASE}/deploy/images/${MACHINE}/${PRJ_PREFIX}-${MACHINE}-${MACHINE}.manifest"
+PKGDATA_BASE="${TMP_BASE}/pkgdata"
 RUNTIME_DIR="${PKGDATA_BASE}/${MACHINE}/runtime"
 OUT_FILE="${PATH_BUILD}/basic-sstate-recipe-list.txt"
 
