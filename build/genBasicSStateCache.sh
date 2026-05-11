@@ -1,0 +1,141 @@
+#!/bin/bash
+set -e
+# --------------------------------------------------
+# 사용법: source generate_basic_sstate.sh <yocto-build-dir> <sstate-base-dir> [project-prefix]
+# 예제: source genBasicSStateCache.sh /SRC/nad/sa515m/SA515M_apps/apps_proc/build /data001/vc.integrator/mirror/tsu_26my_release/sstate-cache/BASIC 26tsu
+
+
+# --------------------------------------------------
+# 1. 입력 인자 확인 및 build dir 검사
+# --------------------------------------------------
+PATH_BUILD_INPUT="$1"
+SSTATE_BASE="$2"
+PRJ_PREFIX="${3:-26tsu}"
+
+[ -z "$PATH_BUILD_INPUT" ] || [ -z "$SSTATE_BASE" ] && {
+    echo "Usage: source generate_basic_sstate.sh <yocto-build-dir> <sstate-base-dir> [project-prefix]"
+    return 1 2>/dev/null || exit 1
+}
+
+PATH_BUILD=$(cd "$PATH_BUILD_INPUT" 2>/dev/null && pwd -P) || {
+    echo "Error: invalid build dir path: $PATH_BUILD_INPUT"
+    return 1 2>/dev/null || exit 1
+}
+
+[[ -f "$PATH_BUILD/conf/local.conf" && -f "$PATH_BUILD/conf/bblayers.conf" ]] || {
+    echo "Error: not a Yocto build dir: $PATH_BUILD"
+    return 1 2>/dev/null || exit 1
+}
+
+BASIC_DIR="${SSTATE_BASE}/BASIC"
+
+# --------------------------------------------------
+# 2. BASIC sstate 저장 디렉토리 생성
+# --------------------------------------------------
+mkdir -p "$BASIC_DIR"
+
+echo "================================================="
+echo "Generating BASIC SSTATE into:"
+echo "$BASIC_DIR"
+echo "Yocto build dir:"
+echo "$PATH_BUILD"
+echo "================================================="
+
+# --------------------------------------------------
+# 3. 기본 경로 설정 (manifest / pkgdata)
+# --------------------------------------------------
+IMAGE_MANIFEST="${PATH_BUILD}/tmp-glibc/deploy/images/${MACHINE}/${PRJ_PREFIX}-${MACHINE}-${MACHINE}.manifest"
+PKGDATA_BASE="${PATH_BUILD}/tmp/pkgdata"
+RUNTIME_DIR="${PKGDATA_BASE}/${MACHINE}/runtime"
+OUT_FILE="${PATH_BUILD}/basic-sstate-recipe-list.txt"
+
+[[ -f "$IMAGE_MANIFEST" ]] || {
+    echo "Error: manifest not found: $IMAGE_MANIFEST"
+    return 1 2>/dev/null || exit 1
+}
+
+[[ -d "$RUNTIME_DIR" ]] || {
+    echo "Error: runtime pkgdata not found: $RUNTIME_DIR"
+    return 1 2>/dev/null || exit 1
+}
+
+# --------------------------------------------------
+# 4. Image → PN → native/cross 확장 + toolchain 포함
+# --------------------------------------------------
+{
+    # 4-1. manifest에서 package 추출 후 PN 변환
+    awk '{print $1}' "$IMAGE_MANIFEST" | sort -u |
+    while read -r pkg; do
+        [ -f "${RUNTIME_DIR}/${pkg}" ] &&
+        awk '/^PN:/ {print $2}' "${RUNTIME_DIR}/${pkg}"
+    done | sort -u |
+
+    # 4-2. 각 PN에 대해 native / cross 확장
+    while read -r pn; do
+        echo "$pn"
+        find "$PKGDATA_BASE" \( -name "${pn}-native" -o -name "${pn}-cross*" \) \
+            -type f -exec basename {} \; 2>/dev/null
+    done
+
+    # 4-3. 기본 toolchain / libc 강제 포함
+    cat <<EOF
+gcc-cross-${TARGET_ARCH}
+binutils-cross-${TARGET_ARCH}
+gcc-runtime
+glibc
+glibc-native
+libgcc
+libstdc++
+EOF
+
+# 중복 제거 후 최종 recipe list 생성
+} | sort -u > "$OUT_FILE"
+
+echo "Recipe list generated: $OUT_FILE"
+echo "Total recipes: $(wc -l < "$OUT_FILE")"
+
+# --------------------------------------------------
+# 5. BASIC sstate 생성 (기존 FULL sstate 그대로 사용)
+#    → build 완료 상태이므로 재컴파일 없이 sstate만 생성됨
+# --------------------------------------------------
+echo "Populating BASIC sstate-cache..."
+bitbake $(cat "$OUT_FILE")
+
+# --------------------------------------------------
+# 6. 생성된 sstate 중 BASIC에 해당하는 파일만 복사
+#    (현재 default SSTATE_DIR 기준에서 추출)
+# --------------------------------------------------
+DEFAULT_SSTATE_DIR=$(bitbake -e | grep '^SSTATE_DIR=' | cut -d'"' -f2)
+
+echo "Default SSTATE_DIR detected:"
+echo "$DEFAULT_SSTATE_DIR"
+
+echo "Copying matching sstate objects to BASIC..."
+
+grep -o 'sstate:[^ ]*' "$OUT_FILE" 2>/dev/null || true
+
+# 실제 파일 복사 (task hash 기반 전체 복사 방식)
+rsync -a --ignore-existing \
+    "$DEFAULT_SSTATE_DIR"/ \
+    "$BASIC_DIR"/
+
+echo "================================================="
+echo "✅ BASIC SSTATE generation complete"
+echo "Location: $BASIC_DIR"
+echo "================================================="
+
+# --------------------------------------------------
+# 7. 사용자 검증용 비교 명령 출력
+# --------------------------------------------------
+echo ""
+echo "===== Verification Commands ====="
+echo "1) BASIC sstate 파일 개수 확인"
+echo "   find $BASIC_DIR -type f | wc -l"
+echo ""
+echo "2) FULL vs BASIC 파일 차이 확인"
+echo "   diff <(ls $DEFAULT_SSTATE_DIR | sort) <(ls $BASIC_DIR | sort)"
+echo ""
+echo "3) BASIC에 존재하는 항목 비율 확인"
+echo "   echo \"FULL:\" \$(find $DEFAULT_SSTATE_DIR -type f | wc -l)"
+echo "   echo \"BASIC:\" \$(find $BASIC_DIR -type f | wc -l)"
+echo "=================================="
