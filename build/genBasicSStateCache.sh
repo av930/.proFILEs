@@ -36,6 +36,23 @@ detect_tmp_base() {
     return 1
 }
 
+# Yocto 환경 재설정
+detect_oe_init() {
+    local path_build="$1"
+    local path_apps_proc
+
+    path_apps_proc="$(dirname "$path_build")"
+    [[ -f "$path_apps_proc/poky/oe-init-build-env" ]] && { echo "$path_apps_proc/poky/oe-init-build-env"; return 0; }
+    return 1
+}
+
+# bitbake 변수 조회
+get_bitbake_var() {
+    local var_name="$1"
+
+    bitbake -e | sed -n "s/^${var_name}=\"\([^\"]*\)\"/\1/p" | head -n 1
+}
+
 [ -z "$PATH_BUILD_INPUT" ] || [ -z "$SSTATE_BASE" ] && {
     echo "Usage: source generate_basic_sstate.sh <yocto-build-dir> <sstate-base-dir> <prefix>-<machine>"
     return 1 2>/dev/null || exit 1
@@ -67,6 +84,24 @@ PATH_BUILD=$(cd "$PATH_BUILD_INPUT" 2>/dev/null && pwd -P) || {
     return 1 2>/dev/null || exit 1
 }
 
+PATH_OE_INIT=$(detect_oe_init "$PATH_BUILD") || {
+    echo "Error: oe-init-build-env not found near $PATH_BUILD"
+    return 1 2>/dev/null || exit 1
+}
+
+PATH_ORIG="$PWD"
+source "$PATH_OE_INIT" "$PATH_BUILD" > /dev/null || {
+    echo "Error: failed to source Yocto environment: $PATH_OE_INIT"
+    cd "$PATH_ORIG"
+    return 1 2>/dev/null || exit 1
+}
+cd "$PATH_ORIG"
+
+command -v bitbake > /dev/null || {
+    echo "Error: bitbake not found after sourcing $PATH_OE_INIT"
+    return 1 2>/dev/null || exit 1
+}
+
 [[ -f "$PATH_BUILD/conf/local.conf" && -f "$PATH_BUILD/conf/bblayers.conf" ]] || {
     echo "Error: not a Yocto build dir: $PATH_BUILD"
     return 1 2>/dev/null || exit 1
@@ -92,6 +127,12 @@ echo "================================================="
 TMP_BASE=$(detect_tmp_base "$PATH_BUILD") || {
     echo "Error: failed to detect tmp output dir under $PATH_BUILD"
     echo "Expected one of: $PATH_BUILD/tmp-glibc/pkgdata or $PATH_BUILD/tmp/pkgdata"
+    return 1 2>/dev/null || exit 1
+}
+
+TARGET_ARCH=$(get_bitbake_var TARGET_ARCH)
+[[ -n "$TARGET_ARCH" ]] || {
+    echo "Error: failed to detect TARGET_ARCH from bitbake environment"
     return 1 2>/dev/null || exit 1
 }
 
@@ -156,7 +197,12 @@ bitbake $(cat "$OUT_FILE")
 # 6. 생성된 sstate 중 BASIC에 해당하는 파일만 복사
 #    (현재 default SSTATE_DIR 기준에서 추출)
 # --------------------------------------------------
-DEFAULT_SSTATE_DIR=$(bitbake -e | grep '^SSTATE_DIR=' | cut -d'"' -f2)
+DEFAULT_SSTATE_DIR=$(get_bitbake_var SSTATE_DIR)
+
+[[ -n "$DEFAULT_SSTATE_DIR" ]] || {
+    echo "Error: failed to detect SSTATE_DIR from bitbake environment"
+    return 1 2>/dev/null || exit 1
+}
 
 echo "Default SSTATE_DIR detected:"
 echo "$DEFAULT_SSTATE_DIR"
