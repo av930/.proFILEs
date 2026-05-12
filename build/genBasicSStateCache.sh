@@ -36,6 +36,51 @@ detect_tmp_base() {
     return 1
 }
 
+detect_target_arch() {
+    local pkgdata_base="$1"
+
+    find "$TMP_BASE" \( -type f -o -type d \) \( -name 'gcc-cross-*' -o -name 'binutils-cross-*' \) -exec basename {} \; 2>/dev/null |
+    sed -n 's/^gcc-cross-//p; s/^binutils-cross-//p' |
+    grep -v '^$' |
+    sort -u |
+    head -1
+}
+
+resolve_conf_value() {
+    local conf_file="$1"
+    local var_name="$2"
+    local raw_line value
+
+    raw_line=$(grep -E "^[[:space:]]*${var_name}[[:space:]]*[?+:]?=" "$conf_file" | grep -v '^[[:space:]]*#' | tail -1) || true
+    [[ -n "$raw_line" ]] || return 1
+
+    value=${raw_line#*=}
+    value=$(echo "$value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/^"//;s/"$//;s/^'\''//;s/'\''$//')
+    [[ -n "$value" ]] || return 1
+
+    value=${value//\$\{TOPDIR\}/$PATH_BUILD}
+    value=${value//\$TOPDIR/$PATH_BUILD}
+
+    case "$value" in
+        /*) ;;
+        *) value="$PATH_BUILD/${value#./}" ;;
+    esac
+
+    echo "$value"
+}
+
+resolve_sstate_dir() {
+    local configured_dir
+
+    configured_dir=$(resolve_conf_value "$PATH_BUILD/conf/local.conf" "SSTATE_DIR") || true
+    [[ -n "$configured_dir" ]] && {
+        echo "$configured_dir"
+        return 0
+    }
+
+    echo "$PATH_BUILD/sstate-cache"
+}
+
 [ -z "$PATH_BUILD_INPUT" ] || [ -z "$SSTATE_BASE" ] && {
     echo "Usage: source generate_basic_sstate.sh <yocto-build-dir> <sstate-base-dir> <prefix>-<machine>"
     return 1 2>/dev/null || exit 1
@@ -99,6 +144,9 @@ IMAGE_MANIFEST="${TMP_BASE}/deploy/images/${MACHINE}/${PRJ_PREFIX}-${MACHINE}-${
 PKGDATA_BASE="${TMP_BASE}/pkgdata"
 RUNTIME_DIR="${PKGDATA_BASE}/${MACHINE}/runtime"
 OUT_FILE="${PATH_BUILD}/basic-sstate-recipe-list.txt"
+FOUND_FILE_LIST="${PATH_BUILD}/basic-sstate-found-files.txt"
+REL_FILE_LIST="${PATH_BUILD}/basic-sstate-relative-files.txt"
+MISSING_RECIPE_LIST="${PATH_BUILD}/basic-sstate-missing-recipes.txt"
 
 [[ -f "$IMAGE_MANIFEST" ]] || {
     echo "Error: manifest not found: $IMAGE_MANIFEST"
@@ -107,6 +155,13 @@ OUT_FILE="${PATH_BUILD}/basic-sstate-recipe-list.txt"
 
 [[ -d "$RUNTIME_DIR" ]] || {
     echo "Error: runtime pkgdata not found: $RUNTIME_DIR"
+    return 1 2>/dev/null || exit 1
+}
+
+TARGET_ARCH_NAME="${TARGET_ARCH:-$(detect_target_arch "$PKGDATA_BASE")}" 
+
+[[ -n "$TARGET_ARCH_NAME" ]] || {
+    echo "Error: failed to detect TARGET_ARCH from pkgdata"
     return 1 2>/dev/null || exit 1
 }
 
@@ -130,8 +185,8 @@ OUT_FILE="${PATH_BUILD}/basic-sstate-recipe-list.txt"
 
     # 4-3. 기본 toolchain / libc 강제 포함
     cat <<EOF
-gcc-cross-${TARGET_ARCH}
-binutils-cross-${TARGET_ARCH}
+gcc-cross-${TARGET_ARCH_NAME}
+binutils-cross-${TARGET_ARCH_NAME}
 gcc-runtime
 glibc
 glibc-native
@@ -146,29 +201,51 @@ echo "Recipe list generated: $OUT_FILE"
 echo "Total recipes: $(wc -l < "$OUT_FILE")"
 
 # --------------------------------------------------
-# 5. BASIC sstate 생성 (기존 FULL sstate 그대로 사용)
-#    → build 완료 상태이므로 재컴파일 없이 sstate만 생성됨
+# 5. extraction-only 방식으로 selected recipe에 해당하는 sstate만 선별
 # --------------------------------------------------
-echo "Populating BASIC sstate-cache..."
-bitbake $(cat "$OUT_FILE")
+DEFAULT_SSTATE_DIR=$(resolve_sstate_dir)
 
-# --------------------------------------------------
-# 6. 생성된 sstate 중 BASIC에 해당하는 파일만 복사
-#    (현재 default SSTATE_DIR 기준에서 추출)
-# --------------------------------------------------
-DEFAULT_SSTATE_DIR=$(bitbake -e | grep '^SSTATE_DIR=' | cut -d'"' -f2)
+[[ -d "$DEFAULT_SSTATE_DIR" ]] || {
+    echo "Error: SSTATE_DIR not found: $DEFAULT_SSTATE_DIR"
+    return 1 2>/dev/null || exit 1
+}
 
 echo "Default SSTATE_DIR detected:"
 echo "$DEFAULT_SSTATE_DIR"
 
 echo "Copying matching sstate objects to BASIC..."
 
-grep -o 'sstate:[^ ]*' "$OUT_FILE" 2>/dev/null || true
+: > "$FOUND_FILE_LIST"
+: > "$REL_FILE_LIST"
+: > "$MISSING_RECIPE_LIST"
 
-# 실제 파일 복사 (task hash 기반 전체 복사 방식)
-rsync -a --ignore-existing \
-    "$DEFAULT_SSTATE_DIR"/ \
-    "$BASIC_DIR"/
+while read -r pn; do
+    [[ -n "$pn" ]] || continue
+
+    if find "$DEFAULT_SSTATE_DIR" \( -type f -o -type l \) -name "sstate:${pn}:*" -print >> "$FOUND_FILE_LIST"; then
+        :
+    fi
+
+    if ! grep -Fq "sstate:${pn}:" "$FOUND_FILE_LIST"; then
+        echo "$pn" >> "$MISSING_RECIPE_LIST"
+    fi
+done < "$OUT_FILE"
+
+sort -u "$FOUND_FILE_LIST" -o "$FOUND_FILE_LIST"
+
+if [[ -s "$FOUND_FILE_LIST" ]]; then
+    sed "s#^${DEFAULT_SSTATE_DIR}/##" "$FOUND_FILE_LIST" > "$REL_FILE_LIST"
+    rsync -a --ignore-existing --files-from="$REL_FILE_LIST" \
+        "$DEFAULT_SSTATE_DIR"/ \
+        "$BASIC_DIR"/
+else
+    echo "Error: no matching sstate files found for selected recipes"
+    return 1 2>/dev/null || exit 1
+fi
+
+echo "Matched sstate files: $(wc -l < "$FOUND_FILE_LIST")"
+echo "Missing recipes: $(wc -l < "$MISSING_RECIPE_LIST")"
+[[ -s "$MISSING_RECIPE_LIST" ]] && echo "Missing recipe list: $MISSING_RECIPE_LIST"
 
 echo "================================================="
 echo "✅ BASIC SSTATE generation complete"
@@ -176,17 +253,20 @@ echo "Location: $BASIC_DIR"
 echo "================================================="
 
 # --------------------------------------------------
-# 7. 사용자 검증용 비교 명령 출력
+# 6. 사용자 검증용 비교 명령 출력
 # --------------------------------------------------
 echo ""
 echo "===== Verification Commands ====="
 echo "1) BASIC sstate 파일 개수 확인"
 echo "   find $BASIC_DIR -type f | wc -l"
 echo ""
-echo "2) FULL vs BASIC 파일 차이 확인"
-echo "   diff <(ls $DEFAULT_SSTATE_DIR | sort) <(ls $BASIC_DIR | sort)"
+echo "2) 선별 복사된 파일 목록 확인"
+echo "   head $FOUND_FILE_LIST"
 echo ""
-echo "3) BASIC에 존재하는 항목 비율 확인"
+echo "3) 누락된 recipe 확인"
+echo "   cat $MISSING_RECIPE_LIST"
+echo ""
+echo "4) BASIC에 존재하는 항목 비율 확인"
 echo "   echo \"FULL:\" \$(find $DEFAULT_SSTATE_DIR -type f | wc -l)"
 echo "   echo \"BASIC:\" \$(find $BASIC_DIR -type f | wc -l)"
 echo "=================================="
