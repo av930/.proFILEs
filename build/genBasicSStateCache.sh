@@ -81,6 +81,22 @@ resolve_sstate_dir() {
     echo "$PATH_BUILD/sstate-cache"
 }
 
+expand_sstate_recipes() {
+    local pn="$1"
+
+    case "$pn" in
+        libstdc++)
+            printf '%s\n' gcc-runtime
+            ;;
+        glibc-native)
+            printf '%s\n' glibc cross-localedef-native
+            ;;
+        *)
+            printf '%s\n' "$pn"
+            ;;
+    esac
+}
+
 [ -z "$PATH_BUILD_INPUT" ] || [ -z "$SSTATE_BASE" ] && {
     echo "Usage: source generate_basic_sstate.sh <yocto-build-dir> <sstate-base-dir> <prefix>-<machine>"
     return 1 2>/dev/null || exit 1
@@ -222,12 +238,22 @@ echo "Copying matching sstate objects to BASIC..."
 while read -r pn; do
     [[ -n "$pn" ]] || continue
 
-    if find "$DEFAULT_SSTATE_DIR" \( -type f -o -type l \) -name "sstate:${pn}:*" -print >> "$FOUND_FILE_LIST"; then
-        :
-    fi
+    while read -r mapped_pn; do
+        [[ -n "$mapped_pn" ]] || continue
+        find "$DEFAULT_SSTATE_DIR" \( -type f -o -type l \) -name "sstate:${mapped_pn}:*" -print >> "$FOUND_FILE_LIST"
+    done < <(expand_sstate_recipes "$pn")
 
     if ! grep -Fq "sstate:${pn}:" "$FOUND_FILE_LIST"; then
-        echo "$pn" >> "$MISSING_RECIPE_LIST"
+        found_alias_match=0
+        while read -r mapped_pn; do
+            [[ -n "$mapped_pn" ]] || continue
+            if grep -Fq "sstate:${mapped_pn}:" "$FOUND_FILE_LIST"; then
+                found_alias_match=1
+                break
+            fi
+        done < <(expand_sstate_recipes "$pn")
+
+        [[ "$found_alias_match" -eq 0 ]] && echo "$pn" >> "$MISSING_RECIPE_LIST"
     fi
 done < "$OUT_FILE"
 
