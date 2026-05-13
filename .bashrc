@@ -126,7 +126,18 @@ alias sc$ECHO='_bar "Usage"; printf "
 "'
 alias scfile='_bar "log save to $HOME/screen.file.log"; screen -X hardcopy -h ~/screen.file.log'
 alias sc${TAG}='screen -ls'
-alias sc="screen -U -RR -c ${proFILEdir}/.screenrc"
+function _start_profile_http_service_if_needed(){
+    local script_path="${proFILEdir}/http/startHttpService.sh"
+
+    [ -x "${script_path}" ] || return 0
+    "${script_path}"
+}
+
+function sc(){
+    _start_profile_http_service_if_needed
+    screen -U -RR -c "${proFILEdir}/.screenrc" "$@"
+}
+
 alias scr="screen -U -dR -c ${proFILEdir}/.screenrc"
 alias scx='_bar "kill all screen session"; _killscreen'
 function _killscreen(){
