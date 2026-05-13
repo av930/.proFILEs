@@ -5,6 +5,7 @@ set -e
 #      전체 sstate-cache에서 필요한 항목만 선별하여 daily나 event build에서 이용가능하도록 BASIC sstate-cache만 추출하는 기능
 # 사용법: generate_basic_sstate.sh <yocto-build-dir> <sstate-base-dir> [<prefix>-<machine>]
 # 예제: genBasicSStateCache.sh /SRC/nad/sa515m/SA515M_apps/apps_proc/build /data001/vc.integrator/mirror/tsu_26my_release/sstate-cache/BASIC 26tsu-sa515m
+# 예제: genBasicSStateCache.sh /SRC/nad/sa515m/SA515M_apps/apps_proc/build /data001/vc.integrator/mirror/tsu_26my_release/sstate-cache/BASIC
 
 
 # --------------------------------------------------
@@ -33,6 +34,28 @@ detect_tmp_base() {
 
     [[ -d "$path_build/tmp-glibc/pkgdata" ]] && { echo "$path_build/tmp-glibc"; return 0; }
     [[ -d "$path_build/tmp/pkgdata" ]]       && { echo "$path_build/tmp";       return 0; }
+    return 1
+}
+
+detect_variant_from_manifest() {
+    local tmp_base="$1"
+    local manifest_path machine_name manifest_name variant_name
+
+    while read -r manifest_path; do
+        [[ -n "$manifest_path" ]] || continue
+        [[ "$manifest_path" == *.rootfs.manifest ]] && continue
+
+        machine_name=$(basename "$(dirname "$manifest_path")")
+        manifest_name=$(basename "$manifest_path")
+        variant_name=${manifest_name%-${machine_name}.manifest}
+
+        [[ "$variant_name" == "$manifest_name" ]] && continue
+        [[ "$variant_name" == *-* ]] || continue
+
+        echo "$variant_name"
+        return 0
+    done < <(find "$tmp_base/deploy/images" -mindepth 2 -maxdepth 2 \( -type f -o -type l \) -name '*.manifest' 2>/dev/null | sort)
+
     return 1
 }
 
@@ -107,22 +130,6 @@ expand_sstate_recipes() {
     return 1 2>/dev/null || exit 1
 }
 
-if   [[ -n "$ARG_VARIANT" ]]; then
-    parse_variant "$ARG_VARIANT" || {
-        echo "Error: invalid manual input: $ARG_VARIANT"
-        echo "Manual input required: source generate_basic_sstate.sh <yocto-build-dir> <sstate-base-dir> <prefix>-<machine>"
-        echo "Example: source generate_basic_sstate.sh $PATH_BUILD_INPUT $SSTATE_BASE 26tsu-sa515m"
-        return 1 2>/dev/null || exit 1
-    }
-elif parse_variant "$BUILD_TARGET_VARIANT";              then :
-elif [[ "$PATH_OUT" =~ /upload_images/([^/]+-[^/]+)/ ]]; then parse_variant "${BASH_REMATCH[1]}"
-else
-    echo "Error: failed to detect <prefix>-<machine> from BUILD_TARGET_VARIANT or PATH_OUT"
-    echo "Manual input required: source generate_basic_sstate.sh <yocto-build-dir> <sstate-base-dir> <prefix>-<machine>"
-    echo "Example: source generate_basic_sstate.sh $PATH_BUILD_INPUT $SSTATE_BASE 26tsu-sa515m"
-    return 1 2>/dev/null || exit 1
-fi
-
 PATH_BUILD=$(cd "$PATH_BUILD_INPUT" 2>/dev/null && pwd -P) || {
     echo "Error: invalid build dir path: $PATH_BUILD_INPUT"
     return 1 2>/dev/null || exit 1
@@ -132,6 +139,29 @@ PATH_BUILD=$(cd "$PATH_BUILD_INPUT" 2>/dev/null && pwd -P) || {
     echo "Error: not a Yocto build dir: $PATH_BUILD"
     return 1 2>/dev/null || exit 1
 }
+
+TMP_BASE=$(detect_tmp_base "$PATH_BUILD") || {
+    echo "Error: failed to detect tmp output dir under $PATH_BUILD"
+    echo "Expected one of: $PATH_BUILD/tmp-glibc/pkgdata or $PATH_BUILD/tmp/pkgdata"
+    return 1 2>/dev/null || exit 1
+}
+
+if   [[ -n "$ARG_VARIANT" ]]; then
+    parse_variant "$ARG_VARIANT" || {
+        echo "Error: invalid manual input: $ARG_VARIANT"
+        echo "Manual input required: source generate_basic_sstate.sh <yocto-build-dir> <sstate-base-dir> <prefix>-<machine>"
+        echo "Example: source generate_basic_sstate.sh $PATH_BUILD_INPUT $SSTATE_BASE 26tsu-sa515m"
+        return 1 2>/dev/null || exit 1
+    }
+elif parse_variant "$BUILD_TARGET_VARIANT";              then :
+elif [[ "$PATH_OUT" =~ /upload_images/([^/]+-[^/]+)/ ]]; then parse_variant "${BASH_REMATCH[1]}"
+elif detected_variant=$(detect_variant_from_manifest "$TMP_BASE"); then parse_variant "$detected_variant"
+else
+    echo "Error: failed to detect <prefix>-<machine> from BUILD_TARGET_VARIANT, PATH_OUT, or manifests under $TMP_BASE/deploy/images"
+    echo "Manual input required: source generate_basic_sstate.sh <yocto-build-dir> <sstate-base-dir> <prefix>-<machine>"
+    echo "Example: source generate_basic_sstate.sh $PATH_BUILD_INPUT $SSTATE_BASE 26tsu-sa515m"
+    return 1 2>/dev/null || exit 1
+fi
 
 [[ "${SSTATE_BASE##*/}" == "BASIC" ]] && BASIC_DIR="$SSTATE_BASE" || BASIC_DIR="${SSTATE_BASE}/BASIC"
 
@@ -150,12 +180,6 @@ echo "================================================="
 # --------------------------------------------------
 # 3. 기본 경로 설정 (manifest / pkgdata)
 # --------------------------------------------------
-TMP_BASE=$(detect_tmp_base "$PATH_BUILD") || {
-    echo "Error: failed to detect tmp output dir under $PATH_BUILD"
-    echo "Expected one of: $PATH_BUILD/tmp-glibc/pkgdata or $PATH_BUILD/tmp/pkgdata"
-    return 1 2>/dev/null || exit 1
-}
-
 IMAGE_MANIFEST="${TMP_BASE}/deploy/images/${MACHINE}/${PRJ_PREFIX}-${MACHINE}-${MACHINE}.manifest"
 PKGDATA_BASE="${TMP_BASE}/pkgdata"
 RUNTIME_DIR="${PKGDATA_BASE}/${MACHINE}/runtime"
