@@ -40,6 +40,29 @@ is_ipv4_address() {
     [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]
 }
 
+# 입력 IP가 현재 서버의 로컬 IPv4인지 판별
+# loopback 및 현재 인터페이스에 바인딩된 IPv4 주소와 비교
+is_local_target_ip() {
+    local target_ip="$1" local_ip=""
+
+    [[ -z "$target_ip" ]] && return 1
+    [[ "$target_ip" == "127.0.0.1" ]] && return 0
+
+    if has_cmd ip; then
+        while IFS= read -r local_ip; do
+            [[ -z "$local_ip" ]] && continue
+            [[ "$local_ip" == "$target_ip" ]] && return 0
+        done < <(ip -o -4 addr show up 2>/dev/null | awk '{print $4}' | cut -d/ -f1)
+    fi
+
+    while IFS= read -r local_ip; do
+        [[ -z "$local_ip" ]] && continue
+        [[ "$local_ip" == "$target_ip" ]] && return 0
+    done < <(hostname -I 2>/dev/null | tr ' ' '\n')
+
+    return 1
+}
+
 # 명령 존재 여부 확인
 # 시스템에서 지정된 명령어 사용 가능 여부를 체크
 has_cmd() { command -v "$1" >/dev/null 2>&1; }
@@ -574,7 +597,14 @@ main() {
         esac
     fi
 
-    (( remote_mode == 0 )) && [[ -n "$target_ip" ]] && { run_remote_script "$target_ip" "$action"; return $?; }
+    if (( remote_mode == 0 )) && [[ -n "$target_ip" ]]; then
+        if is_local_target_ip "$target_ip"; then
+            target_ip=""
+        else
+            run_remote_script "$target_ip" "$action"
+            return $?
+        fi
+    fi
 
     case "$action" in
         status)  show_server_spec "$target_ip"
