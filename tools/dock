@@ -414,6 +414,18 @@ function dockbuild(){
 
 function dockstart(){
 ## ---------------------------------------------------------------------------
+    local start_mode="start"
+    local requested_name requested_port requested_img
+
+    if [ "$1" = "run" ]; then
+        start_mode="run"
+        shift
+    fi
+
+    requested_name="${1:-$cntr_name}"
+    requested_port="${2:-$cntr_port}"
+    requested_img="${3:-$cntr_img}"
+
     $DEBUG "$LINENO:[$cntr_cmd] [$cntr_name] [$cntr_port] [$cntr_img]"
     
     check_docker_running || return 1
@@ -428,20 +440,32 @@ function dockstart(){
     fi
 
     printf "\n\nPlease Input Image, ID is more accurate!!!\n"
-    read -p "input Image ID/Repository [ImageID| Repository| Enter:$recent_name]: " cntr_img
-    read -p "input Container to start [Name| Enter:${recent_name##*/}]: " cntr_name
+
+    if [ -n "$requested_img" ]; 
+    then cntr_img="$requested_img"
+    else read -p "input Image ID/Repository [ImageID| Repository| Enter:$recent_name]: " cntr_img
+    fi
+
+    if [ -n "$requested_name" ]; 
+    then cntr_name="$requested_name"
+    else read -p "input Container to start [Name| Enter:${recent_name##*/}]: " cntr_name
+    fi
 
     if [ "$cntr_img" = "" ];then cntr_img=${recent_name}; fi
     if [ "$cntr_name" = "" ];then cntr_name=${recent_name##*/}; fi
 
-    if [ "$1" = "run" ];then
-        print_header "$1"
+    if [ "$start_mode" = "run" ];then
+        print_header "$start_mode"
         echorun docker run -dit --name ${cntr_name} ${cntr_img} /bin/bash -c 'echo HelloDocker !!!'
         return 0
     fi
 
-    read -p "input Port [Port Number| Enter:${cntr_port}]: "
-    [ -n "${REPLY}" ] && cntr_port="${REPLY}"
+    if [ -n "$requested_port" ]; then
+        cntr_port="$requested_port"
+    else
+        read -p "input Port [Port Number| Enter:${cntr_port}]: "
+        [ -n "${REPLY}" ] && cntr_port="${REPLY}"
+    fi
 
     cntr_port=$(find_available_port "$cntr_port")
 
@@ -784,8 +808,8 @@ local ret=0
           image|images|ps|vol|volume)    docklist "${@:1}"                    ;;
         build)          dockbuild "${@:2}"                                    ;;
           hello)        dockhello;                                            ;;
-        start)          dockstart;                                            ;;
-          run)          dockstart run                                         ;;
+                start)          dockstart "${@:2}"                                    ;;
+                    run)          dockstart run "${@:2}"                                ;;
           exec)         dockexec                                              ;;
           debug)        dockdebug                                             ;;
         stop|rm)        dockstoprm "${@:1}"                                   ;;
