@@ -45,7 +45,7 @@ run_io() {
     case "$mode" in
         ssh) ssh "${SSH_OPTS[@]}" "$target_ip" "$arg1" 2>/dev/null
     ;; exec) [[ -n "$target_ip" ]] && run_io ssh "$target_ip" "$arg1" || eval "$arg1"
-    ;; grep) grep -E "$arg1" "$arg2" | head -1 | sed 's/.*=[[:space:]]*//;s/^"//;s/"$//;s/'\''//g'
+    ;; grep) grep -aE "$arg1" "$arg2" | head -1 | sed 's/.*=[[:space:]]*//;s/^"//;s/"$//;s/'\''//g'
     ;; test) [[ -n "$target_ip" ]] && run_io ssh "$target_ip" "test -$arg2 '$arg1'" >/dev/null || { [[ "$arg2" == "f" ]] && [[ -f "$arg1" ]] || [[ -d "$arg1" ]]; }
     ;; size) [[ -n "$target_ip" ]] && run_io ssh "$target_ip" "du -sh '$arg1' 2>/dev/null | awk '{print \$1}'" || du -sh "$arg1" 2>/dev/null | awk '{print $1}'
     ;; mtime) [[ -n "$target_ip" ]] && run_io ssh "$target_ip" "stat -c %Y '$arg1'" || stat -c %Y "$arg1"
@@ -58,18 +58,94 @@ run_io() {
 calc_duration() {
     local start="$1" end="$2"
     [[ -z "$start" || -z "$end" ]] && return
-    
-    # 시작/종료 시간을 epoch 초로 변환
+    local diff
+    diff=$(calc_duration_seconds "$start" "$end")
+    printf "%02d:%02d:%02d" $((diff/3600)) $((diff%3600/60)) $((diff%60))
+}
+
+# 두 시각(HH:MM:SS) 간의 시간차를 초 단위로 반환
+calc_duration_seconds() {
+    local start="$1" end="$2"
+    [[ -z "$start" || -z "$end" ]] && { echo 0; return; }
+
     local s_sec e_sec
     s_sec=$(date -u -d "1970-01-01 $start" +"%s" 2>/dev/null || echo 0)
     e_sec=$(date -u -d "1970-01-01 $end" +"%s" 2>/dev/null || echo 0)
-    
-    # 자정을 넘긴 경우 처리 (종료 시간이 시작 시간보다 작으면 +24시간)
-    if (( e_sec < s_sec )); then e_sec=$((e_sec + 86400)); fi
-    
-    # 시간차를 HH:MM:SS 형식으로 변환하여 출력
-    local diff=$((e_sec - s_sec))
-    printf "%02d:%02d:%02d" $((diff/3600)) $((diff%3600/60)) $((diff%60))
+    (( e_sec < s_sec )) && e_sec=$((e_sec + 86400))
+    echo $((e_sec - s_sec))
+}
+
+# 로그에서 패턴이 처음 등장한 시각(HH:MM:SS) 추출
+extract_first_timed_match() {
+    local pattern="$1" log_file="$2"
+    grep -aEi -m1 "$pattern" "$log_file" 2>/dev/null | grep -Eo "${TIMESTAMP_OPTIONAL}[0-9]{2}:[0-9]{2}:[0-9]{2}" | grep -Eo "[0-9]{2}:[0-9]{2}:[0-9]{2}" | head -1 || true
+}
+
+# 구간 소요 시간을 정해진 형식으로 출력
+print_duration_segment() {
+    local label="$1" start_time="$2" end_time="$3" total_sec="$4" duration="" diff=0 pct_str="[N/A]"
+    if [[ -n "$start_time" && -n "$end_time" ]]; then
+        duration=$(calc_duration "$start_time" "$end_time")
+        diff=$(calc_duration_seconds "$start_time" "$end_time")
+        [[ "$total_sec" -gt 0 ]] && pct_str=$(awk -v diff="$diff" -v total="$total_sec" 'BEGIN { printf "[%.1f%%]", (diff * 100) / total }')
+        printf "  - %-35s: %8s  %8s (%s ~ %s)\n" "$label" "$duration" "$pct_str" "$start_time" "$end_time"
+    else
+        printf "  - %-35s: %8s  %8s (%s)\n" "$label" "N/A" "$pct_str" "boundary not found in log"
+    fi
+}
+
+# 2열 출력용 블록 문자열 생성
+make_section_block() {
+    local title="$1" body="${2:-}" header subtitle
+    title=${title//\\n/$'\n'}
+    body=${body//\\n/$'\n'}
+
+    if [[ "$title" == *$'\n'* ]]; then
+        header=${title%%$'\n'*}
+        subtitle=${title#*$'\n'}
+        subtitle=$(printf "%s" "$subtitle" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    else
+        header="$title"
+        subtitle=""
+    fi
+
+    header=$(printf "%s" "$header" | sed 's/[[:space:]]*$//')
+    body=$(printf "%s" "$body" | sed 's/[[:space:]]*$//')
+
+    printf "%s\n" "$header"
+    [[ -n "$subtitle" ]] && printf "    %s\n" "$subtitle"
+    [[ -n "$body" ]] && printf "__SECTION_DIVIDER__\n%s\n" "$body"
+}
+
+# 여러줄 문자열을 2열로 정렬 출력
+print_two_column_sections() {
+    local left_block="$1" right_block="${2:-}" num_term_cols num_col_width divider
+    local -a left_lines=() right_lines=()
+    local idx max_lines left_line right_line
+    num_term_cols=$(tput cols 2>/dev/null || echo 180)
+    num_col_width=$(( (num_term_cols - 4) / 2 ))
+    [[ "$num_col_width" -lt 68 ]] && num_col_width=68
+    divider="  $(printf '%*s' $((num_col_width - 2)) '' | tr ' ' '-')"
+
+    if [[ -n "$right_block" ]]; then
+        mapfile -t left_lines <<< "$left_block"
+        mapfile -t right_lines <<< "$right_block"
+        max_lines=${#left_lines[@]}
+        [[ ${#right_lines[@]} -gt $max_lines ]] && max_lines=${#right_lines[@]}
+
+        for ((idx=0; idx<max_lines; idx++)); do
+            left_line="${left_lines[idx]:-}"
+            right_line="${right_lines[idx]:-}"
+            [[ "$left_line" == "__SECTION_DIVIDER__" ]] && left_line="$divider"
+            [[ "$right_line" == "__SECTION_DIVIDER__" ]] && right_line="$divider"
+            printf "%-${num_col_width}s    %s\n" "$left_line" "$right_line"
+        done
+    else
+        while IFS= read -r left_line; do
+            [[ "$left_line" == "__SECTION_DIVIDER__" ]] && left_line="$divider"
+            printf "%s\n" "$left_line"
+        done <<< "$left_block"
+    fi
 }
 
 # Jenkins build API 에서 시작/종료 시각 계산
@@ -213,6 +289,8 @@ analyze_time() {
     echo -e "\n${CYAN}=== 2. Time Analysis ===${NCOL}"
 
     local start_time end_time total_duration s_sec=0 e_sec=0 total_diff=0 start_label end_label
+    local build_cmd_pattern
+    local repo_start_time="" build_cmd_time="" build_done_time="" upload_start_time=""
 
     # 로그 시작/종료 시간 추출 (타임스탬프 있는/없는 로그 모두 지원)
     # 로그 앞부분 50줄과 뒷부분 100줄에서 HH:MM:SS 패턴 검색
@@ -231,18 +309,30 @@ analyze_time() {
         fi
         echo -e "${GREEN}Overall Start Time ~ Overall End Time:${NCOL} ($start_label ~ $end_label) = $total_duration"
 
-        # 시간차를 초 단위로 변환 (Task 비율 계산용)
         s_sec=$(date -u -d "1970-01-01 $start_time" +"%s" 2>/dev/null || echo 0)
         e_sec=$(date -u -d "1970-01-01 $end_time" +"%s" 2>/dev/null || echo 0)
         (( e_sec < s_sec )) && e_sec=$((e_sec + 86400))  # 자정 넘김 보정
         total_diff=$((e_sec - s_sec))
+
+        repo_start_time=$(extract_first_timed_match 'repo[[:space:]]+(init|sync)' "$log_file")
+        build_cmd_pattern='^[0-9]{2}:[0-9]{2}:[0-9]{2}[[:space:]]+([+][[:space:]]+)?((\./)?build\.sh|bitbake|make)([[:space:]]|$)'
+        build_cmd_time=$(extract_first_timed_match "$build_cmd_pattern" "$log_file")
+        build_done_time=$(extract_first_timed_match 'SUCCESS: yocto build|Tasks Summary: Attempted' "$log_file")
+        upload_start_time=$(extract_first_timed_match 'ncftpput|artifactory' "$log_file")
+
+        echo -e "${GREEN}\n- Section Duration (구간별 소요시간):${NCOL}"
+        print_duration_segment "Script start -> before Source download:" "$start_time" "$repo_start_time" "$total_diff"
+        print_duration_segment "Source download start ->  before Build:" "$repo_start_time" "$build_cmd_time" "$total_diff"
+        print_duration_segment "Build start/end -> before Image upload:" "$build_cmd_time" "$upload_start_time" "$total_diff"
+        print_duration_segment "Image upload start -> Script terminate:" "$upload_start_time" "$end_time" "$total_diff"
     else
-        echo "Overall Start Time ~ Overall End Time: ($start_time ~ $end_time)"
+        echo -e "${GREEN}Overall Start Time ~ Overall End Time:${NCOL} ($start_time ~ $end_time)"
+        echo -e "${GREEN}- Section Duration (구간별 소요시간):${NCOL} unavailable because timestamp is not found in log"
     fi
 
     # Yocto Tasks 카운팅 및 첫 등장 시간 비율 계산
     # 각 Task가 로그에 몇 번 등장했는지, 전체 빌드 시간 중 몇 %에 첫 등장했는지 분석
-    echo -e "\n- Task Extracted Count (1st hit time ratio):"
+    echo -e "${GREEN}\n- Task Extracted Count (1st hit time ratio):${NCOL}"
     for task in do_fetch do_unpack do_patch do_configure do_compile do_install do_package do_rootfs do_image; do
         local count pct_str="" t_hit t_sec pct task_started_pattern
         task_started_pattern="task $task: Started"
@@ -480,23 +570,27 @@ analyze_config_and_cache() {
     local rebuilt_modules=$(echo "$missed_tasks" | grep -oP 'recipe \K[^:]+' | sort -u || echo "")
     local fetched_modules=$(echo "$fetch_lines" | grep -oP 'recipe \K[^:]+' | sort -u || echo "")
     
-    # 1. [Hit] Tasks restored from cache (first 10 examples, image related task always need to be rebuilt)
+    # 1. [Hit] Tasks restored from cache (first 20 examples, image related task always need to be rebuilt)
     ## sstate-cache에서 hit된 task들, image 관련 task는 캐싱 불가능하여 여기 나오지 않음.
-    local setscene_tasks=$(grep -a "Running setscene task" "$log_file" 2>/dev/null | head -10 || echo "")
-    local setscene_count=$(echo "$setscene_tasks" | sed '/^$/d' | wc -l | xargs)
-    echo -e "  ${green}- [Hit:${setscene_count:-0}] Tasks restored from cache (first 10 examples, image related task always need to be rebuilt):${NCOL}"
+    local setscene_all_tasks=$(grep -a "Running setscene task" "$log_file" 2>/dev/null || echo "")
+    local setscene_tasks=$(echo "$setscene_all_tasks" | head -20)
+    local setscene_count=$(echo "$setscene_all_tasks" | sed '/^$/d' | wc -l | xargs)
+    local section_hit_body="" section_no_fetch_body="" section_with_fetch_body="" section_cached_fetch_body="" section_internet_body=""
+    local section_hit section_no_fetch section_with_fetch section_cached_fetch section_internet
     if [[ -n "$setscene_tasks" ]]; then
-        echo "$setscene_tasks" | while IFS= read -r line; do
+        while IFS= read -r line; do
             local timestamp=$(echo "$line" | grep -oE '^[0-9]{2}:[0-9]{2}:[0-9]{2}' || echo "")
             local recipe=$(echo "$line" | grep -oP 'recipes-[^/]+/[^/]+/\K[^:]+' || echo "$line" | grep -oP '/\K[^/:]+\.bb')
             local task=$(echo "$line" | grep -oP ':do_\K[^)]+' || echo "")
             if [[ -n "$recipe" ]]; then
-                [[ -n "$timestamp" ]] && echo "    [$timestamp] $recipe (task: do_$task)" || echo "    • $recipe (task: do_$task)"
+                [[ -n "$timestamp" ]] && section_hit_body+="    [$timestamp] $recipe (task: do_$task)"$'\n' || section_hit_body+="    • $recipe (task: do_$task)"$'\n'
             fi
-        done
+        done <<< "$setscene_tasks"
     else
-        echo "    (None - no tasks restored from cache examples found)"
+        section_hit_body="    (None - no tasks restored from cache examples found)"
     fi
+    section_hit=$(make_section_block "  - [Hit:${setscene_count:-0}] Tasks from sstatecache (first 20 examples, image related task always rebuilt):\
+    \n setscene_all_tasks으로 cache에서 복원된 시각을 표시" "${section_hit_body%$'\n'}")
     
     # 2. [Missed] Modules rebuilt without fetch 
     ## fetch 없이 rebuild된 모듈들 (fetch 단계는 없었지만 실제로는 rebuild된 task들, 즉 sstate-cache에 없거나 hash값이 맞지 않아 rebuild되어야 하는 모듈
@@ -505,7 +599,6 @@ analyze_config_and_cache() {
         [[ -z "$full_recipe" ]] && continue
         echo "$fetched_modules" | grep -qF "$full_recipe" || no_fetch_count=$((no_fetch_count + 1))
     done <<< "$rebuilt_modules"
-    echo -e "  ${green}- [Missed:${no_fetch_count:-0}] Modules rebuilt without fetch, All source already exists:${NCOL}"
     if [[ -n "$missed_tasks" ]]; then
         # rebuild되었지만 fetch되지 않은 모듈 찾기
         while IFS= read -r full_recipe; do
@@ -516,17 +609,19 @@ analyze_config_and_cache() {
                 local first_line=$(echo "$missed_tasks" | grep -F "recipe $full_recipe:" | head -1 || echo "")
                 local timestamp=$(echo "$first_line" | grep -oE '^[0-9]{2}:[0-9]{2}:[0-9]{2}' || echo "")
                 if [[ -n "$full_recipe" ]]; then
-                    [[ -n "$timestamp" ]] && echo "    [$timestamp] $full_recipe" || echo "    • $full_recipe"
+                    [[ -n "$timestamp" ]] && section_no_fetch_body+="    [$timestamp] $full_recipe"$'\n' || section_no_fetch_body+="    • $full_recipe"$'\n'
                 fi
             fi
         done <<< "$rebuilt_modules"
         
         if [[ $no_fetch_count -eq 0 ]]; then
-            echo "    (None - all rebuilt modules had fetch tasks)"
+            section_no_fetch_body="    (None - all rebuilt modules had fetch tasks)"
         fi
     else
-        echo "    (None - no rebuilt modules found)"
+        section_no_fetch_body="    (None - no rebuilt modules found)"
     fi
+    section_no_fetch=$(make_section_block "  - [Missed:${no_fetch_count:-0}] Modules rebuilt without fetch, All source already exists:\
+    \n 실제 fetch 없이 rebuild된 시각을 표시" "${section_no_fetch_body%$'\n'}")
     
     # 3. [Missed] Modules that were rebuilt from DL_DIR, PREMIRROR
     ## rebuild로 인해 src fetch가 필요해, 먼저 DL_DIR, PREMIRROR에 존재하는지 확인한다.
@@ -535,7 +630,6 @@ analyze_config_and_cache() {
         [[ -z "$full_recipe" ]] && continue
         echo "$fetched_modules" | grep -qF "$full_recipe" && with_fetch_count=$((with_fetch_count + 1))
     done <<< "$rebuilt_modules"
-    echo -e "  ${green}- [Missed:${with_fetch_count:-0}] Modules that need to be rebuilt:${NCOL}"
     if [[ -n "$missed_tasks" ]]; then
         # rebuild되고 fetch도 있는 모듈만 찾기
         while IFS= read -r full_recipe; do
@@ -546,18 +640,85 @@ analyze_config_and_cache() {
                 local first_line=$(echo "$missed_tasks" | grep -F "recipe $full_recipe:" | head -1 || echo "")
                 local timestamp=$(echo "$first_line" | grep -oE '^[0-9]{2}:[0-9]{2}:[0-9]{2}' || echo "")
                 if [[ -n "$full_recipe" ]]; then
-                    [[ -n "$timestamp" ]] && echo "    [$timestamp] $full_recipe" || echo "    • $full_recipe"
+                    [[ -n "$timestamp" ]] && section_with_fetch_body+="    [$timestamp] $full_recipe"$'\n' || section_with_fetch_body+="    • $full_recipe"$'\n'
                 fi
             fi
         done <<< "$rebuilt_modules"
         
         if [[ $with_fetch_count -eq 0 ]]; then
-            echo "    (None - all tasks restored from cache)"
+            section_with_fetch_body="    (None - all tasks restored from cache)"
         fi
     else
-        echo "    (None - all tasks restored from cache)"
+        section_with_fetch_body="    (None - all tasks restored from cache)"
     fi
+    section_with_fetch=$(make_section_block "  - [Missed:${with_fetch_count:-0}] Modules rebuilt with fetch, fetched from DL_DIR or PREMIRROR, Internet:\
+    \n 실제 build를 시작한 시각을 표시" "${section_with_fetch_body%$'\n'}")
     
+    # 먼저 인터넷에서 다운로드된 recipe 목록 추출 (Fetching http 전후 20줄 내에 있는 recipe)
+    local internet_recipes=$(grep -a -B 20 "Fetching.*http" "$log_file" 2>/dev/null | grep "recipe.*do_fetch.*Started" | grep -oP 'recipe \K[^:]+' | sort -u || echo "")
+    local cached_fetch_count=0
+    while IFS= read -r full_recipe; do
+        [[ -z "$full_recipe" ]] && continue
+        echo "$internet_recipes" | grep -qF "$full_recipe" || cached_fetch_count=$((cached_fetch_count + 1))
+    done <<< "$fetched_modules"
+    
+    # 4. [Hit] Module list fetched from DL_DIR or PREMIRRORS (cached, no internet download)
+    ## DL_DIR 또는 PREMIRRORS에서 캐시 hit된 모듈들 (인터넷 다운로드 없음)
+    if [[ -n "$fetch_lines" ]]; then
+        # fetch_lines에서 internet_recipes를 제외한 모듈만 출력
+        while IFS= read -r full_recipe; do
+            [[ -z "$full_recipe" ]] && continue
+            # 이 모듈이 인터넷 다운로드 목록에 없는지 확인
+            if ! echo "$internet_recipes" | grep -qF "$full_recipe"; then
+                # 첫 번째 발견 시간 찾기
+                local first_line=$(echo "$fetch_lines" | grep -F "recipe $full_recipe:" | head -1 || echo "")
+                local timestamp=$(echo "$first_line" | grep -oE '^[0-9]{2}:[0-9]{2}:[0-9]{2}' || echo "")
+                if [[ -n "$full_recipe" ]]; then
+                    if [[ -n "$timestamp" ]]; then
+                        section_cached_fetch_body+="    [$timestamp] $full_recipe"$'\n'
+                    else
+                        section_cached_fetch_body+="    • $full_recipe"$'\n'
+                    fi
+                fi
+            fi
+        done <<< "$(echo "$fetch_lines" | grep -oP 'recipe \K[^:]+' | sort -u)"
+        
+        [[ -z "$section_cached_fetch_body" ]] && section_cached_fetch_body="    (None - all fetched modules required internet download)"
+    else
+        section_cached_fetch_body="    (None - no fetch tasks executed)"
+    fi
+    section_cached_fetch=$(make_section_block "  - [Hit:${cached_fetch_count:-0}] Modules fetched from DL_DIR or PREMIRRORS (cached):\
+    \n 실제 DL_DIR or PREMIRRORS에서 do_fetch한 시각을 표시 " "${section_cached_fetch_body%$'\n'}")
+    
+    # 5. [Missed] All files downloaded from Internet (recipes + BitBake system files)
+    ## 인터넷에서 다운로드된 모든 파일 (recipe 소스 do_fetch + BitBake의 buildtools과 uninative)
+    ## bitbake에서 uninative는 host의 gcc버전에 상관없이 동일한 sstate-cache를 생성하는 library, buildtools는 gcc,make,python등등 build기본 toolchain
+    local fetching_lines=$(grep -a "Fetching.*http" "$log_file" 2>/dev/null || echo "")
+    local internet_file_count=$(echo "$fetching_lines" | grep -oP 'http[s]?://[^\s;]+' | sed 's|.*/||;s|?.*||;s|;.*||' | sed '/^$/d' | sort -u | wc -l | xargs)
+    if [[ -n "$fetching_lines" ]]; then
+        local internet_files=$(echo "$fetching_lines" | grep -oP 'http[s]?://[^\s;]+' | sed 's|.*/||;s|?.*||;s|;.*||' | sed '/^$/d' | sort -u)
+        while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
+            # 첫 번째 발견 시간 찾기
+            local first_line=$(echo "$fetching_lines" | grep -F "$file" | head -1)
+            local timestamp=$(echo "$first_line" | grep -oE '^[0-9]{2}:[0-9]{2}:[0-9]{2}' || echo "")
+            local url=$(echo "$first_line" | grep -oP 'http[s]?://[^\s;]+' | head -1)
+            local domain=$(echo "$url" | cut -d'/' -f3)
+            if [[ -n "$file" && -n "$domain" ]]; then
+                [[ -n "$timestamp" ]] && section_internet_body+="    [$timestamp] $file (from $domain)"$'\n' || section_internet_body+="    • $file (from $domain)"$'\n'
+            fi
+        done <<< "$internet_files"
+    else
+        section_internet_body="    (None - all sources were cached in DL_DIR or PREMIRRORS)"
+    fi
+    section_internet=$(make_section_block "  - [Missed:${internet_file_count:-0}] Files downloaded from Internet (recipes do_fetch + system bitbake):" "${section_internet_body%$'\n'}")
+
+    print_two_column_sections "$section_hit" "$section_no_fetch"
+    echo
+    print_two_column_sections "$section_with_fetch" "$section_cached_fetch"
+    echo
+    print_two_column_sections "$section_internet"
+
     # ========== PREMIRRORS 세부 정보 ==========
     echo -e "\n${BLUE}--- 3.2. Premirror Details ---${NCOL}"
 
@@ -585,71 +746,6 @@ analyze_config_and_cache() {
                 echo -e "  - Path: $premirror_path (not accessible)"
             fi
         fi
-    fi
-    
-    # 먼저 인터넷에서 다운로드된 recipe 목록 추출 (Fetching http 전후 20줄 내에 있는 recipe)
-    local internet_recipes=$(grep -a -B 20 "Fetching.*http" "$log_file" 2>/dev/null | grep "recipe.*do_fetch.*Started" | grep -oP 'recipe \K[^:]+' | sort -u || echo "")
-    local cached_fetch_count=0
-    while IFS= read -r full_recipe; do
-        [[ -z "$full_recipe" ]] && continue
-        echo "$internet_recipes" | grep -qF "$full_recipe" || cached_fetch_count=$((cached_fetch_count + 1))
-    done <<< "$fetched_modules"
-    
-    # 4. [Hit] Module list fetched from DL_DIR or PREMIRRORS (cached, no internet download)
-    ## DL_DIR 또는 PREMIRRORS에서 캐시 hit된 모듈들 (인터넷 다운로드 없음)
-    echo -e "  ${green}- [Hit:${cached_fetch_count:-0}] Modules fetched from DL_DIR or PREMIRRORS (cached):${NCOL}"
-    if [[ -n "$fetch_lines" ]]; then
-        # fetch_lines에서 internet_recipes를 제외한 모듈만 출력
-        local cached_modules=""
-        while IFS= read -r full_recipe; do
-            [[ -z "$full_recipe" ]] && continue
-            # 이 모듈이 인터넷 다운로드 목록에 없는지 확인
-            if ! echo "$internet_recipes" | grep -qF "$full_recipe"; then
-                # 첫 번째 발견 시간 찾기
-                local first_line=$(echo "$fetch_lines" | grep -F "recipe $full_recipe:" | head -1 || echo "")
-                local timestamp=$(echo "$first_line" | grep -oE '^[0-9]{2}:[0-9]{2}:[0-9]{2}' || echo "")
-                if [[ -n "$full_recipe" ]]; then
-                    if [[ -n "$timestamp" ]]; then
-                        cached_modules="${cached_modules}    [$timestamp] $full_recipe"$'\n'
-                    else
-                        cached_modules="${cached_modules}    • $full_recipe"$'\n'
-                    fi
-                fi
-            fi
-        done <<< "$(echo "$fetch_lines" | grep -oP 'recipe \K[^:]+' | sort -u)"
-        
-        if [[ -z "$cached_modules" ]]; then
-            echo "    (None - all fetched modules required internet download)"
-        else
-            echo -n "$cached_modules"
-        fi
-    else
-        echo "    (None - no fetch tasks executed)"
-    fi
-    
-    # 5. [Missed] All files downloaded from Internet (recipes + BitBake system files)
-    ## 인터넷에서 다운로드된 모든 파일 (recipe 소스 do_fetch + BitBake의 buildtools과 uninative)
-    ## bitbake에서 uninative는 host의 gcc버전에 상관없이 동일한 sstate-cache를 생성하는 library, buildtools는 gcc,make,python등등 build기본 toolchain
-    local fetching_lines=$(grep -a "Fetching.*http" "$log_file" 2>/dev/null || echo "")
-    local internet_file_count=$(echo "$fetching_lines" | grep -oP 'http[s]?://[^\s;]+' | sed 's|.*/||;s|?.*||;s|;.*||' | sed '/^$/d' | sort -u | wc -l | xargs)
-    echo -e "  ${green}- [Missed:${internet_file_count:-0}] Files downloaded from Internet (recipes do_fetch + system bitbake):${NCOL}"
-    if [[ -n "$fetching_lines" ]]; then
-        echo "$fetching_lines" | while IFS= read -r line; do
-            local url=$(echo "$line" | grep -oP 'http[s]?://[^\s;]+' | head -1)
-            local file=$(basename "$url" | cut -d'?' -f1 | cut -d';' -f1)
-            echo "$file"
-        done | sort -u | while IFS= read -r file; do
-            # 첫 번째 발견 시간 찾기
-            local first_line=$(echo "$fetching_lines" | grep -F "$file" | head -1)
-            local timestamp=$(echo "$first_line" | grep -oE '^[0-9]{2}:[0-9]{2}:[0-9]{2}' || echo "")
-            local url=$(echo "$first_line" | grep -oP 'http[s]?://[^\s;]+' | head -1)
-            local domain=$(echo "$url" | cut -d'/' -f3)
-            if [[ -n "$file" && -n "$domain" ]]; then
-                [[ -n "$timestamp" ]] && echo "    [$timestamp] $file (from $domain)" || echo "    • $file (from $domain)"
-            fi
-        done
-    else
-        echo "    (None - all sources were cached in DL_DIR or PREMIRRORS)"
     fi
     
     set -e  # 오류 모드 복원
