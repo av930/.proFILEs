@@ -44,12 +44,58 @@ run_io() {
     local mode="$1" target_ip="$2" arg1="${3:-}" arg2="${4:-}"
     case "$mode" in
         ssh) ssh "${SSH_OPTS[@]}" "$target_ip" "$arg1" 2>/dev/null
-    ;; exec) [[ -n "$target_ip" ]] && run_io ssh "$target_ip" "$arg1" || eval "$arg1"
+    ;; exec) if [[ -n "$target_ip" ]]; then run_io ssh "$target_ip" "$arg1"; else eval "$arg1"; fi
     ;; grep) grep -aE "$arg1" "$arg2" | head -1 | sed 's/.*=[[:space:]]*//;s/^"//;s/"$//;s/'\''//g'
-    ;; test) [[ -n "$target_ip" ]] && run_io ssh "$target_ip" "test -$arg2 '$arg1'" >/dev/null || { [[ "$arg2" == "f" ]] && [[ -f "$arg1" ]] || [[ -d "$arg1" ]]; }
-    ;; size) [[ -n "$target_ip" ]] && run_io ssh "$target_ip" "du -sh '$arg1' 2>/dev/null | awk '{print \$1}'" || du -sh "$arg1" 2>/dev/null | awk '{print $1}'
-    ;; mtime) [[ -n "$target_ip" ]] && run_io ssh "$target_ip" "stat -c %Y '$arg1'" || stat -c %Y "$arg1"
+    ;; test) if [[ -n "$target_ip" ]]; then run_io ssh "$target_ip" "test -$arg2 '$arg1'" >/dev/null; else { [[ "$arg2" == "f" ]] && [[ -f "$arg1" ]] || [[ -d "$arg1" ]]; }; fi
+    ;; size) if [[ -n "$target_ip" ]]; then run_io ssh "$target_ip" "du -sh '$arg1' 2>/dev/null | awk '{print \$1}'"; else du -sh "$arg1" 2>/dev/null | awk '{print $1}'; fi
+    ;; mtime) if [[ -n "$target_ip" ]]; then run_io ssh "$target_ip" "stat -c %Y '$arg1'"; else stat -c %Y "$arg1"; fi
     esac
+}
+
+can_ssh_remote() {
+    local target_ip="$1"
+    [[ -z "$target_ip" ]] && return 0
+    run_io ssh "$target_ip" "true" >/dev/null 2>&1
+}
+
+print_log_detect_line() {
+    local label="$1" line="$2"
+    [[ -n "$line" ]] && printf "  - Detected %s line: %s\n" "$label" "$line"
+}
+
+print_remote_unavailable() {
+    local scope="$1" target_ip="$2"
+    echo -e "${RED}[FAIL] ${scope} unavailable: SSH connection to ${target_ip} failed${NCOL}"
+}
+
+extract_logged_var_value() {
+    local var_name="$1" log_file="$2"
+    grep -aE "^${TIMESTAMP_OPTIONAL}[[:space:]]*([+][[:space:]]+)?(export[[:space:]]+)?${var_name}[[:space:]]*[?:]?=" "$log_file" 2>/dev/null | head -1 | sed 's/.*=[[:space:]]*//;s/^"//;s/"$//;s/'\''//g'
+}
+
+extract_logged_assignment_value() {
+    local var_name="$1" log_file="$2"
+    grep -aE "^${TIMESTAMP_OPTIONAL}[[:space:]]*([+][[:space:]]+)?(export[[:space:]]+)?${var_name}=" "$log_file" 2>/dev/null | head -1 | sed 's/.*=//;s/^"//;s/"$//;s/'\''//g'
+}
+
+infer_build_dir_from_deploy_images() {
+    local log_file="$1" deploy_path=""
+    deploy_path=$(grep -aoE '/[^[:space:]]*/deploy/images/[^[:space:]]*' "$log_file" 2>/dev/null | head -1 | sed 's|/deploy/images/.*|/deploy/images|' || echo "")
+    [[ -z "$deploy_path" ]] && return 1
+    dirname "$(dirname "$(dirname "$deploy_path")")"
+}
+
+wrap_block_for_column() {
+    local block="$1" width="$2" line
+    while IFS= read -r line; do
+        if [[ "$line" == "__SECTION_DIVIDER__" ]]; then
+            printf "%s\n" "$line"
+        elif [[ -z "$line" ]]; then
+            printf "\n"
+        else
+            printf "%s\n" "$line" | fold -s -w "$width"
+        fi
+    done <<< "$block"
 }
 
 # 두 시각(HH:MM:SS) 간의 시간차를 계산하여 HH:MM:SS 형식으로 반환
@@ -98,12 +144,14 @@ print_duration_segment() {
 make_section_block() {
     local title="$1" body="${2:-}" header subtitle
     title=${title//\\n/$'\n'}
+    title=${title//\\t/$'\t'}
     body=${body//\\n/$'\n'}
+    body=${body//\\t/$'\t'}
 
     if [[ "$title" == *$'\n'* ]]; then
         header=${title%%$'\n'*}
         subtitle=${title#*$'\n'}
-        subtitle=$(printf "%s" "$subtitle" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        subtitle=$(printf "%s" "$subtitle" | sed 's/[[:space:]]*$//')
     else
         header="$title"
         subtitle=""
@@ -113,7 +161,12 @@ make_section_block() {
     body=$(printf "%s" "$body" | sed 's/[[:space:]]*$//')
 
     printf "%s\n" "$header"
-    [[ -n "$subtitle" ]] && printf "    %s\n" "$subtitle"
+    if [[ -n "$subtitle" ]]; then
+        # Handle multi-line subtitle with proper indentation
+        while IFS= read -r line; do
+            [[ -n "$line" ]] && printf "    %s\n" "$line"
+        done <<< "$subtitle"
+    fi
     [[ -n "$body" ]] && printf "__SECTION_DIVIDER__\n%s\n" "$body"
 }
 
@@ -122,12 +175,15 @@ print_two_column_sections() {
     local left_block="$1" right_block="${2:-}" num_term_cols num_col_width divider
     local -a left_lines=() right_lines=()
     local idx max_lines left_line right_line
-    num_term_cols=$(tput cols 2>/dev/null || echo 180)
+    num_term_cols=$(tput cols 2>/dev/null || echo 220)
+    [[ "$num_term_cols" -lt 220 ]] && num_term_cols=220
     num_col_width=$(( (num_term_cols - 4) / 2 ))
-    [[ "$num_col_width" -lt 68 ]] && num_col_width=68
+    [[ "$num_col_width" -lt 108 ]] && num_col_width=108
     divider="  $(printf '%*s' $((num_col_width - 2)) '' | tr ' ' '-')"
 
     if [[ -n "$right_block" ]]; then
+        left_block=$(wrap_block_for_column "$left_block" "$num_col_width")
+        right_block=$(wrap_block_for_column "$right_block" "$num_col_width")
         mapfile -t left_lines <<< "$left_block"
         mapfile -t right_lines <<< "$right_block"
         max_lines=${#left_lines[@]}
@@ -141,6 +197,7 @@ print_two_column_sections() {
             printf "%-${num_col_width}s    %s\n" "$left_line" "$right_line"
         done
     else
+        left_block=$(wrap_block_for_column "$left_block" "$num_col_width")
         while IFS= read -r left_line; do
             [[ "$left_line" == "__SECTION_DIVIDER__" ]] && left_line="$divider"
             printf "%s\n" "$left_line"
@@ -366,7 +423,12 @@ analyze_config_and_cache() {
     echo -e "\n${CYAN}=== 3. Yocto Build Configuration & Cache Analysis ===${NCOL}"
     
     # 내부 함수: 로그에서 특정 변수의 값을 추출
-    extract_val() { run_io grep "" "^${TIMESTAMP_OPTIONAL}[[:space:]]*${1}[[:space:]]*[?:]?=" "$log_file" || echo ""; }
+    extract_val() { extract_logged_var_value "$1" "$log_file" || echo ""; }
+    extract_last_number() {
+        local text="$1" label="$2" value=""
+        value=$(printf "%s\n" "$text" | tail -1 | grep -oP "${label} \K[0-9]+" | head -1 | xargs || true)
+        [[ "$value" =~ ^[0-9]+$ ]] && echo "$value" || echo "0"
+    }
     
     # 내부 함수: file:// URL에서 순수 경로 추출
     extract_pure_path() {
@@ -399,37 +461,58 @@ analyze_config_and_cache() {
     local threads=$(extract_val BB_NUMBER_THREADS)
     local make_jobs=$(extract_val PARALLEL_MAKE)
     local scons_jobs=$(extract_val SCONS_OVERRIDE_NUM_JOBS)
-    local dl_dir=$(extract_val DL_DIR)
+    local dl_dir=$(extract_logged_assignment_value DL_DIR "$log_file")
+    [[ -z "$dl_dir" ]] && dl_dir=$(extract_val DL_DIR)
     local premirrors=$(extract_val SOURCE_MIRROR_URL)
     [[ -z "$premirrors" ]] && premirrors=$(extract_val PREMIRRORS)
     local mirrors=$(extract_val MIRRORS)
     local sstate_mirrors=$(extract_val SSTATE_MIRRORS)
+    local total_fetch=$(grep -a "recipe.*do_fetch.*Started" "$log_file" 2>/dev/null | wc -l | xargs)
+    local premirror_fetch=$(grep -aiE "Trying PREMIRROR|from PREMIRRORS|will check PREMIRRORS" "$log_file" 2>/dev/null | wc -l | xargs)
+    local internet_fetch=$(grep -aE "Fetching.*http[s]?://" "$log_file" 2>/dev/null | wc -l | xargs)
+    local other_cached_fetch=$((total_fetch - premirror_fetch - internet_fetch))
+    local dl_dir_detect_line="" premirrors_detect_line="" sstate_detect_line=""
+    local remote_ssh_ok=1 remote_notice_printed=0
+    [[ "$other_cached_fetch" -lt 0 ]] && other_cached_fetch=0
+    [[ -n "$target_ip" ]] && ! can_ssh_remote "$target_ip" && remote_ssh_ok=0
+    dl_dir_detect_line=$(grep -aE "^${TIMESTAMP_OPTIONAL}[[:space:]]*([+][[:space:]]+)?(export[[:space:]]+)?DL_DIR[[:space:]]*[?:]?=" "$log_file" 2>/dev/null | head -1 || echo "")
+    premirrors_detect_line=$(grep -aiE "Trying PREMIRROR|from PREMIRRORS|will check PREMIRRORS" "$log_file" 2>/dev/null | head -1 || echo "")
+    sstate_detect_line=$(grep -a "Sstate summary:" "$log_file" 2>/dev/null | tail -1 || echo "")
     
     # 간접 증거 감지
-    [[ -z "$premirrors" ]] && grep -aq "will check PREMIRRORS\|from PREMIRRORS\|Trying PREMIRROR" "$log_file" 2>/dev/null && premirrors="CONFIGURED (detected from log-message)"
-    [[ -z "$sstate_mirrors" ]] && grep -aq "Sstate summary:" "$log_file" 2>/dev/null && sstate_mirrors="CONFIGURED (detected from log-message)"
+    [[ -z "$premirrors" && "$premirror_fetch" -gt 0 ]] && premirrors="CONFIGURED (detected from log-message)"
+    [[ -z "$sstate_mirrors" && -n "$sstate_detect_line" ]] && sstate_mirrors="CONFIGURED (detected from log-message)"
     
     # 추가 검색: 빌드 디렉토리의 local.conf에서 직접 찾기 (항상 실행)
     local PATH_REMOTESRC=$(grep -a -B1 "SUCCESS: yocto build" "$log_file" | head -1 | grep -oP '[0-9]{2}:[0-9]{2}:[0-9]{2}\s+\K/.*' 2>/dev/null || echo "")
     if [[ -n "$PATH_REMOTESRC" ]]; then
         local local_conf="$PATH_REMOTESRC/conf/local.conf"
-        local premirrors_from_conf="" sstate_mirrors_from_conf="" conf_mtime=0
-        if   [[ -n "$target_ip" ]] && run_io test "$target_ip" "$local_conf" f; then conf_mtime=$(run_io mtime "$target_ip" "$local_conf" 2>/dev/null || echo 0)
+        local dl_dir_from_conf="" premirrors_from_conf="" sstate_mirrors_from_conf="" conf_mtime=0
+        if   [[ -n "$target_ip" && "$remote_ssh_ok" -eq 1 ]] && run_io test "$target_ip" "$local_conf" f; then conf_mtime=$(run_io mtime "$target_ip" "$local_conf" 2>/dev/null || echo 0)
         elif [[ -f "$local_conf" ]]; then conf_mtime=$(run_io mtime "" "$local_conf" 2>/dev/null || echo 0)
         fi
         [[ "$conf_mtime" -gt 0 && "$check_epoch" -gt 0 && "$conf_mtime" -gt "$check_epoch" ]] && skip_details=1
         
         # 원격/로컬 서버에서 파일 존재 확인 및 내용 읽기
         if   [[ "$skip_details" -eq 1 ]]; then :
+        elif [[ -n "$target_ip" && "$remote_ssh_ok" -eq 0 ]]; then
+            [[ "$remote_notice_printed" -eq 0 ]] && print_remote_unavailable "Source configuration lookup" "$target_ip"
+            remote_notice_printed=1
         elif [[ -n "$target_ip" ]] && run_io test "$target_ip" "$local_conf" f; then
+            dl_dir_from_conf=$(run_io ssh "$target_ip" "grep -E '^[[:space:]]*DL_DIR[[:space:]]*[?:]?=' '$local_conf' | head -1" | sed 's/.*=[[:space:]]*//;s/^"//;s/"$//;s/'\''//g' || echo "")
             premirrors_from_conf=$(run_io ssh "$target_ip" "grep -E 'SOURCE_MIRROR_URL|PREMIRRORS' '$local_conf' | head -1" | sed 's/.*=[[:space:]]*//;s/^"//;s/"$//;s/'\''//g' || echo "")
             sstate_mirrors_from_conf=$(run_io ssh "$target_ip" "grep -E 'SSTATE_MIRRORS' '$local_conf' | head -1" | sed 's/.*=[[:space:]]*//;s/^"//;s/"$//;s/'\''//g' || echo "")
         elif [[ -f "$local_conf" ]]; then
+            dl_dir_from_conf=$(run_io grep "" '^[[:space:]]*DL_DIR[[:space:]]*[?:]?=' "$local_conf" || echo "")
             premirrors_from_conf=$(run_io grep "" 'SOURCE_MIRROR_URL|PREMIRRORS' "$local_conf" || echo "")
             sstate_mirrors_from_conf=$(run_io grep "" 'SSTATE_MIRRORS' "$local_conf" || echo "")
         fi
         
+
         # 결과값이 있으면 업데이트 (detected from source 태그 추가)
+        if [[ -n "$dl_dir_from_conf" ]]; then
+            dl_dir="$dl_dir_from_conf"
+        fi
         if [[ -n "$premirrors_from_conf" ]]; then
             premirrors="$premirrors_from_conf (detected from source)"
         fi
@@ -457,15 +540,27 @@ analyze_config_and_cache() {
     [[ -n "$threads" ]] && echo -e "$TAG_OK BB_NUMBER_THREADS = $threads" || echo -e "$TAG_WARN BB_NUMBER_THREADS not found"
     [[ -n "$make_jobs" ]] && echo -e "$TAG_OK PARALLEL_MAKE = $make_jobs" || echo -e "$TAG_WARN PARALLEL_MAKE not found"
     [[ -n "$scons_jobs" ]] && echo -e "$TAG_OK SCONS_OVERRIDE_NUM_JOBS = $scons_jobs" || echo -e "$TAG_WARN SCONS_OVERRIDE_NUM_JOBS not found"
-    [[ -n "$dl_dir" ]] && echo -e "$TAG_OK DL_DIR = $dl_dir" || echo -e "$TAG_WARN DL_DIR not found"
+    if [[ -n "$dl_dir" ]]; then
+        if [[ "$dl_dir" == "CONFIGURED (detected from log-message)" ]]; then
+            echo -e "$TAG_OK DL_DIR = Configured (detected from log-message)"
+            print_log_detect_line "DL_DIR" "$dl_dir_detect_line"
+        else
+            echo -e "$TAG_OK DL_DIR = $dl_dir"
+            print_log_detect_line "DL_DIR" "$dl_dir_detect_line"
+        fi
+    else
+        echo -e "$TAG_WARN DL_DIR not found"
+    fi
     
     # PREMIRRORS 요약
     if [[ -n "$premirrors" ]]; then
         if [[ "$premirrors" == "CONFIGURED (detected from log-message)" ]]; then
             echo -e "$TAG_OK PREMIRRORS = Configured (detected from log-message)"
+            print_log_detect_line "PREMIRRORS" "$premirrors_detect_line"
         elif [[ "$premirrors" =~ "detected from log-message" ]]; then
             # 로그에서 추출된 경로 정보 (경로 그대로 표시)
             echo -e "$TAG_OK PREMIRRORS = $premirrors"
+            print_log_detect_line "PREMIRRORS" "$premirrors_detect_line"
         elif [[ "$premirrors" =~ "detected from source" ]]; then
             # source에서 읽은 정보는 skip_details가 0일 때만 유효
             if [[ "$skip_details" -eq 1 ]]; then
@@ -473,11 +568,23 @@ analyze_config_and_cache() {
                 echo -e "$TAG_OK PREMIRRORS = Configured (detected from log-message)"
             else
                 local pure_path=$(extract_pure_path "${premirrors% (detected from source)}" "0")
-                run_io test "$target_ip" "$pure_path" d && echo -e "$TAG_OK PREMIRRORS = $premirrors" || echo -e "${RED}[FAIL] PREMIRRORS path not exists: $pure_path${NCOL}"
+                if [[ -n "$target_ip" && "$remote_ssh_ok" -eq 0 ]]; then
+                    print_remote_unavailable "PREMIRRORS path verification" "$target_ip"
+                elif run_io test "$target_ip" "$pure_path" d; then
+                    echo -e "$TAG_OK PREMIRRORS = $premirrors"
+                else
+                    echo -e "${RED}[FAIL] PREMIRRORS path not exists: $pure_path${NCOL}"
+                fi
             fi
         else
             local pure_path=$(extract_pure_path "$premirrors" "0")
-            run_io test "$target_ip" "$pure_path" d && echo -e "$TAG_OK PREMIRRORS = $premirrors" || echo -e "${RED}[FAIL] PREMIRRORS path not exists: $pure_path${NCOL}"
+            if [[ -n "$target_ip" && "$remote_ssh_ok" -eq 0 ]]; then
+                print_remote_unavailable "PREMIRRORS path verification" "$target_ip"
+            elif run_io test "$target_ip" "$pure_path" d; then
+                echo -e "$TAG_OK PREMIRRORS = $premirrors"
+            else
+                echo -e "${RED}[FAIL] PREMIRRORS path not exists: $pure_path${NCOL}"
+            fi
         fi
     else
         echo -e "$TAG_WARN PREMIRRORS not found"
@@ -486,7 +593,13 @@ analyze_config_and_cache() {
     # MIRRORS 요약
     if [[ -n "$mirrors" ]]; then
         local pure_path=$(extract_pure_path "$mirrors" "0")
-        run_io test "$target_ip" "$pure_path" d && echo -e "$TAG_OK MIRRORS = $mirrors" || echo -e "${RED}[FAIL] MIRRORS path not exists: $pure_path${NCOL}"
+        if [[ -n "$target_ip" && "$remote_ssh_ok" -eq 0 ]]; then
+            print_remote_unavailable "MIRRORS path verification" "$target_ip"
+        elif run_io test "$target_ip" "$pure_path" d; then
+            echo -e "$TAG_OK MIRRORS = $mirrors"
+        else
+            echo -e "${RED}[FAIL] MIRRORS path not exists: $pure_path${NCOL}"
+        fi
     else
         echo -e "$TAG_WARN MIRRORS not found"
     fi
@@ -495,9 +608,11 @@ analyze_config_and_cache() {
     if [[ -n "$sstate_mirrors" ]]; then
         if [[ "$sstate_mirrors" == "CONFIGURED (detected from log-message)" ]]; then
             echo -e "$TAG_OK SSTATE_MIRRORS = Configured (detected from log-message)"
+            print_log_detect_line "SSTATE_MIRRORS" "$sstate_detect_line"
         elif [[ "$sstate_mirrors" =~ "detected from log-message" ]]; then
             # 로그에서 추출된 경로 정보 (경로 그대로 표시)
             echo -e "$TAG_OK SSTATE_MIRRORS = $sstate_mirrors"
+            print_log_detect_line "SSTATE_MIRRORS" "$sstate_detect_line"
         elif [[ "$sstate_mirrors" =~ "detected from source" ]]; then
             # source에서 읽은 정보는 skip_details가 0일 때만 유효
             if [[ "$skip_details" -eq 1 ]]; then
@@ -505,11 +620,23 @@ analyze_config_and_cache() {
                 echo -e "$TAG_OK SSTATE_MIRRORS = Configured (detected from log-message)"
             else
                 local pure_path=$(extract_pure_path "${sstate_mirrors% (detected from source)}" "1")
-                run_io test "$target_ip" "$pure_path" d && echo -e "$TAG_OK SSTATE_MIRRORS = $sstate_mirrors" || echo -e "${RED}[FAIL] SSTATE_MIRRORS path not exists: $pure_path${NCOL}"
+                if [[ -n "$target_ip" && "$remote_ssh_ok" -eq 0 ]]; then
+                    print_remote_unavailable "SSTATE_MIRRORS path verification" "$target_ip"
+                elif run_io test "$target_ip" "$pure_path" d; then
+                    echo -e "$TAG_OK SSTATE_MIRRORS = $sstate_mirrors"
+                else
+                    echo -e "${RED}[FAIL] SSTATE_MIRRORS path not exists: $pure_path${NCOL}"
+                fi
             fi
         else
             local pure_path=$(extract_pure_path "$sstate_mirrors" "1")
-            run_io test "$target_ip" "$pure_path" d && echo -e "$TAG_OK SSTATE_MIRRORS = $sstate_mirrors" || echo -e "${RED}[FAIL] SSTATE_MIRRORS path not exists: $pure_path${NCOL}"
+            if [[ -n "$target_ip" && "$remote_ssh_ok" -eq 0 ]]; then
+                print_remote_unavailable "SSTATE_MIRRORS path verification" "$target_ip"
+            elif run_io test "$target_ip" "$pure_path" d; then
+                echo -e "$TAG_OK SSTATE_MIRRORS = $sstate_mirrors"
+            else
+                echo -e "${RED}[FAIL] SSTATE_MIRRORS path not exists: $pure_path${NCOL}"
+            fi
         fi
     else
         echo -e "$TAG_WARN SSTATE_MIRRORS not found (sstate-cache sharing not configured)"
@@ -523,11 +650,11 @@ analyze_config_and_cache() {
     # ========== SSTATE-CACHE 세부 정보 ==========
     echo -e "\n${BLUE}--- 3.1. Sstate-cache Details ---${NCOL}"
     echo -e "${GREEN}[Cache Statistics]${NCOL}"
-    local sstate_summary=$(grep -a "Sstate summary:" "$log_file" 2>/dev/null || echo "")
+    local sstate_summary=$(grep -a "Sstate summary:" "$log_file" 2>/dev/null | tail -1 || echo "")
     if [[ -n "$sstate_summary" ]]; then
-        local wanted=$(echo "$sstate_summary" | grep -oP 'Wanted \K[0-9]+' || echo "0")
-        local found=$(echo "$sstate_summary" | grep -oP 'Found \K[0-9]+' || echo "0")
-        local missed=$(echo "$sstate_summary" | grep -oP 'Missed \K[0-9]+' || echo "0")
+        local wanted=$(extract_last_number "$sstate_summary" "Wanted")
+        local found=$(extract_last_number "$sstate_summary" "Found")
+        local missed=$(extract_last_number "$sstate_summary" "Missed")
         [[ "$wanted" -gt 0 ]] && local hit_rate=$(( found * 100 / wanted )) || local hit_rate=0
         printf "  - Hit rate: %s%% (%s/%s), Missed: %s\n" "$hit_rate" "$found" "$wanted" "$missed"
     else
@@ -542,7 +669,9 @@ analyze_config_and_cache() {
         [[ "$sstate_path_raw" =~ "detected from source" ]] && sstate_path_raw="${sstate_path_raw% (detected from source)}"
         local sstate_path=$(extract_pure_path "$sstate_path_raw" "1")
         if [[ -n "$sstate_path" ]]; then
-            if run_io test "$target_ip" "$sstate_path" d; then
+            if [[ -n "$target_ip" && "$remote_ssh_ok" -eq 0 ]]; then
+                print_remote_unavailable "SSTATE-cache storage lookup" "$target_ip"
+            elif run_io test "$target_ip" "$sstate_path" d; then
                 local sstate_size=$(run_io size "$target_ip" "$sstate_path" || echo "Unknown")
                 echo -e "  - Path: $sstate_path"
                 echo -e "  - Size: $sstate_size"
@@ -553,9 +682,9 @@ analyze_config_and_cache() {
     fi
     
     echo -e "${GREEN}[Sstate-cache Miss Analysis]${NCOL}"
-    local sstate_line=$(grep -a "Sstate summary:" "$log_file" 2>/dev/null || echo "")
+    local sstate_line=$(grep -a "Sstate summary:" "$log_file" 2>/dev/null | tail -1 || echo "")
     if [[ -n "$sstate_line" ]]; then
-        local missed=$(echo "$sstate_line" | grep -oP 'Missed \K[0-9]+' || echo "0")
+        local missed=$(extract_last_number "$sstate_line" "Missed")
         if [[ "$missed" -gt 0 ]]; then
             echo "  - Reason: $missed tasks not found in sstate-cache (new/modified recipes or different build configuration)"
             echo "  - Impact: These tasks will be rebuilt from source instead of using cached artifacts"
@@ -589,8 +718,8 @@ analyze_config_and_cache() {
     else
         section_hit_body="    (None - no tasks restored from cache examples found)"
     fi
-    section_hit=$(make_section_block "  - [Hit:${setscene_count:-0}] Tasks from sstatecache (first 20 examples, image related task always rebuilt):\
-    \n setscene_all_tasks으로 cache에서 복원된 시각을 표시" "${section_hit_body%$'\n'}")
+    section_hit=$(make_section_block "  - [Hit:${setscene_count:-0}] Modules from sstatecache(first 20 examples, some tasks always rebuilt):\
+    \nsetscene_all_tasks으로 cache에서 복원된 시각을 표시" "${section_hit_body%$'\n'}")
     
     # 2. [Missed] Modules rebuilt without fetch 
     ## fetch 없이 rebuild된 모듈들 (fetch 단계는 없었지만 실제로는 rebuild된 task들, 즉 sstate-cache에 없거나 hash값이 맞지 않아 rebuild되어야 하는 모듈
@@ -621,7 +750,7 @@ analyze_config_and_cache() {
         section_no_fetch_body="    (None - no rebuilt modules found)"
     fi
     section_no_fetch=$(make_section_block "  - [Missed:${no_fetch_count:-0}] Modules rebuilt without fetch, All source already exists:\
-    \n 실제 fetch 없이 rebuild된 시각을 표시" "${section_no_fetch_body%$'\n'}")
+    \n\t\t\t\t실제 fetch 없이 rebuild된 시각을 표시" "${section_no_fetch_body%$'\n'}")
     
     # 3. [Missed] Modules that were rebuilt from DL_DIR, PREMIRROR
     ## rebuild로 인해 src fetch가 필요해, 먼저 DL_DIR, PREMIRROR에 존재하는지 확인한다.
@@ -652,7 +781,7 @@ analyze_config_and_cache() {
         section_with_fetch_body="    (None - all tasks restored from cache)"
     fi
     section_with_fetch=$(make_section_block "  - [Missed:${with_fetch_count:-0}] Modules rebuilt with fetch, fetched from DL_DIR or PREMIRROR, Internet:\
-    \n 실제 build를 시작한 시각을 표시" "${section_with_fetch_body%$'\n'}")
+    \n실제 build를 시작한 시각을 표시" "${section_with_fetch_body%$'\n'}")
     
     # 먼저 인터넷에서 다운로드된 recipe 목록 추출 (Fetching http 전후 20줄 내에 있는 recipe)
     local internet_recipes=$(grep -a -B 20 "Fetching.*http" "$log_file" 2>/dev/null | grep "recipe.*do_fetch.*Started" | grep -oP 'recipe \K[^:]+' | sort -u || echo "")
@@ -688,7 +817,7 @@ analyze_config_and_cache() {
         section_cached_fetch_body="    (None - no fetch tasks executed)"
     fi
     section_cached_fetch=$(make_section_block "  - [Hit:${cached_fetch_count:-0}] Modules fetched from DL_DIR or PREMIRRORS (cached):\
-    \n 실제 DL_DIR or PREMIRRORS에서 do_fetch한 시각을 표시 " "${section_cached_fetch_body%$'\n'}")
+    \n\n\t\t\t\t실제 DL_DIR or PREMIRRORS에서 do_fetch한 시각을 표시" "${section_cached_fetch_body%$'\n'}")
     
     # 5. [Missed] All files downloaded from Internet (recipes + BitBake system files)
     ## 인터넷에서 다운로드된 모든 파일 (recipe 소스 do_fetch + BitBake의 buildtools과 uninative)
@@ -723,13 +852,33 @@ analyze_config_and_cache() {
     echo -e "\n${BLUE}--- 3.2. Premirror Details ---${NCOL}"
 
     echo -e "${GREEN}[Fetch Statistics]${NCOL}"
-    local total_fetch=$(grep -a "recipe.*do_fetch.*Started" "$log_file" 2>/dev/null | wc -l | xargs)
-    local premirror_fetch=$(grep -aiE "Trying PREMIRROR|from PREMIRRORS|will check PREMIRRORS" "$log_file" 2>/dev/null | wc -l | xargs)
-    local internet_fetch=$(grep -aE "Fetching.*http[s]?://" "$log_file" 2>/dev/null | wc -l | xargs)
-    local dl_dir_cache_fetch=$((total_fetch - premirror_fetch - internet_fetch))
-    [[ $dl_dir_cache_fetch -lt 0 ]] && dl_dir_cache_fetch=0
-    printf "  - Total: %s, From premirror: %s, From internet: %s, From DL_DIR cache: %s\n" "${total_fetch:-0}" "${premirror_fetch:-0}" "${internet_fetch:-0}" "$dl_dir_cache_fetch"
+    printf "  - Total: %s, From premirror: %s, From internet: %s, Other cached/local source: %s\n" "${total_fetch:-0}" "${premirror_fetch:-0}" "${internet_fetch:-0}" "$other_cached_fetch"
     
+
+    echo -e "${GREEN}[DL_DIR Path]${NCOL}"
+    if [[ -n "$dl_dir" && "$dl_dir" != "CONFIGURED (detected from log-message)" ]]; then
+        echo -e "  - Path: $dl_dir"
+        # DL_DIR size check (mirroring premirror logic)
+        if [[ "$skip_details" -eq 1 ]]; then
+            echo -e "  - $TAG_WARN Skipped build is old"
+        else
+            if [[ -n "$dl_dir" ]]; then
+                if [[ -n "$target_ip" && "$remote_ssh_ok" -eq 0 ]]; then
+                    print_remote_unavailable "DL_DIR storage lookup" "$target_ip"
+                elif run_io test "$target_ip" "$dl_dir" d; then
+                    local dl_dir_size=$(run_io size "$target_ip" "$dl_dir" || echo "Unknown")
+                    echo -e "  - Size: $dl_dir_size"
+                else
+                    echo -e "  - Path: $dl_dir (not accessible)"
+                fi
+            fi
+        fi
+    elif [[ -n "$dl_dir_detect_line" ]]; then
+        echo -e "  - Detected from log: $dl_dir_detect_line"
+    else
+        echo -e "  - $TAG_WARN DL_DIR path not available"
+    fi
+
     echo -e "${GREEN}[Premirror Storage]${NCOL}"
     if [[ "$skip_details" -eq 1 || "$premirrors" == "CONFIGURED (detected from log-message)" || "$premirrors" =~ "detected from log-message" ]]; then
         echo -e "  - $TAG_WARN Skipped build is old"
@@ -738,7 +887,9 @@ analyze_config_and_cache() {
         [[ "$premirror_path_raw" =~ "detected from source" ]] && premirror_path_raw="${premirror_path_raw% (detected from source)}"
         local premirror_path=$(extract_pure_path "$premirror_path_raw" "0")
         if [[ -n "$premirror_path" ]]; then
-            if run_io test "$target_ip" "$premirror_path" d; then
+            if [[ -n "$target_ip" && "$remote_ssh_ok" -eq 0 ]]; then
+                print_remote_unavailable "Premirror storage lookup" "$target_ip"
+            elif run_io test "$target_ip" "$premirror_path" d; then
                 local premirror_size=$(run_io size "$target_ip" "$premirror_path" || echo "Unknown")
                 echo -e "  - Path: $premirror_path"
                 echo -e "  - Size: $premirror_size"
@@ -769,6 +920,12 @@ find_large_outputs() {
 
     # 빌드 디렉토리 추출 (3번 항목과 동일한 방식)
     local PATH_REMOTESRC=$(grep -a -B1 "SUCCESS: yocto build" "$log_file" | head -1 | grep -oP '[0-9]{2}:[0-9]{2}:[0-9]{2}\s+\K/.*' 2>/dev/null || echo "")
+    local inferred_build_dir=""
+
+    if [[ -z "$PATH_REMOTESRC" ]]; then
+        inferred_build_dir=$(infer_build_dir_from_deploy_images "$log_file" || echo "")
+        [[ -n "$inferred_build_dir" ]] && PATH_REMOTESRC="$inferred_build_dir"
+    fi
     
     if [[ -z "$PATH_REMOTESRC" ]]; then
         echo -e "${YELLOW}[WARN] Build directory not found in log.${NCOL}"
@@ -781,12 +938,19 @@ find_large_outputs() {
     
     echo -e "${GREEN}[Build Directory]${NCOL}"
     echo "  - Build path: $PATH_REMOTESRC"
+    [[ -n "$inferred_build_dir" ]] && echo "  - Derived from first /deploy/images/ match in log"
     echo "  - Search pattern: $deploy_pattern"
     
     # find 명령 생성: 지정된 크기 이상 파일 검색 후 크기순 정렬하여 상위 10개 추출
     local find_cmd="find $deploy_pattern -type f -size +$FILESIZE 2>/dev/null | xargs ls -lh 2>/dev/null | awk '{print \$5, \$9}' | sort -hr | head -n 10"
     
     echo -e "\n${GREEN}[Large Files (Top 10)]${NCOL}"
+
+    if [[ -n "$target_ip" ]] && ! can_ssh_remote "$target_ip"; then
+        print_remote_unavailable "Large output scan" "$target_ip"
+        set -e
+        return 0
+    fi
     
     local result=""
     result=$(run_io exec "$target_ip" "$find_cmd" 2>/dev/null || echo "")
