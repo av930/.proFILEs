@@ -1,10 +1,11 @@
 #!/bin/bash
 set +xe  # 에러 무시 모드로 시작
-C_YELLOW='\033[1;33m' && C_GREEN='\033[1;32m' && C_RED='\033[1;31m' && C_RESET='\033[0m'
 
 ## 다운로드 스크립트 저장
 download_file() { 
+    readonly C_YELLOW='\033[1;33m' && C_GREEN='\033[1;32m' && C_RED='\033[1;31m' && C_RESET='\033[0m'
     local file="${1##*/}"
+    
     wget -O "$file" "http://10.159.30.66:8000/$1" && \
       { printf "${C_YELLOW}%s${C_RESET}\n" "Downloaded from http://10.159.30.66:8000"; } ||\
       wget -O "$file" "https://raw.githubusercontent.com/av930/.proFILEs/master/$1" && \
@@ -15,7 +16,8 @@ download_file() {
     return 0
 }
 
-## download할 script 지정
+#####################################
+## 여기서 부터 main script 실행
 SCRIPT=build/analyzeBuildTime.sh
 download_file "${SCRIPT}" || exit 1
 

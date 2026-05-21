@@ -13,6 +13,11 @@ mode="${3:-$1}"  # PATH1/PATH2 사용시 $1이 mode
 print_usage() {
 	echo "Usage: EXCEPT=<path1;path2> P1=<dir1|file1|str1> P2=<dir2|file2|str2> cmp_dirs.sh <mode:1|2|3>"
 	echo "   or: EXCEPT=<path1;path2> cmp_dirs.sh <dir1|file1|str1> <dir2|file2|str2> <mode:1|2|3>"
+	echo ""
+	echo "Mode options:"
+	echo "  1 - Show items only in P1 (left difference)"
+	echo "  2 - Show items only in P2 (right difference)"
+	echo "  3 - Show common items (intersection)"
 	exit 1
 }
 
@@ -67,6 +72,9 @@ else
 fi
 
 tmpout=$(mktemp)
+# Mode 1: P1만 존재 (P1 only)
+# Mode 2: P2만 존재 (P2 only)
+# Mode 3: 공통 항목 (Common items)
 case "$mode" in
  	  1) comm -23 "$file1" "$file2" | tee "$tmpout"
 	     echo "=========================================="
