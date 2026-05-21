@@ -494,7 +494,13 @@ analyze_config_and_cache() {
     
     # 간접 증거 감지
     [[ -z "$premirrors" && "$premirror_fetch" -gt 0 ]] && premirrors="CONFIGURED (detected from log-message)"
-    [[ -z "$sstate_mirrors" && -n "$sstate_detect_line" ]] && sstate_mirrors="CONFIGURED (detected from log-message)"
+    if [[ -z "$sstate_mirrors" && -n "$sstate_detect_line" ]]; then
+        if echo "$sstate_detect_line" | grep -Eq "Found[[:space:]]+0([^0-9]|$)"; then
+            sstate_mirrors="NOT CONFIGURED WELL (detected from log-message)"
+        else
+            sstate_mirrors="CONFIGURED (detected from log-message)"
+        fi
+    fi
     
     # 추가 검색: 빌드 디렉토리의 local.conf에서 직접 찾기 (항상 실행)
     local PATH_REMOTESRC=$(grep -a -B1 "SUCCESS: yocto build" "$log_file" | head -1 | grep -oP '[0-9]{2}:[0-9]{2}:[0-9]{2}\s+\K/.*' 2>/dev/null || echo "")
@@ -626,6 +632,9 @@ analyze_config_and_cache() {
         if [[ "$sstate_mirrors" == "CONFIGURED (detected from log-message)" ]]; then
             echo -e "$TAG_OK SSTATE_MIRRORS = Configured (detected from log-message)"
             print_log_detect_line "SSTATE_MIRRORS" "$sstate_detect_line"
+        elif [[ "$sstate_mirrors" == NOT\ CONFIGURED\ WELL* ]]; then
+            echo -e "$TAG_WARN SSTATE_MIRRORS = Not Configured Well (detected from log-message)"
+            print_log_detect_line "SSTATE_MIRRORS" "$sstate_detect_line"
         elif [[ "$sstate_mirrors" =~ "detected from log-message" ]]; then
             # 로그에서 추출된 경로 정보 (경로 그대로 표시)
             echo -e "$TAG_OK SSTATE_MIRRORS = $sstate_mirrors"
@@ -634,7 +643,11 @@ analyze_config_and_cache() {
             # source에서 읽은 정보는 skip_details가 0일 때만 유효
             if [[ "$skip_details" -eq 1 ]]; then
                 # local.conf가 최신이므로 로그 메시지 기반 정보로 표시
-                echo -e "$TAG_OK SSTATE_MIRRORS = Configured (detected from log-message)"
+                if echo "$sstate_detect_line" | grep -Eq "Found[[:space:]]+0([^0-9]|$)"; then
+                    echo -e "$TAG_WARN SSTATE_MIRRORS = Not Configured Well (detected from log-message)"
+                else
+                    echo -e "$TAG_OK SSTATE_MIRRORS = Configured (detected from log-message)"
+                fi
             else
                 local pure_path=$(extract_pure_path "${sstate_mirrors% (detected from source)}" "1")
                 if [[ -n "$target_ip" && "$remote_ssh_ok" -eq 0 ]]; then
@@ -771,7 +784,7 @@ analyze_config_and_cache() {
         section_no_fetch_body="    (None - no rebuilt modules found)"
     fi
     section_no_fetch=$(make_section_block "  - [Missed:${no_fetch_count:-0}] Modules rebuilt without fetch, All source already exists:\
-    \n\t\t실제 fetch 없이 rebuild된 시각을 표시" "${section_no_fetch_body%$'\n'}")
+    \n\t\t   실제 fetch 없이 rebuild된 시각을 표시" "${section_no_fetch_body%$'\n'}")
     
     # 3. [Missed] Modules that were rebuilt from DL_DIR, PREMIRROR
     ## rebuild로 인해 src fetch가 필요해, 먼저 DL_DIR, PREMIRROR에 존재하는지 확인한다.
@@ -838,7 +851,7 @@ analyze_config_and_cache() {
         section_cached_fetch_body="    (None - no fetch tasks executed)"
     fi
     section_cached_fetch=$(make_section_block "  - [Hit:${cached_fetch_count:-0}] Modules fetched from DL_DIR or PREMIRRORS (cached):\
-    \n\n\t\t실제 DL_DIR or PREMIRRORS에서 do_fetch한 시각을 표시" "${section_cached_fetch_body%$'\n'}")
+    \n\n\t\t   실제 DL_DIR or PREMIRRORS에서 do_fetch한 시각을 표시" "${section_cached_fetch_body%$'\n'}")
     
     # 5. [Missed] All files downloaded from Internet (recipes + BitBake system files)
     ## 인터넷에서 다운로드된 모든 파일 (recipe 소스 do_fetch + BitBake의 buildtools과 uninative)

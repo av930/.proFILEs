@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # Gerrit 또는 local git history에서 특정 regexp를 만족하는 commit을 검색한다.
-# Gerrit은 merged history를, local은 git log -G history를 기반으로 필터링한다.
+# Gerrit은 merged history를 검색하고, git project까지 지정이 가능하다. branch 지정도 가능하다. 
+# Local은 git log -G history를 기반으로 검색하고, git project는 path로 지정이 가능하다. branch는 현재소스기준으로 가능하다.
 
 readonly SSH_OPTS=(-n -q -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5)
 readonly DEFAULT_EXT_LIST='.bb,.bbappend,.bbclass,.inc,.conf'
@@ -12,8 +13,10 @@ readonly LOCAL_HOST_IPS="$(hostname -I 2>/dev/null || true)"
 usage() {
     echo "Gerrit : $0 <user:key> <vgit.lge.com/na> <query> <period> <regexp> [ext_list]" >&2
     echo "Local  : $0 <ssh_server_ip> <rootdir> <subpath> <period> <regexp> [ext_list]" >&2
-    echo "Example: $0 'vc.integrator:***' 'vgit.lge.com/na' 'status:merged' '365d' 'SRC_URI'" >&2
-    echo "Example: $0 '10.159.30.66' '/path/to/root' '/path/to/subpath' '365d' 'SRC_URI([[:space:]]*:(append|prepend|remove))?[[:space:]]*(\?\?=|\?=|:=|\+=|=\+|\.=|=\.|=)' '.bb,.bbappend,.bbclass,.inc,.conf'" >&2
+    echo "Gerrit: $0 'vc.integrator:***' 'vgit.lge.com/na' 'status:merged' '365d' 'SRC_URI'" >&2
+    echo "Gerrit Project: $0 'vc.integrator:***' 'https://vgit.lge.com/na/admin/repos/tiger/variant/target/tsu' 'status:merged' '365d' 'SRC_URI'" >&2
+    echo "Gerrit Project/Branch: $0 'vc.integrator:***' 'https://vgit.lge.com/na/admin/repos/tiger/variant/target/tsu' 'status:merged branch:main' '365d' 'SRC_URI'" >&2
+    echo "Local dir: $0 '10.159.30.66' '/path/to/root' '/path/to/subpath' '365d' 'SRC_URI([[:space:]]*:(append|prepend|remove))?[[:space:]]*(\?\?=|\?=|:=|\+=|=\+|\.=|=\.|=)' '.bb,.bbappend,.bbclass,.inc,.conf'" >&2
     echo "date period format: 365, 365d, 12m, 2025-01-01" >&2
 }
 
@@ -61,6 +64,25 @@ normalize_base_url() {
 
     [[ "$arg_url" =~ ^https?:// ]] || arg_url="https://${arg_url}"
     echo "${arg_url%/}"
+}
+
+parse_gerrit_target() {
+#----------------------------------------------------------------------------------------------------------
+# Gerrit 입력값에서 base URL과 optional project를 분리한다.
+# 입력: vgit host/path 또는 .../admin/repos/<project>
+# 출력: base_url|project
+    local arg_target="$1" normalized base_url project=""
+
+    normalized=$(normalize_base_url "$arg_target")
+
+    if [[ "$normalized" =~ ^(https?://[^/]+(/[^/]+)*)/admin/repos/(.+)$ ]]; then
+        base_url="${BASH_REMATCH[1]}"
+        project="${BASH_REMATCH[3]}"
+    else
+        base_url="$normalized"
+    fi
+
+    printf '%s|%s\n' "$base_url" "$project"
 }
 
 build_since_date() {
@@ -216,14 +238,17 @@ search_gerrit_commits() {
 # 입력: auth, base_url, query, period, regexp, ext_list
 # 출력: Gerrit change url
     local arg_auth="$1" arg_base_url="$2" arg_query="$3" arg_period="$4" arg_regexp="$5" arg_ext_list="${6:-$DEFAULT_EXT_LIST}"
-    local base_url since_date since_epoch query api_url start=0 page_size=100 page_json page_count more_changes=false
+    local target_info base_url project_filter since_date since_epoch query api_url start=0 page_size=100 page_json page_count more_changes=false
     local change_json change_num project submitted submitted_epoch patch_text commit_url files_json file_regexp
 
-    base_url=$(normalize_base_url "$arg_base_url")
+    target_info=$(parse_gerrit_target "$arg_base_url")
+    base_url="${target_info%%|*}"
+    project_filter="${target_info#*|}"
     since_date=$(build_since_date "$arg_period")
     since_epoch=$(date -u -d "$since_date 00:00:00" +%s)
     file_regexp=$(build_file_regexp "$arg_ext_list")
     query="$arg_query"
+    [[ -z "$project_filter" || "$query" == *"project:${project_filter}"* ]] || query="${query} project:${project_filter}"
     [[ "$query" == *"status:merged"* ]] || query="${query} status:merged"
     [[ "$query" == *"after:"* ]] || query="${query} after:${since_date}"
     api_url="${base_url}/a/changes/"
