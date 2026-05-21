@@ -424,6 +424,16 @@ analyze_config_and_cache() {
     
     # 내부 함수: 로그에서 특정 변수의 값을 추출
     extract_val() { extract_logged_var_value "$1" "$log_file" || echo ""; }
+    is_default_dl_dir() { [[ "$1" == '${TOPDIR}/downloads' ]]; }
+    extract_conf_value() {
+        local conf_path="$1" var_pattern="$2" remote_ip="$3"
+        local grep_pattern="^[[:space:]]*(${var_pattern})[[:space:]]*[?:]?="
+        if [[ -n "$remote_ip" ]]; then
+            run_io ssh "$remote_ip" "grep -E '$grep_pattern' '$conf_path' | head -1" | sed 's/.*=[[:space:]]*//;s/^"//;s/"$//;s/'\''//g' || echo ""
+        else
+            run_io grep "" "$grep_pattern" "$conf_path" || echo ""
+        fi
+    }
     extract_last_number() {
         local text="$1" label="$2" value=""
         value=$(printf "%s\n" "$text" | tail -1 | grep -oP "${label} \K[0-9]+" | head -1 | xargs || true)
@@ -461,8 +471,11 @@ analyze_config_and_cache() {
     local threads=$(extract_val BB_NUMBER_THREADS)
     local make_jobs=$(extract_val PARALLEL_MAKE)
     local scons_jobs=$(extract_val SCONS_OVERRIDE_NUM_JOBS)
+    local dl_dir_origin=""
     local dl_dir=$(extract_logged_assignment_value DL_DIR "$log_file")
+    [[ -n "$dl_dir" ]] && dl_dir_origin="log"
     [[ -z "$dl_dir" ]] && dl_dir=$(extract_val DL_DIR)
+    [[ -n "$dl_dir" && -z "$dl_dir_origin" ]] && dl_dir_origin="log"
     local premirrors=$(extract_val SOURCE_MIRROR_URL)
     [[ -z "$premirrors" ]] && premirrors=$(extract_val PREMIRRORS)
     local mirrors=$(extract_val MIRRORS)
@@ -470,10 +483,10 @@ analyze_config_and_cache() {
     local total_fetch=$(grep -a "recipe.*do_fetch.*Started" "$log_file" 2>/dev/null | wc -l | xargs)
     local premirror_fetch=$(grep -aiE "Trying PREMIRROR|from PREMIRRORS|will check PREMIRRORS" "$log_file" 2>/dev/null | wc -l | xargs)
     local internet_fetch=$(grep -aE "Fetching.*http[s]?://" "$log_file" 2>/dev/null | wc -l | xargs)
-    local other_cached_fetch=$((total_fetch - premirror_fetch - internet_fetch))
+    local cached_fetch=$((total_fetch - internet_fetch))
     local dl_dir_detect_line="" premirrors_detect_line="" sstate_detect_line=""
     local remote_ssh_ok=1 remote_notice_printed=0
-    [[ "$other_cached_fetch" -lt 0 ]] && other_cached_fetch=0
+    [[ "$cached_fetch" -lt 0 ]] && cached_fetch=0
     [[ -n "$target_ip" ]] && ! can_ssh_remote "$target_ip" && remote_ssh_ok=0
     dl_dir_detect_line=$(grep -aE "^${TIMESTAMP_OPTIONAL}[[:space:]]*([+][[:space:]]+)?(export[[:space:]]+)?DL_DIR[[:space:]]*[?:]?=" "$log_file" 2>/dev/null | head -1 || echo "")
     premirrors_detect_line=$(grep -aiE "Trying PREMIRROR|from PREMIRRORS|will check PREMIRRORS" "$log_file" 2>/dev/null | head -1 || echo "")
@@ -498,20 +511,21 @@ analyze_config_and_cache() {
         elif [[ -n "$target_ip" && "$remote_ssh_ok" -eq 0 ]]; then
             [[ "$remote_notice_printed" -eq 0 ]] && print_remote_unavailable "Source configuration lookup" "$target_ip"
             remote_notice_printed=1
-        elif [[ -n "$target_ip" ]] && run_io test "$target_ip" "$local_conf" f; then
-            dl_dir_from_conf=$(run_io ssh "$target_ip" "grep -E '^[[:space:]]*DL_DIR[[:space:]]*[?:]?=' '$local_conf' | head -1" | sed 's/.*=[[:space:]]*//;s/^"//;s/"$//;s/'\''//g' || echo "")
-            premirrors_from_conf=$(run_io ssh "$target_ip" "grep -E 'SOURCE_MIRROR_URL|PREMIRRORS' '$local_conf' | head -1" | sed 's/.*=[[:space:]]*//;s/^"//;s/"$//;s/'\''//g' || echo "")
-            sstate_mirrors_from_conf=$(run_io ssh "$target_ip" "grep -E 'SSTATE_MIRRORS' '$local_conf' | head -1" | sed 's/.*=[[:space:]]*//;s/^"//;s/"$//;s/'\''//g' || echo "")
         elif [[ -f "$local_conf" ]]; then
-            dl_dir_from_conf=$(run_io grep "" '^[[:space:]]*DL_DIR[[:space:]]*[?:]?=' "$local_conf" || echo "")
-            premirrors_from_conf=$(run_io grep "" 'SOURCE_MIRROR_URL|PREMIRRORS' "$local_conf" || echo "")
-            sstate_mirrors_from_conf=$(run_io grep "" 'SSTATE_MIRRORS' "$local_conf" || echo "")
+            :
+        fi
+
+        if [[ -z "$dl_dir_from_conf" && ( -f "$local_conf" || -n "$target_ip" ) ]]; then
+            dl_dir_from_conf=$(extract_conf_value "$local_conf" "DL_DIR" "$target_ip")
+            premirrors_from_conf=$(extract_conf_value "$local_conf" "SOURCE_MIRROR_URL|PREMIRRORS" "$target_ip")
+            sstate_mirrors_from_conf=$(extract_conf_value "$local_conf" "SSTATE_MIRRORS" "$target_ip")
         fi
         
 
         # 결과값이 있으면 업데이트 (detected from source 태그 추가)
         if [[ -n "$dl_dir_from_conf" ]]; then
             dl_dir="$dl_dir_from_conf"
+            dl_dir_origin="source"
         fi
         if [[ -n "$premirrors_from_conf" ]]; then
             premirrors="$premirrors_from_conf (detected from source)"
@@ -545,8 +559,11 @@ analyze_config_and_cache() {
             echo -e "$TAG_OK DL_DIR = Configured (detected from log-message)"
             print_log_detect_line "DL_DIR" "$dl_dir_detect_line"
         else
-            echo -e "$TAG_OK DL_DIR = $dl_dir"
-            print_log_detect_line "DL_DIR" "$dl_dir_detect_line"
+            local dl_dir_origin_suffix=""
+            [[ "$dl_dir_origin" == "source" ]] && dl_dir_origin_suffix=" (detected from source)"
+            [[ "$dl_dir_origin" == "log" ]] && dl_dir_origin_suffix=" (detected from log)"
+            echo -e "$TAG_OK DL_DIR = $dl_dir${dl_dir_origin_suffix}"
+            [[ "$dl_dir_origin" == "log" ]] && print_log_detect_line "DL_DIR" "$dl_dir_detect_line"
         fi
     else
         echo -e "$TAG_WARN DL_DIR not found"
@@ -656,7 +673,11 @@ analyze_config_and_cache() {
         local found=$(extract_last_number "$sstate_summary" "Found")
         local missed=$(extract_last_number "$sstate_summary" "Missed")
         [[ "$wanted" -gt 0 ]] && local hit_rate=$(( found * 100 / wanted )) || local hit_rate=0
-        printf "  - Hit rate: %s%% (%s/%s), Missed: %s\n" "$hit_rate" "$found" "$wanted" "$missed"
+        if [[ "$hit_rate" -eq 0 ]]; then
+            echo -e "${RED}  - Hit rate: ${hit_rate}% (${found}/${wanted}), Missed: ${missed}${NCOL}"
+        else
+            printf "  - Hit rate: %s%% (%s/%s), Missed: %s\n" "$hit_rate" "$found" "$wanted" "$missed"
+        fi
     else
         echo "  - Sstate summary not found in log"
     fi
@@ -750,7 +771,7 @@ analyze_config_and_cache() {
         section_no_fetch_body="    (None - no rebuilt modules found)"
     fi
     section_no_fetch=$(make_section_block "  - [Missed:${no_fetch_count:-0}] Modules rebuilt without fetch, All source already exists:\
-    \n\t\t\t\t실제 fetch 없이 rebuild된 시각을 표시" "${section_no_fetch_body%$'\n'}")
+    \n\t\t실제 fetch 없이 rebuild된 시각을 표시" "${section_no_fetch_body%$'\n'}")
     
     # 3. [Missed] Modules that were rebuilt from DL_DIR, PREMIRROR
     ## rebuild로 인해 src fetch가 필요해, 먼저 DL_DIR, PREMIRROR에 존재하는지 확인한다.
@@ -817,7 +838,7 @@ analyze_config_and_cache() {
         section_cached_fetch_body="    (None - no fetch tasks executed)"
     fi
     section_cached_fetch=$(make_section_block "  - [Hit:${cached_fetch_count:-0}] Modules fetched from DL_DIR or PREMIRRORS (cached):\
-    \n\n\t\t\t\t실제 DL_DIR or PREMIRRORS에서 do_fetch한 시각을 표시" "${section_cached_fetch_body%$'\n'}")
+    \n\n\t\t실제 DL_DIR or PREMIRRORS에서 do_fetch한 시각을 표시" "${section_cached_fetch_body%$'\n'}")
     
     # 5. [Missed] All files downloaded from Internet (recipes + BitBake system files)
     ## 인터넷에서 다운로드된 모든 파일 (recipe 소스 do_fetch + BitBake의 buildtools과 uninative)
@@ -852,11 +873,13 @@ analyze_config_and_cache() {
     echo -e "\n${BLUE}--- 3.2. Premirror Details ---${NCOL}"
 
     echo -e "${GREEN}[Fetch Statistics]${NCOL}"
-    printf "  - Total: %s, From premirror: %s, From internet: %s, Other cached/local source: %s\n" "${total_fetch:-0}" "${premirror_fetch:-0}" "${internet_fetch:-0}" "$other_cached_fetch"
+    printf "  - Total: %s, From DL_DIR/PREMIRRORS/local source: %s, From internet: %s\n" "${total_fetch:-0}" "$cached_fetch" "${internet_fetch:-0}"
     
 
     echo -e "${GREEN}[DL_DIR Path]${NCOL}"
-    if [[ -n "$dl_dir" && "$dl_dir" != "CONFIGURED (detected from log-message)" ]]; then
+    if is_default_dl_dir "$dl_dir"; then
+        echo -e '  - '"$TAG_WARN"' DL_DIR not configured (default: ${TOPDIR}/downloads)'
+    elif [[ -n "$dl_dir" && "$dl_dir" != "CONFIGURED (detected from log-message)" ]]; then
         echo -e "  - Path: $dl_dir"
         # DL_DIR size check (mirroring premirror logic)
         if [[ "$skip_details" -eq 1 ]]; then
