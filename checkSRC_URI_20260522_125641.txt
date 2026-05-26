@@ -1,0 +1,6 @@
+# checkSRC_URI result
+# root : /tmp/tmp.FJi1NNKg2i
+# date : 2026-05-22 12:56:41
+# STATUS	FILE	URI
+FAIL	/tmp/tmp.FJi1NNKg2i/meta/recipes-core/demo/demo_1.0.bb	http://ftp.gnu.org/gnu/glibc/glibc-2.34.tar.xz
+OKAY	/tmp/tmp.FJi1NNKg2i/meta/recipes-core/demo/demo_1.0.bb	file://local.patch

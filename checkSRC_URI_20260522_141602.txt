@@ -1,0 +1,8 @@
+# checkSRC_URI result
+# root : /tmp/tmp.ADR1AbT0X8
+# date : 2026-05-22 14:16:02
+# STATUS	FILE	URI
+SKIP	/tmp/tmp.ADR1AbT0X8/meta/recipes-test/demo/demo_1.0.bb	https://snapshot.debian.org/archive/debian/20160728T043443Z/pool/main/a/${BPN}/
+FAIL	/tmp/tmp.ADR1AbT0X8/meta/recipes-test/demo/demo_1.0.bb	http://github.com/intel/example/archive/v2.tar.gz
+FAIL	/tmp/tmp.ADR1AbT0X8/meta/recipes-test/demo/demo_1.0.bb	https://github.com/intel/example/archive/v1.tar.gz
+OKAY	/tmp/tmp.ADR1AbT0X8/meta/recipes-test/demo/demo_1.0.bb	file://local.patch

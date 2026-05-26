@@ -1,0 +1,14 @@
+# checkSRC_URI result
+# root : /tmp/test_bb2
+# date : 2026-05-22 10:59:24
+# STATUS	FILE	URI
+SKIP	/tmp/test_bb2/meta/recipes-core/glibc/glibc_2.34.bb	https://${MIRROR_HOST}/file.tar.gz
+SKIP	/tmp/test_bb2/meta/recipes-core/glibc/glibc_2.34.bb	svn://svn.example.com/repo
+FAIL	/tmp/test_bb2/meta/recipes-core/glibc/glibc_2.34.bb	file://0001-NONEXISTENT.patch
+FAIL	/tmp/test_bb2/meta/recipes-core/glibc/glibc_2.34.bb	http://ftp.gnu.org/gnu/glibc/glibc-2.34.tar.xz
+FAIL	/tmp/test_bb2/meta/recipes-core/glibc/glibc_2.34.bb	https://git.codelinaro.org/clo/ype/external/yoctoproject.org/poky/-/raw/yocto/honister/meta/recipes-core/glibc/glibc/0021-eglibc-Resolve-__fpscr_values-on-SH4.patch
+FAIL	/tmp/test_bb2/meta/recipes-core/glibc/glibc_2.34.bb	https://kernel.org/NONEXISTENT_xyz.tar.gz
+OKAY	/tmp/test_bb2/meta/recipes-core/glibc/glibc_2.34.bb	file://0001-CVE-2021-3999.patch
+OKAY	/tmp/test_bb2/meta/recipes-core/glibc/glibc_2.34.bb	file://0021-eglibc-Resolve.patch
+OKAY	/tmp/test_bb2/meta/recipes-core/glibc/glibc_2.34.bb	file://files/0002-fix.patch
+OKAY	/tmp/test_bb2/meta/recipes-core/glibc/glibc_2.34.bb	https://git.codelinaro.org/clo/ype/external/yoctoproject.org/poky/-/raw/yocto/honister/meta/recipes-core/glibc/glibc/0001-CVE-2021-3999.patch
