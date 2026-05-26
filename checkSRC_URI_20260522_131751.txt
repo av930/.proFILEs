@@ -1,8 +1,0 @@
-# checkSRC_URI result
-# root : /tmp/tmp.qFpmwF61f9
-# date : 2026-05-22 13:17:51
-# STATUS	FILE	URI
-SKIP	/tmp/tmp.qFpmwF61f9/meta/recipes-test/demo/demo_1.0.bb	http://snapshot.debian.org/archive/debian//20150831T093342Z/pool/main/n/${BPN}/
-SKIP	/tmp/tmp.qFpmwF61f9/meta/recipes-test/demo/demo_1.0.bb	http://snapshot.debian.org/archive/debian/20160728T043443Z/pool/main/a/${BPN}/
-SKIP	/tmp/tmp.qFpmwF61f9/meta/recipes-test/demo/demo_1.0.bb	http://snapshot.debian.org/archive/debian/20181022T085404Z/pool/main/n/netcat-openbsd/${BPN}
-SKIP	/tmp/tmp.qFpmwF61f9/meta/recipes-test/demo/demo_1.0.bb	http://snapshot.debian.org/archive/debian/20191212T145612Z/pool/main/d/${BPN}/
