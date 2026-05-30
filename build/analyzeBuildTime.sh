@@ -70,7 +70,7 @@ print_remote_unavailable() {
 
 extract_logged_var_value() {
     local var_name="$1" log_file="$2"
-    grep -aE "^${TIMESTAMP_OPTIONAL}[[:space:]]*([+][[:space:]]+)?(export[[:space:]]+)?${var_name}[[:space:]]*[?:]?=" "$log_file" 2>/dev/null | head -1 | sed 's/.*=[[:space:]]*//;s/^"//;s/"$//;s/'\''//g'
+    grep -aE "^${TIMESTAMP_OPTIONAL}[[:space:]]*([+][[:space:]]+)?(export[[:space:]]+)?${var_name}[[:space:]]*[+?:]?=" "$log_file" 2>/dev/null | head -1 | sed 's/.*=[[:space:]]*//;s/^"//;s/"$//;s/'\''//g'
 }
 
 extract_logged_assignment_value() {
@@ -427,7 +427,7 @@ analyze_config_and_cache() {
     is_default_dl_dir() { [[ "$1" == '${TOPDIR}/downloads' ]]; }
     extract_conf_value() {
         local conf_path="$1" var_pattern="$2" remote_ip="$3"
-        local grep_pattern="^[[:space:]]*(${var_pattern})[[:space:]]*[?:]?="
+        local grep_pattern="^[[:space:]]*(${var_pattern})[[:space:]]*[+?:]?="
         if [[ -n "$remote_ip" ]]; then
             run_io ssh "$remote_ip" "grep -E '$grep_pattern' '$conf_path' | head -1" | sed 's/.*=[[:space:]]*//;s/^"//;s/"$//;s/'\''//g' || echo ""
         else
@@ -482,18 +482,21 @@ analyze_config_and_cache() {
     local sstate_mirrors=$(extract_val SSTATE_MIRRORS)
     local total_fetch=$(grep -a "recipe.*do_fetch.*Started" "$log_file" 2>/dev/null | wc -l | xargs)
     local premirror_fetch=$(grep -aiE "Trying PREMIRROR|from PREMIRRORS|will check PREMIRRORS" "$log_file" 2>/dev/null | wc -l | xargs)
+    local mirror_fetch=$(grep -aiE "Trying MIRRORS|attempting MIRRORS if available|from MIRRORS|will check MIRRORS|\(will check MIRRORS" "$log_file" 2>/dev/null | wc -l | xargs)
     local internet_fetch=$(grep -aE "Fetching.*http[s]?://" "$log_file" 2>/dev/null | wc -l | xargs)
     local cached_fetch=$((total_fetch - internet_fetch))
-    local dl_dir_detect_line="" premirrors_detect_line="" sstate_detect_line=""
+    local dl_dir_detect_line="" premirrors_detect_line="" mirrors_detect_line="" sstate_detect_line=""
     local remote_ssh_ok=1 remote_notice_printed=0
     [[ "$cached_fetch" -lt 0 ]] && cached_fetch=0
     [[ -n "$target_ip" ]] && ! can_ssh_remote "$target_ip" && remote_ssh_ok=0
-    dl_dir_detect_line=$(grep -aE "^${TIMESTAMP_OPTIONAL}[[:space:]]*([+][[:space:]]+)?(export[[:space:]]+)?DL_DIR[[:space:]]*[?:]?=" "$log_file" 2>/dev/null | head -1 || echo "")
+    dl_dir_detect_line=$(grep -aE "^${TIMESTAMP_OPTIONAL}[[:space:]]*([+][[:space:]]+)?(export[[:space:]]+)?DL_DIR[[:space:]]*[+?:]?=" "$log_file" 2>/dev/null | head -1 || echo "")
     premirrors_detect_line=$(grep -aiE "Trying PREMIRROR|from PREMIRRORS|will check PREMIRRORS" "$log_file" 2>/dev/null | head -1 || echo "")
+    mirrors_detect_line=$(grep -aiE "Trying MIRRORS|attempting MIRRORS if available|from MIRRORS|will check MIRRORS|\(will check MIRRORS" "$log_file" 2>/dev/null | head -1 || echo "")
     sstate_detect_line=$(grep -a "Sstate summary:" "$log_file" 2>/dev/null | tail -1 || echo "")
     
     # 간접 증거 감지
     [[ -z "$premirrors" && "$premirror_fetch" -gt 0 ]] && premirrors="CONFIGURED (detected from log-message)"
+    [[ -z "$mirrors" && "$mirror_fetch" -gt 0 ]] && mirrors="CONFIGURED (detected from log-message)"
     if [[ -z "$sstate_mirrors" && -n "$sstate_detect_line" ]]; then
         if echo "$sstate_detect_line" | grep -Eq "Found[[:space:]]+0([^0-9]|$)"; then
             sstate_mirrors="NOT CONFIGURED WELL (detected from log-message)"
@@ -504,9 +507,13 @@ analyze_config_and_cache() {
     
     # 추가 검색: 빌드 디렉토리의 local.conf에서 직접 찾기 (항상 실행)
     local PATH_REMOTESRC=$(grep -a -B1 "SUCCESS: yocto build" "$log_file" | head -1 | grep -oP '[0-9]{2}:[0-9]{2}:[0-9]{2}\s+\K/.*' 2>/dev/null || echo "")
+    if [[ -z "$PATH_REMOTESRC" ]]; then
+        # 빌드 실패로 SUCCESS 라인이 없을 수 있으므로, tmp*/work 경로에서 TOPDIR(=.../build) 역추적
+        PATH_REMOTESRC=$(grep -aoE '/[^[:space:]]+/build/tmp[^[:space:]]*' "$log_file" 2>/dev/null | head -1 | sed 's|/tmp.*||' || echo "")
+    fi
     if [[ -n "$PATH_REMOTESRC" ]]; then
         local local_conf="$PATH_REMOTESRC/conf/local.conf"
-        local dl_dir_from_conf="" premirrors_from_conf="" sstate_mirrors_from_conf="" conf_mtime=0
+        local dl_dir_from_conf="" premirrors_from_conf="" mirrors_from_conf="" sstate_mirrors_from_conf="" conf_mtime=0
         if   [[ -n "$target_ip" && "$remote_ssh_ok" -eq 1 ]] && run_io test "$target_ip" "$local_conf" f; then conf_mtime=$(run_io mtime "$target_ip" "$local_conf" 2>/dev/null || echo 0)
         elif [[ -f "$local_conf" ]]; then conf_mtime=$(run_io mtime "" "$local_conf" 2>/dev/null || echo 0)
         fi
@@ -524,6 +531,7 @@ analyze_config_and_cache() {
         if [[ -z "$dl_dir_from_conf" && ( -f "$local_conf" || -n "$target_ip" ) ]]; then
             dl_dir_from_conf=$(extract_conf_value "$local_conf" "DL_DIR" "$target_ip")
             premirrors_from_conf=$(extract_conf_value "$local_conf" "SOURCE_MIRROR_URL|PREMIRRORS" "$target_ip")
+            mirrors_from_conf=$(extract_conf_value "$local_conf" "MIRRORS" "$target_ip")
             sstate_mirrors_from_conf=$(extract_conf_value "$local_conf" "SSTATE_MIRRORS" "$target_ip")
         fi
         
@@ -536,6 +544,9 @@ analyze_config_and_cache() {
         if [[ -n "$premirrors_from_conf" ]]; then
             premirrors="$premirrors_from_conf (detected from source)"
         fi
+        if [[ -n "$mirrors_from_conf" ]]; then
+            mirrors="$mirrors_from_conf (detected from source)"
+        fi
         if [[ -n "$sstate_mirrors_from_conf" ]]; then
             sstate_mirrors="$sstate_mirrors_from_conf (detected from source)"
         fi
@@ -545,11 +556,15 @@ analyze_config_and_cache() {
     if [[ "$skip_details" -eq 1 ]]; then
         # local.conf에서 읽은 정보는 무시
         premirrors_from_conf=""
+        mirrors_from_conf=""
         sstate_mirrors_from_conf=""
         
         # 로그에서 직접 추출된 경로 정보가 있으면 (detected from log-message) 태그 추가
         if [[ -n "$premirrors" && "$premirrors" != "CONFIGURED (detected from log-message)" ]]; then
             premirrors="$premirrors (detected from log-message)"
+        fi
+        if [[ -n "$mirrors" && "$mirrors" != "CONFIGURED (detected from log-message)" ]]; then
+            mirrors="$mirrors (detected from log-message)"
         fi
         if [[ -n "$sstate_mirrors" && "$sstate_mirrors" != "CONFIGURED (detected from log-message)" ]]; then
             sstate_mirrors="$sstate_mirrors (detected from log-message)"
@@ -615,13 +630,35 @@ analyze_config_and_cache() {
     
     # MIRRORS 요약
     if [[ -n "$mirrors" ]]; then
-        local pure_path=$(extract_pure_path "$mirrors" "0")
-        if [[ -n "$target_ip" && "$remote_ssh_ok" -eq 0 ]]; then
-            print_remote_unavailable "MIRRORS path verification" "$target_ip"
-        elif run_io test "$target_ip" "$pure_path" d; then
+        if [[ "$mirrors" == "CONFIGURED (detected from log-message)" ]]; then
+            echo -e "$TAG_OK MIRRORS = Configured (detected from log-message)"
+            print_log_detect_line "MIRRORS" "$mirrors_detect_line"
+        elif [[ "$mirrors" =~ "detected from log-message" ]]; then
             echo -e "$TAG_OK MIRRORS = $mirrors"
+            print_log_detect_line "MIRRORS" "$mirrors_detect_line"
+        elif [[ "$mirrors" =~ "detected from source" ]]; then
+            if [[ "$skip_details" -eq 1 ]]; then
+                echo -e "$TAG_OK MIRRORS = Configured (detected from log-message)"
+                print_log_detect_line "MIRRORS" "$mirrors_detect_line"
+            else
+                local pure_path=$(extract_pure_path "${mirrors% (detected from source)}" "0")
+                if [[ -n "$target_ip" && "$remote_ssh_ok" -eq 0 ]]; then
+                    print_remote_unavailable "MIRRORS path verification" "$target_ip"
+                elif run_io test "$target_ip" "$pure_path" d; then
+                    echo -e "$TAG_OK MIRRORS = $mirrors"
+                else
+                    echo -e "${RED}[FAIL] MIRRORS path not exists: $pure_path${NCOL}"
+                fi
+            fi
         else
-            echo -e "${RED}[FAIL] MIRRORS path not exists: $pure_path${NCOL}"
+            local pure_path=$(extract_pure_path "$mirrors" "0")
+            if [[ -n "$target_ip" && "$remote_ssh_ok" -eq 0 ]]; then
+                print_remote_unavailable "MIRRORS path verification" "$target_ip"
+            elif run_io test "$target_ip" "$pure_path" d; then
+                echo -e "$TAG_OK MIRRORS = $mirrors"
+            else
+                echo -e "${RED}[FAIL] MIRRORS path not exists: $pure_path${NCOL}"
+            fi
         fi
     else
         echo -e "$TAG_WARN MIRRORS not found"
@@ -931,6 +968,47 @@ analyze_config_and_cache() {
                 echo -e "  - Size: $premirror_size"
             else
                 echo -e "  - Path: $premirror_path (not accessible)"
+            fi
+        fi
+    fi
+
+    # ========== MIRRORS 세부 정보 ==========
+    echo -e "\n${BLUE}--- 3.3. Mirror Details ---${NCOL}"
+
+    echo -e "${GREEN}[Mirror Attempt Evidence]${NCOL}"
+    printf "  - Mirror-related log lines: %s (~ maxium 100 )\n" "${mirror_fetch:-0}"
+    local mirror_lines_preview=""
+    mirror_lines_preview=$(grep -aiE "Trying MIRRORS|attempting MIRRORS if available|from MIRRORS|will check MIRRORS|\(will check MIRRORS" "$log_file" 2>/dev/null | head -n 100 || true)
+    if [[ -n "$mirror_lines_preview" ]]; then
+        printf "%s\n" "$mirror_lines_preview" | awk '
+            {
+                if (match($0, /([0-9]{2}:[0-9]{2}:[0-9]{2})[[:space:]]+/, a)) {
+                    ts=a[1]
+                    sub(/^.*[0-9]{2}:[0-9]{2}:[0-9]{2}[[:space:]]+/, "")
+                    printf "[%s] %s\n", ts, $0
+                } else {
+                    print $0
+                }
+            }
+        '
+    fi
+
+    echo -e "${GREEN}[Mirror Storage]${NCOL}"
+    if [[ "$skip_details" -eq 1 || "$mirrors" == "CONFIGURED (detected from log-message)" || "$mirrors" =~ "detected from log-message" ]]; then
+        echo -e "  - $TAG_WARN Skipped build is old"
+    else
+        local mirror_path_raw="$mirrors"
+        [[ "$mirror_path_raw" =~ "detected from source" ]] && mirror_path_raw="${mirror_path_raw% (detected from source)}"
+        local mirror_path=$(extract_pure_path "$mirror_path_raw" "0")
+        if [[ -n "$mirror_path" ]]; then
+            if [[ -n "$target_ip" && "$remote_ssh_ok" -eq 0 ]]; then
+                print_remote_unavailable "MIRRORS storage lookup" "$target_ip"
+            elif run_io test "$target_ip" "$mirror_path" d; then
+                local mirror_size=$(run_io size "$target_ip" "$mirror_path" || echo "Unknown")
+                echo -e "  - Path: $mirror_path"
+                echo -e "  - Size: $mirror_size"
+            else
+                echo -e "  - Path: $mirror_path (not accessible)"
             fi
         fi
     fi

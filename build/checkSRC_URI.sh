@@ -17,14 +17,17 @@ ROOT_DIR=""
 
 usage() {
         cat <<EOF
-Usage: $(basename "$0") <root_dir> [options]
+usage: $(basename "$0") <root_dir> [options]
     root_dir     : Target repo project root directory
     -t TIMEOUT   : URL access timeout (seconds, default: 10)
     -j JOBS      : Number of parallel threads (default: 32)
     -v           : Print SKIP (unverifiable) URIs
     -l           : Only print extracted URIs (no access check)
     -h           : Show this help
-Output:
+example:
+    $(basename "$0") /path/to/yocto/project
+    $(basename "$0") /path/to/yocto/project -t 5 -j 16 -v    
+output:
     OKAY /path/to/file.bb  http://example.com/file.tar.gz
     FAIL /path/to/file.bb  http://example.com/file.tar.gz
     SKIP /path/to/file.bb  \${VAR}/file.tar.gz             (with -v)

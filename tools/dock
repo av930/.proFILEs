@@ -472,6 +472,7 @@ function dockstart(){
     # create dirs&files in advanced, if not, these dir&file is created for root account.
     sudo -u ${account} mkdir -p ${home_dir}/Docker_MountDIR ${home_dir}/mirror ${home_dir}/.jfrog
     touch ${home_dir}/.ssh ${home_dir}/.profile ${home_dir}/.bashrc ${home_dir}/.gitconfig
+    mkdir -p /nfs ## 없으면 빈 dir로 사용하고, /nfs가 이미 nfs 마운트 되어 있으면 그대로 사용한다. 
 
     ## warning
     ## if mount with ro, file is another copy from start
@@ -498,6 +499,7 @@ function dockstart(){
         -v ${home_dir}/.jfrog:${home_dir}/.jfrog:rw                             \
         -v ${home_dir}/mirror:${home_dir}/mirror:rw                             \
         -v ${home_dir}/Docker_MountDIR:${home_dir}/Docker_MountDIR:rw           \
+        -v /nfs:/nfs:ro                                                         \
         ${cntr_img} /bin/bash -c 'sudo service ssh start && /bin/bash'
 
         #if [ $? -eq 0 ]; then docklist ps; fi
