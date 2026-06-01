@@ -1,6 +1,7 @@
 # vim: set filetype=bash:
 printf '[%s] called: [%s:%s] sourced\n' "$0" "$BASH_SOURCE" "$LINENO"
 
+######################## register sul
 func_su(){
     acc=vc.integrator
     echo account is [$acc]
@@ -30,6 +31,18 @@ if (( 8 < $(grep \/docker /proc/1/cgroup 2>/dev/null |wc -l)  )); then
     [ -n "${PS1SC}" ] && PS1="${PS1SC}"
 fi
 
+
+######################## run  http server 
+function _start_httpserver(){
+    local script_path="${proFILEdir}/http/startHttpService.sh"
+
+    [ -x "${script_path}" ] || return 0
+    "${script_path}"
+}
+
+if [ "$(get_ip)" = "10.159.30.66" ]; then _start_httpserver ; fi
+
+######################## vscode shell integration
 # VS Code shell integration - VS Code 터미널에서만 활성화
 if [[ "$TERM_PROGRAM" == "vscode" ]]; then
     if [[ -n "${VSCODE_SHELL_INTEGRATION}" ]]; then

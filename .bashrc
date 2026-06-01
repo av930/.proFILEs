@@ -126,15 +126,8 @@ alias sc$ECHO='_bar "Usage"; printf "
 "'
 alias scfile='_bar "log save to $HOME/screen.file.log"; screen -X hardcopy -h ~/screen.file.log'
 alias sc${TAG}='screen -ls'
-function _start_profile_http_service_if_needed(){
-    local script_path="${proFILEdir}/http/startHttpService.sh"
-
-    [ -x "${script_path}" ] || return 0
-    "${script_path}"
-}
 
 function sc(){
-    _start_profile_http_service_if_needed
     screen -U -RR -c "${proFILEdir}/.screenrc" "$@"
 }
 
