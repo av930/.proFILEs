@@ -70,12 +70,14 @@ print_remote_unavailable() {
 
 extract_logged_var_value() {
     local var_name="$1" log_file="$2"
-    grep -aE "^${TIMESTAMP_OPTIONAL}[[:space:]]*([+][[:space:]]+)?(export[[:space:]]+)?${var_name}[[:space:]]*[+?:]?=" "$log_file" 2>/dev/null | head -1 | sed 's/.*=[[:space:]]*//;s/^"//;s/"$//;s/'\''//g'
+    local assign_op_re='([?+.]?=|:=|=)'
+    grep -aE "^${TIMESTAMP_OPTIONAL}[[:space:]]*([+][[:space:]]+)?(export[[:space:]]+)?${var_name}[[:space:]]*${assign_op_re}" "$log_file" 2>/dev/null | head -1 | sed 's/.*=[[:space:]]*//;s/^"//;s/"$//;s/'\''//g'
 }
 
 extract_logged_assignment_value() {
     local var_name="$1" log_file="$2"
-    grep -aE "^${TIMESTAMP_OPTIONAL}[[:space:]]*([+][[:space:]]+)?(export[[:space:]]+)?${var_name}=" "$log_file" 2>/dev/null | head -1 | sed 's/.*=//;s/^"//;s/"$//;s/'\''//g'
+    local assign_op_re='([?+.]?=|:=|=)'
+    grep -aE "^${TIMESTAMP_OPTIONAL}[[:space:]]*([+][[:space:]]+)?(export[[:space:]]+)?${var_name}[[:space:]]*${assign_op_re}" "$log_file" 2>/dev/null | head -1 | sed 's/.*=//;s/^"//;s/"$//;s/'\''//g'
 }
 
 infer_build_dir_from_deploy_images() {
@@ -427,12 +429,27 @@ analyze_config_and_cache() {
     is_default_dl_dir() { [[ "$1" == '${TOPDIR}/downloads' ]]; }
     extract_conf_value() {
         local conf_path="$1" var_pattern="$2" remote_ip="$3"
-        local grep_pattern="^[[:space:]]*(${var_pattern})[[:space:]]*[+?:]?="
+        local assign_op_re='([?+.]?=|:=|=)'
+        local grep_pattern="^[[:space:]]*(${var_pattern})[[:space:]]*${assign_op_re}"
         if [[ -n "$remote_ip" ]]; then
             run_io ssh "$remote_ip" "grep -E '$grep_pattern' '$conf_path' | head -1" | sed 's/.*=[[:space:]]*//;s/^"//;s/"$//;s/'\''//g' || echo ""
         else
             run_io grep "" "$grep_pattern" "$conf_path" || echo ""
         fi
+    }
+    conf_has_own_mirrors_inherit() {
+        local conf_path="$1" remote_ip="$2" line
+        local assign_op_re='([?+.]?=|:=|=)'
+        local grep_pattern="^[[:space:]]*INHERIT[[:space:]]*${assign_op_re}"
+
+        if [[ -n "$remote_ip" ]]; then
+            line=$(run_io ssh "$remote_ip" "grep -E '$grep_pattern' '$conf_path' 2>/dev/null" 2>/dev/null || echo "")
+        else
+            line=$(grep -aE "$grep_pattern" "$conf_path" 2>/dev/null || echo "")
+        fi
+
+        [[ -z "$line" ]] && return 1
+        echo "$line" | grep -qE '(^|[^A-Za-z0-9_-])own-mirrors([^A-Za-z0-9_-]|$)'
     }
     extract_last_number() {
         local text="$1" label="$2" value=""
@@ -513,7 +530,8 @@ analyze_config_and_cache() {
     fi
     if [[ -n "$PATH_REMOTESRC" ]]; then
         local local_conf="$PATH_REMOTESRC/conf/local.conf"
-        local dl_dir_from_conf="" premirrors_from_conf="" mirrors_from_conf="" sstate_mirrors_from_conf="" conf_mtime=0
+        local dl_dir_from_conf="" premirrors_from_conf="" mirrors_from_conf="" sstate_mirrors_from_conf="" source_mirror_url_from_conf="" conf_mtime=0
+        local has_own_mirrors=0
         if   [[ -n "$target_ip" && "$remote_ssh_ok" -eq 1 ]] && run_io test "$target_ip" "$local_conf" f; then conf_mtime=$(run_io mtime "$target_ip" "$local_conf" 2>/dev/null || echo 0)
         elif [[ -f "$local_conf" ]]; then conf_mtime=$(run_io mtime "" "$local_conf" 2>/dev/null || echo 0)
         fi
@@ -530,9 +548,15 @@ analyze_config_and_cache() {
 
         if [[ -z "$dl_dir_from_conf" && ( -f "$local_conf" || -n "$target_ip" ) ]]; then
             dl_dir_from_conf=$(extract_conf_value "$local_conf" "DL_DIR" "$target_ip")
-            premirrors_from_conf=$(extract_conf_value "$local_conf" "SOURCE_MIRROR_URL|PREMIRRORS" "$target_ip")
+            source_mirror_url_from_conf=$(extract_conf_value "$local_conf" "SOURCE_MIRROR_URL" "$target_ip")
+            premirrors_from_conf=$(extract_conf_value "$local_conf" "PREMIRRORS" "$target_ip")
             mirrors_from_conf=$(extract_conf_value "$local_conf" "MIRRORS" "$target_ip")
             sstate_mirrors_from_conf=$(extract_conf_value "$local_conf" "SSTATE_MIRRORS" "$target_ip")
+
+            if conf_has_own_mirrors_inherit "$local_conf" "$target_ip"; then
+                has_own_mirrors=1
+                [[ -n "$source_mirror_url_from_conf" ]] && premirrors_from_conf="$source_mirror_url_from_conf"
+            fi
         fi
         
 
@@ -542,7 +566,11 @@ analyze_config_and_cache() {
             dl_dir_origin="source"
         fi
         if [[ -n "$premirrors_from_conf" ]]; then
-            premirrors="$premirrors_from_conf (detected from source)"
+            if [[ "$has_own_mirrors" -eq 1 && -n "$source_mirror_url_from_conf" ]]; then
+                premirrors="$premirrors_from_conf (detected from source, via INHERIT own-mirrors)"
+            else
+                premirrors="$premirrors_from_conf (detected from source)"
+            fi
         fi
         if [[ -n "$mirrors_from_conf" ]]; then
             mirrors="$mirrors_from_conf (detected from source)"
