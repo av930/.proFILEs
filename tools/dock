@@ -422,9 +422,9 @@ function dockstart(){
         shift
     fi
 
-    requested_name="${1:-$cntr_name}"
-    requested_port="${2:-$cntr_port}"
-    requested_img="${3:-$cntr_img}"
+    requested_name="$1"
+    requested_port="$2"
+    requested_img="$3"
 
     $DEBUG "$LINENO:[$cntr_cmd] [$cntr_name] [$cntr_port] [$cntr_img]"
     
@@ -469,6 +469,22 @@ function dockstart(){
 
     cntr_port=$(find_available_port "$cntr_port")
 
+    # Prompt password securely for container user. 
+    # If empty, use legacy/existing mount logic.
+    local cntr_pw
+    read -rs -p "Input SSH-PW for container [to separate passwd from HOST]: " cntr_pw
+    echo ""
+
+    local extra_mounts=()
+    if [ -z "$cntr_pw" ]; then
+        extra_mounts=(
+            -v /etc/group:/etc/group:ro
+            -v /etc/passwd:/etc/passwd:ro
+            -v /etc/shadow:/etc/shadow:ro
+            -v /etc/ssh:/etc/ssh:ro
+        )
+    fi
+
     # create dirs&files in advanced, if not, these dir&file is created for root account.
     sudo -u ${account} mkdir -p ${home_dir}/Docker_MountDIR ${home_dir}/mirror ${home_dir}/.jfrog
     touch ${home_dir}/.ssh ${home_dir}/.profile ${home_dir}/.bashrc ${home_dir}/.gitconfig
@@ -483,13 +499,10 @@ function dockstart(){
         --hostname ${HOSTNAME}                                                  \
         -u ${user_id}:${group_id}                                               \
         -p ${cntr_port}:22                                                      \
-        -v /etc/group:/etc/group:ro                                             \
-        -v /etc/passwd:/etc/passwd:ro                                           \
-        -v /etc/shadow:/etc/shadow:ro                                           \
+        "${extra_mounts[@]}"                                                    \
         -v /etc/timezone:/etc/timezone:ro                                       \
         -v /etc/localtime:/etc/localtime:ro                                     \
         -v /etc/hosts:/etc/hosts:ro                                             \
-        -v /etc/ssh:/etc/ssh:ro                                                 \
         -v /usr/local/bin:/usr/local/bin:ro                                     \
         -v /lib/modules:/lib/modules:ro                                         \
         -v ${home_dir}/.profile:${home_dir}/.profile:rw                         \
@@ -497,12 +510,18 @@ function dockstart(){
         -v ${home_dir}/.gitconfig:${home_dir}/.gitconfig:rw                     \
         -v ${home_dir}/.ssh:${home_dir}/.ssh:rw                                 \
         -v ${home_dir}/.jfrog:${home_dir}/.jfrog:rw                             \
-        -v ${home_dir}/mirror:${home_dir}/mirror:rw                             \
-        -v ${home_dir}/Docker_MountDIR:${home_dir}/Docker_MountDIR:rw           \
-        -v /nfs:/nfs:ro                                                         \
+        -v ${home_dir}/mirror:${home_dir}/mirror:ro,rshared                     \
+        -v ${home_dir}/Docker_MountDIR:${home_dir}/Docker_MountDIR:rw,rshared   \
+        -v /nfs:/nfs:ro,rshared                                                 \
+        -v /mnt:/mnt:ro,rshared                                                 \
         ${cntr_img} /bin/bash -c 'sudo service ssh start && /bin/bash'
 
-        #if [ $? -eq 0 ]; then docklist ps; fi
+    if [ $? -eq 0 ]; then
+        if [ -n "$cntr_pw" ]; then
+            echo "${account}:${cntr_pw}" | docker exec --user root -i "${cntr_name}" chpasswd &>/dev/null
+        fi
+        docklist ps
+    fi
     return 0
 }
 

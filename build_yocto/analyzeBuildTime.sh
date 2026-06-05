@@ -310,8 +310,9 @@ check_server_spec() {
     avail_ram_gb=$(( avail_ram_kb / 1024 / 1024 ))
 
     # Disk 정보 수집: 루트 파티션의 전체 용량 및 사용 가능 용량
-    disk_total=$(df -h / | tail -1 | awk '{print $2}' || echo "Unknown")
-    disk_avail=$(df -h / | tail -1 | awk '{print $4}' || echo "Unknown")
+    read -r disk_total disk_avail <<< $(df -hP 2>/dev/null | grep '^/dev/' | sort -hk2 | tail -1 | awk '{print $2, $4}')
+    disk_total="${disk_total:-Unknown}"
+    disk_avail="${disk_avail:-Unknown}" 
 
     # SSD 스토리지 체크: rota 값이 0이면 SSD/NVMe (1이면 HDD)
     lsblk -d -o name,rota 2>/dev/null | grep -q "0$" && has_ssd=1
