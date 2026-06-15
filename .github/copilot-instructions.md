@@ -13,15 +13,16 @@ applyTo: "**"
 4. Minimize token usage by following these strict constraints:
   -Provide your response in two steps: First, a brief thinking process under ### 사고 과정 (in Korean). Second, the requested code.
    DO NOT use conversational filler phrases (e.g., 'Here is the code'). Output ONLY the thinking process and the code with proper description."
+5. 간단한 수정(총 변경 20줄 이하 + 단일 파일일 때만)의 경우, 직접 파일을 수정하지 말고 unified diff를 먼저 제시한 뒤 사용자가 직접 수정할수 있도록 수정된 code block을 제공할것.
 
 
 ## 서버 인증 및 계정 정보
 
 Gerrit, Jenkins, 및 기타 또는 등록된 원격 서버에 대한 인증 정보(계정, HTTP 키/비밀번호, 서버 URL)가 필요한 경우에는
 **절대로 정보를 하드코딩하거나 추측하지 말고, 항상 `revvserver show` 명령으로 조회할 것.**
+https로 되어 있는경우 우선 http로 인증없이 동작하는지 확인해보고, https로 인증이 필요한 경우에만 인증정보를 조회할것.
 
 ### 인증 정보 조회 방법
-
 터미널에서 아래 명령을 실행하면 등록된 모든 서버와 계정/키 정보를 확인할 수 있다.
 
 `revvserver` 는 `~/.proFILEs/tools/revvserver` 경로에 있는 독립 실행 스크립트이며,

@@ -510,10 +510,10 @@ function dockstart(){
         -v ${home_dir}/.gitconfig:${home_dir}/.gitconfig:rw                     \
         -v ${home_dir}/.ssh:${home_dir}/.ssh:rw                                 \
         -v ${home_dir}/.jfrog:${home_dir}/.jfrog:rw                             \
-        -v ${home_dir}/mirror:${home_dir}/mirror:ro,rshared                     \
+        -v ${home_dir}/mirror:${home_dir}/mirror:rw,rshared                     \
         -v ${home_dir}/Docker_MountDIR:${home_dir}/Docker_MountDIR:rw,rshared   \
+        -v /mnt:/mnt:rw,rshared                                                 \
         -v /nfs:/nfs:ro,rshared                                                 \
-        -v /mnt:/mnt:ro,rshared                                                 \
         ${cntr_img} /bin/bash -c 'sudo service ssh start && /bin/bash'
 
     if [ $? -eq 0 ]; then

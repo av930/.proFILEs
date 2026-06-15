@@ -65,6 +65,7 @@ function CMD(){
 alias pro="cd ${proFILEdir}"
 alias tools="cd ${proFILEdir}/tools"
 alias src="cd ~/Docker_MountDIR"
+alias dev="cd ~/Docker_MountDIR/build_dev"
 alias mirr="cd ~/mirror"
 
 
@@ -192,10 +193,15 @@ alias df${TAG}='df -Thx squashfs| (read -r; printf "%s\n" "$REPLY"; sort -k 7)'
 alias ps${TAG}='_bar "usage: psl"; ps -u vc.integrator -o pid,ppid,user,stime,etime,pcpu,pmem,tty,args --forest'
 alias pst='_pst(){ _bar  "usage: pst [$USER]"; pstree -hapgT --ascii -u ${1:-$USER} ;}; _pst'
 
+#### dir
+alias kildircheck='fuser -vm'
+alias kildir='kil_dir(){ fuser -km $1 2>/dev/null; sudo umount $1 2>/dev/null;}; kil_dir'
+
+
 #### process
 alias kil='_kil(){ _bar "kill -SIGTERM -- -[PGID]"; kill -SIGTERM -- -$1 ;}; _kil'
-alias kildir='kill_dir'
-function kill_dir() {
+alias kildirall='kill_dirall'
+function kill_alldir() {
     _bar "try to kill process in current dir"
     # 1. 현재 경로의 깊이(Depth) 계산 (Root / 기준 '/' 개수 카운트)
     local current_dir=$(pwd)
