@@ -379,11 +379,12 @@ analyze_time() {
         build_cmd_time=$(extract_first_timed_match "$build_cmd_pattern" "$log_file")
         build_done_time=$(extract_first_timed_match 'SUCCESS: yocto build|Tasks Summary: Attempted' "$log_file")
         upload_start_time=$(extract_first_timed_match 'ncftpput|artifactory' "$log_file")
+        [ -z "${upload_start_time}"] && upload_start_time=$build_done_time
 
         echo -e "${GREEN}\n- Section Duration (구간별 소요시간):${NCOL}"
         print_duration_segment "Script start -> before Source download:" "$start_time" "$repo_start_time" "$total_diff"
         print_duration_segment "Source download start ->  before Build:" "$repo_start_time" "$build_cmd_time" "$total_diff"
-        print_duration_segment "Build start/end -> before Image upload:" "$build_cmd_time" "$upload_start_time" "$total_diff"
+        print_duration_segment "Build start   ->   before Image upload:" "$build_cmd_time" "$upload_start_time" "$total_diff"
         print_duration_segment "Image upload start -> Script terminate:" "$upload_start_time" "$end_time" "$total_diff"
     else
         echo -e "${GREEN}Overall Start Time ~ Overall End Time:${NCOL} ($start_time ~ $end_time)"
@@ -622,11 +623,11 @@ analyze_config_and_cache() {
     # PREMIRRORS 요약
     if [[ -n "$premirrors" ]]; then
         if [[ "$premirrors" == "CONFIGURED (detected from log-message)" ]]; then
-            echo -e "$TAG_OK PREMIRRORS = Configured (detected from log-message)"
+            echo -e "$TAG_WARN PREMIRRORS = Configured (detected from log-message)"
             print_log_detect_line "PREMIRRORS" "$premirrors_detect_line"
         elif [[ "$premirrors" =~ "detected from log-message" ]]; then
             # 로그에서 추출된 경로 정보 (경로 그대로 표시)
-            echo -e "$TAG_OK PREMIRRORS = $premirrors"
+            echo -e "$TAG_WARN PREMIRRORS = $premirrors"
             print_log_detect_line "PREMIRRORS" "$premirrors_detect_line"
         elif [[ "$premirrors" =~ "detected from source" ]]; then
             # source에서 읽은 정보는 skip_details가 0일 때만 유효
@@ -660,10 +661,10 @@ analyze_config_and_cache() {
     # MIRRORS 요약
     if [[ -n "$mirrors" ]]; then
         if [[ "$mirrors" == "CONFIGURED (detected from log-message)" ]]; then
-            echo -e "$TAG_OK MIRRORS = Configured (detected from log-message)"
+            echo -e "$TAG_WARN MIRRORS = Configured (detected from log-message)"
             print_log_detect_line "MIRRORS" "$mirrors_detect_line"
         elif [[ "$mirrors" =~ "detected from log-message" ]]; then
-            echo -e "$TAG_OK MIRRORS = $mirrors"
+            echo -e "$TAG_WARN MIRRORS = $mirrors"
             print_log_detect_line "MIRRORS" "$mirrors_detect_line"
         elif [[ "$mirrors" =~ "detected from source" ]]; then
             if [[ "$skip_details" -eq 1 ]]; then
@@ -694,6 +695,10 @@ analyze_config_and_cache() {
     fi
     
     # SSTATE_MIRRORS 요약
+    # log의 Sstate summary에서 hit rate 0% 여부 사전 감지 (경로 설정과 교차 검증용)
+    local sstate_hit_zero=0
+    [[ -n "$sstate_detect_line" ]] && echo "$sstate_detect_line" | grep -Eq "Found[[:space:]]+0([^0-9]|$)" && sstate_hit_zero=1
+
     if [[ -n "$sstate_mirrors" ]]; then
         if [[ "$sstate_mirrors" == "CONFIGURED (detected from log-message)" ]]; then
             echo -e "$TAG_OK SSTATE_MIRRORS = Configured (detected from log-message)"
@@ -709,29 +714,33 @@ analyze_config_and_cache() {
             # source에서 읽은 정보는 skip_details가 0일 때만 유효
             if [[ "$skip_details" -eq 1 ]]; then
                 # local.conf가 최신이므로 로그 메시지 기반 정보로 표시
-                if echo "$sstate_detect_line" | grep -Eq "Found[[:space:]]+0([^0-9]|$)"; then
+                if [[ "$sstate_hit_zero" -eq 1 ]]; then
                     echo -e "$TAG_WARN SSTATE_MIRRORS = Not Configured Well (detected from log-message)"
                 else
                     echo -e "$TAG_OK SSTATE_MIRRORS = Configured (detected from log-message)"
                 fi
             else
-                local pure_path=$(extract_pure_path "${sstate_mirrors% (detected from source)}" "1")
+                # path 존재 여부는 [SState-cache Storage] 섹션에서 출력
                 if [[ -n "$target_ip" && "$remote_ssh_ok" -eq 0 ]]; then
                     print_remote_unavailable "SSTATE_MIRRORS path verification" "$target_ip"
-                elif run_io test "$target_ip" "$pure_path" d; then
-                    echo -e "$TAG_OK SSTATE_MIRRORS = $sstate_mirrors"
                 else
-                    echo -e "${RED}[FAIL] SSTATE_MIRRORS path not exists: $pure_path${NCOL}"
+                    if [[ "$sstate_hit_zero" -eq 1 ]]; then
+                        echo -e "$TAG_WARN SSTATE_MIRRORS = $sstate_mirrors (Sstate hit rate was 0% during build)"
+                    else
+                        echo -e "$TAG_OK SSTATE_MIRRORS = $sstate_mirrors"
+                    fi
                 fi
             fi
         else
-            local pure_path=$(extract_pure_path "$sstate_mirrors" "1")
+            # path 존재 여부는 [SState-cache Storage] 섹션에서 출력
             if [[ -n "$target_ip" && "$remote_ssh_ok" -eq 0 ]]; then
                 print_remote_unavailable "SSTATE_MIRRORS path verification" "$target_ip"
-            elif run_io test "$target_ip" "$pure_path" d; then
-                echo -e "$TAG_OK SSTATE_MIRRORS = $sstate_mirrors"
             else
-                echo -e "${RED}[FAIL] SSTATE_MIRRORS path not exists: $pure_path${NCOL}"
+                if [[ "$sstate_hit_zero" -eq 1 ]]; then
+                    echo -e "$TAG_WARN SSTATE_MIRRORS = $sstate_mirrors (Sstate hit rate was 0% during build)"
+                else
+                    echo -e "$TAG_OK SSTATE_MIRRORS = $sstate_mirrors"
+                fi
             fi
         fi
     else
@@ -746,24 +755,34 @@ analyze_config_and_cache() {
     # ========== SSTATE-CACHE 세부 정보 ==========
     echo -e "\n${BLUE}--- 3.1. Sstate-cache Details ---${NCOL}"
     echo -e "${GREEN}[Cache Statistics]${NCOL}"
-    local sstate_summary=$(grep -a "Sstate summary:" "$log_file" 2>/dev/null | tail -1 || echo "")
-    if [[ -n "$sstate_summary" ]]; then
+    local sstate_all_summaries=$(grep -a "Sstate summary:" "$log_file" 2>/dev/null || echo "")
+    local sstate_summary=$(echo "$sstate_all_summaries" | tail -1)
+    if [[ -n "$sstate_all_summaries" ]]; then
+        # 로그에서 감지된 모든 Sstate summary 라인 출력
+        while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            echo "  $line"
+        done <<< "$sstate_all_summaries"
+        echo ""
+        # 마지막 줄 기준으로 hit rate 계산
         local wanted=$(extract_last_number "$sstate_summary" "Wanted")
         local found=$(extract_last_number "$sstate_summary" "Found")
         local missed=$(extract_last_number "$sstate_summary" "Missed")
         [[ "$wanted" -gt 0 ]] && local hit_rate=$(( found * 100 / wanted )) || local hit_rate=0
         if [[ "$hit_rate" -eq 0 ]]; then
-            echo -e "${RED}  - Hit rate: ${hit_rate}% (${found}/${wanted}), Missed: ${missed}${NCOL}"
+            echo -e "${RED}  - Hit rate (last summary): ${hit_rate}% (${found}/${wanted}), Missed: ${missed}${NCOL}"
         else
-            printf "  - Hit rate: %s%% (%s/%s), Missed: %s\n" "$hit_rate" "$found" "$wanted" "$missed"
+            printf "  - Hit rate (last summary): %s%% (%s/%s), Missed: %s\n" "$hit_rate" "$found" "$wanted" "$missed"
         fi
     else
         echo "  - Sstate summary not found in log"
     fi
     
     echo -e "${GREEN}[SState-cache Storage]${NCOL}"
-    if [[ "$skip_details" -eq 1 || "$sstate_mirrors" == "CONFIGURED (detected from log-message)" || "$sstate_mirrors" =~ "detected from log-message" ]]; then
+    if [[ "$skip_details" -eq 1 ]]; then
         echo -e "  - $TAG_WARN Skipped build is old"
+    elif [[ "$sstate_mirrors" == "CONFIGURED (detected from log-message)" || "$sstate_mirrors" =~ "detected from log-message" ]]; then
+        echo -e "  - $TAG_WARN Path unknown: SSTATE_MIRRORS detected only from log-message (no path info available)"
     else
         local sstate_path_raw="$sstate_mirrors"
         [[ "$sstate_path_raw" =~ "detected from source" ]] && sstate_path_raw="${sstate_path_raw% (detected from source)}"
@@ -776,7 +795,7 @@ analyze_config_and_cache() {
                 echo -e "  - Path: $sstate_path"
                 echo -e "  - Size: $sstate_size"
             else
-                echo -e "  - Path: $sstate_path (not accessible)"
+                echo -e "${RED}[FAIL] SSTATE_MIRRORS path not exists: $sstate_path${NCOL}"
             fi
         fi
     fi
@@ -982,8 +1001,10 @@ analyze_config_and_cache() {
     fi
 
     echo -e "${GREEN}[Premirror Storage]${NCOL}"
-    if [[ "$skip_details" -eq 1 || "$premirrors" == "CONFIGURED (detected from log-message)" || "$premirrors" =~ "detected from log-message" ]]; then
+    if [[ "$skip_details" -eq 1 ]]; then
         echo -e "  - $TAG_WARN Skipped build is old"
+    elif [[ "$premirrors" == "CONFIGURED (detected from log-message)" || "$premirrors" =~ "detected from log-message" ]]; then
+        echo -e "  - $TAG_WARN Path unknown: PREMIRRORS detected only from log-message (no path info available)"
     else
         local premirror_path_raw="$premirrors"
         [[ "$premirror_path_raw" =~ "detected from source" ]] && premirror_path_raw="${premirror_path_raw% (detected from source)}"
@@ -1023,8 +1044,10 @@ analyze_config_and_cache() {
     fi
 
     echo -e "${GREEN}[Mirror Storage]${NCOL}"
-    if [[ "$skip_details" -eq 1 || "$mirrors" == "CONFIGURED (detected from log-message)" || "$mirrors" =~ "detected from log-message" ]]; then
+    if [[ "$skip_details" -eq 1 ]]; then
         echo -e "  - $TAG_WARN Skipped build is old"
+    elif [[ "$mirrors" == "CONFIGURED (detected from log-message)" || "$mirrors" =~ "detected from log-message" ]]; then
+        echo -e "  - $TAG_WARN Path unknown: MIRRORS detected only from log-message (no path info available)"
     else
         local mirror_path_raw="$mirrors"
         [[ "$mirror_path_raw" =~ "detected from source" ]] && mirror_path_raw="${mirror_path_raw% (detected from source)}"
@@ -1142,35 +1165,157 @@ main() {
     
     # 첫 번째 인자만 사용 (URL이 & 문자로 shell에서 분리되어도 기본 URL만 필요)
     local input target_log_ip local_ips build_url="" build_start_epoch=0 build_end_epoch=0
+    local build_range_start build_range_end build_num temp_single_log
+    local url_array url_count i single_url
     input="$1"
 
     # 입력이 URL인 경우 로그 다운로드 처리
     if [[ "$input" =~ ^http:// || "$input" =~ ^https:// ]]; then
+        # 여러 줄의 URL이 입력된 경우 감지 (개행 포함)
+        if [[ "$input" =~ $'\n' ]]; then
+            echo -e "$TAG_OK Detected multiple URLs (multi-line input)"
+            echo -e "$TAG_OK Downloading logs from multiple URLs..."
+            
+            # URL을 배열로 파싱 (개행으로 분리)
+            mapfile -t url_array <<< "$input"
+            url_count=${#url_array[@]}
+            
+            # 임시 파일 초기화
+            > "$PATH_TEMP_LOG"
+            
+            # 각 URL에서 로그 다운로드 및 병합
+            for ((i=0; i<url_count; i++)); do
+                single_url="${url_array[$i]}"
+                # 공백 제거
+                single_url=$(echo "$single_url" | xargs)
+                
+                [[ -z "$single_url" ]] && continue
+                
+                temp_single_log=$(mktemp)
+                local current_build_url build_num_from_url
+                
+                echo -e "  - Downloading from: $single_url"
+                
+                # 단일 URL에서 빌드 번호 추출 (첫 번째 URL만 build_url로 설정)
+                if [[ "$single_url" =~ (https?://[^/]+/.*/[0-9]+) ]]; then
+                    current_build_url="${BASH_REMATCH[1]}"
+                    [[ $i -eq 0 ]] && build_url="$current_build_url"
+                    
+                    # timestamps 형식으로 정규화
+                    local normalized_url="${current_build_url}/timestamps/?time=HH:mm:ss&timeZone=GMT+9&appendLog"
+                    
+                    # HTTPS 다운로드 시도 후 실패하면 HTTP로 재시도
+                    if ! curl -skL "$normalized_url" > "$temp_single_log" 2>/dev/null; then
+                        if [[ "$normalized_url" =~ ^https:// ]]; then
+                            normalized_url="${normalized_url/#https/http}"
+                            if ! curl -sL "$normalized_url" > "$temp_single_log" 2>/dev/null; then
+                                echo -e "$TAG_WARN Failed to download from: $single_url"
+                                rm -f "$temp_single_log"
+                                continue
+                            fi
+                        else
+                            echo -e "$TAG_WARN Failed to download from: $single_url"
+                            rm -f "$temp_single_log"
+                            continue
+                        fi
+                    fi
+                    
+                    # 다운로드 성공한 로그 병합
+                    cat "$temp_single_log" >> "$PATH_TEMP_LOG"
+                    [[ $i -lt $((url_count - 1)) ]] && echo "" >> "$PATH_TEMP_LOG"  # URL 간 구분선
+                    echo -e "$TAG_OK Log merged (URL $((i+1))/$url_count)"
+                else
+                    echo -e "$TAG_WARN Invalid Jenkins URL format: $single_url"
+                fi
+                
+                rm -f "$temp_single_log"
+            done
+            
+            # 병합된 로그 확인
+            if [[ ! -s "$PATH_TEMP_LOG" ]]; then
+                echo -e "$TAG_FAIL Failed to download logs from all URLs"
+                exit 1
+            fi
+            
+            echo -e "$TAG_OK Successfully merged logs from $url_count URLs"
+            
         # Jenkins URL인 경우 항상 timestamps 형식으로 정규화
-        if [[ "$input" =~ jenkins ]]; then
-            # build number까지의 기본 URL 추출: .../job_name/build_number
-            if [[ "$input" =~ (https?://[^/]+/.*/[0-9]+) ]]; then
+        elif [[ "$input" =~ jenkins ]]; then
+            # build number 또는 범위 추출: .../job_name/[start-end] 또는 .../job_name/build_number
+            if [[ "$input" =~ (https?://[^/]+/.*/)\[([0-9]+)-([0-9]+)\](.*)$ ]]; then
+                # 범위 형식 [start-end] 감지
+                local base_jenkins_url="${BASH_REMATCH[1]}"
+                build_range_start="${BASH_REMATCH[2]}"
+                build_range_end="${BASH_REMATCH[3]}"
+                local query_part="${BASH_REMATCH[4]}"
+                
+                echo -e "$TAG_OK Detected build range: [$build_range_start-$build_range_end]"
+                echo -e "$TAG_OK Downloading logs from multiple builds..."
+                
+                # 각 빌드 번호별로 로그 다운로드 및 병합
+                > "$PATH_TEMP_LOG"  # 임시 파일 초기화
+                for ((build_num=build_range_start; build_num<=build_range_end; build_num++)); do
+                    temp_single_log=$(mktemp)
+                    local single_build_url="${base_jenkins_url}${build_num}/timestamps/?time=HH:mm:ss&timeZone=GMT+9&appendLog"
+                    
+                    echo -e "  - Downloading build #$build_num..."
+                    
+                    # HTTPS 다운로드 시도 후 실패하면 HTTP로 재시도
+                    if ! curl -skL "$single_build_url" > "$temp_single_log" 2>/dev/null; then
+                        if [[ "$single_build_url" =~ ^https:// ]]; then
+                            single_build_url="${single_build_url/#https/http}"
+                            if ! curl -sL "$single_build_url" > "$temp_single_log" 2>/dev/null; then
+                                echo -e "$TAG_WARN Failed to download build #$build_num"
+                                rm -f "$temp_single_log"
+                                continue
+                            fi
+                        else
+                            echo -e "$TAG_WARN Failed to download build #$build_num"
+                            rm -f "$temp_single_log"
+                            continue
+                        fi
+                    fi
+                    
+                    # 다운로드 성공한 로그 병합
+                    cat "$temp_single_log" >> "$PATH_TEMP_LOG"
+                    [[ $build_num -lt $build_range_end ]] && echo "" >> "$PATH_TEMP_LOG"  # 빌드 간 구분선
+                    rm -f "$temp_single_log"
+                    echo -e "$TAG_OK Build #$build_num log merged"
+                done
+                
+                # 병합된 로그 확인
+                if [[ ! -s "$PATH_TEMP_LOG" ]]; then
+                    echo -e "$TAG_FAIL Failed to download all logs from range [$build_range_start-$build_range_end]"
+                    exit 1
+                fi
+                
+                # build_url은 범위의 첫 번째 빌드로 설정
+                build_url="${base_jenkins_url}${build_range_start}"
+                echo -e "$TAG_OK Successfully merged logs from builds: [$build_range_start-$build_range_end]"
+                
+            elif [[ "$input" =~ (https?://[^/]+/.*/[0-9]+) ]]; then
+                # 단일 빌드 번호 형식
                 build_url="${BASH_REMATCH[1]}"
                 input="${build_url}/timestamps/?time=HH:mm:ss&timeZone=GMT+9&appendLog"
                 echo -e "$TAG_OK Normalized Jenkins URL (final):"
                 echo -e "     $input"
-            fi
-        fi
-
-        echo -e "$TAG_OK Downloading log from URL..."
-
-        # HTTPS 다운로드 시도 후 실패하면 HTTP로 재시도 (Fallback)
-        if ! curl -skL "$input" > "$PATH_TEMP_LOG" 2>/dev/null; then
-            if [[ "$input" =~ ^https:// ]]; then
-                echo -e "$TAG_WARN HTTPS download failed, trying HTTP..."
-                input="${input/#https/http}"
-                if ! curl -sL "$input" > "$PATH_TEMP_LOG" 2>/dev/null; then
-                    echo -e "$TAG_FAIL Failed to download log via HTTP as well"
-                    exit 1
+                
+                echo -e "$TAG_OK Downloading log from URL..."
+                
+                # HTTPS 다운로드 시도 후 실패하면 HTTP로 재시도 (Fallback)
+                if ! curl -skL "$input" > "$PATH_TEMP_LOG" 2>/dev/null; then
+                    if [[ "$input" =~ ^https:// ]]; then
+                        echo -e "$TAG_WARN HTTPS download failed, trying HTTP..."
+                        input="${input/#https/http}"
+                        if ! curl -sL "$input" > "$PATH_TEMP_LOG" 2>/dev/null; then
+                            echo -e "$TAG_FAIL Failed to download log via HTTP as well"
+                            exit 1
+                        fi
+                    else
+                        echo -e "$TAG_FAIL Failed to download log"
+                        exit 1
+                    fi
                 fi
-            else
-                echo -e "$TAG_FAIL Failed to download log"
-                exit 1
             fi
         fi
     elif [[ -f "$input" ]]; then
