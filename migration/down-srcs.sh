@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/bin/bash 
 ## ======================================================================
 ## down-srcs.sh - 병렬 소스 다운로드 관리 스크립트
 ## ======================================================================
@@ -76,7 +76,7 @@ fi
 ## 현재 디렉토리에서 실행 중인 기존 down_src.sh 및 자식 프로세스 종료
 CURRENT_PID=$$
 
-OLD_PIDS=$(ps aux | grep "[d]own_src.sh" | awk '{print $2}' | grep -v "^${CURRENT_PID}$" || true)
+OLD_PIDS=$(ps aux | grep -E "[d]own-srcs\.sh|[d]own_src\.sh" | awk '{print $2}' | grep -v "^${CURRENT_PID}$" || true)
 
 if [ -n "$OLD_PIDS" ]; then
     echo "Killing existing down_src.sh processes..."
@@ -145,6 +145,12 @@ for idx in "${!command_blocks[@]}"; do
     pushd "$JOB_DIR" > /dev/null || exit 1
     echo -e "${JOB_COLOR}[${JOB_ID}.CMD-ORI] ${cmd_block// && / && \\n}${NC}" | sed 's/ ; / ;\n/g'
     actual_cmd="$cmd_block"
+    manifest_file=""
+    manifest_fix_applied=0
+
+    if [[ "$cmd_block" =~ repo[[:space:]]+init.*-m[[:space:]]+([^[:space:]]+) ]]; then
+        manifest_file="${BASH_REMATCH[1]}"
+    fi
 
     ## ==================================================================
     ## 2단계: git clone 명령 분석 (재실행 대비)
@@ -218,8 +224,21 @@ $git_clone_with_ref"
         ## Case 3: Mirror 사용, repo init
         mirror~repo_init)
             repo_mirror_base="$MIRROR_PATH/down.repo.${JOB_ID}"
+            repo_sync_cmd="$(printf '%s\n' "$actual_cmd" | grep -o 'repo sync[^;]*' | tail -1 || true)"
+            repo_main_cmd="$actual_cmd"
+            repo_runner_path="${START_DIR}/${JOB_DIR}/run_repo_mirror.sh"
 
-            ## Mirror 디렉토리 초기화
+            [ -z "$repo_sync_cmd" ] && repo_sync_cmd="repo sync -cj8"
+
+            if [[ ! "$repo_main_cmd" =~ --reference ]]; then
+                repo_main_cmd="$(echo "$repo_main_cmd" | sed '0,/repo init /s|repo init |repo init --reference='"$repo_mirror_base"' |')"
+            fi
+
+            if [ -n "$manifest_file" ]; then
+                repo_main_cmd="$(echo "$repo_main_cmd" | sed "s|repo sync|${START_DIR}/${JOB_DIR}/fix_manifest.sh '${manifest_file}' ; repo sync|g")"
+                manifest_fix_applied=1
+            fi
+
             if [ ! -d "$repo_mirror_base/.repo" ]; then
                 echo -e "${JOB_COLOR}[${JOB_ID}.MIRROR-USE] Creating repo mirror at $repo_mirror_base/${NC}"
                 mkdir -p "$repo_mirror_base"
@@ -233,22 +252,35 @@ $git_clone_with_ref"
                     mirror_init_cmd="${mirror_init_cmd} ; repo sync -cj8"
                 fi
 
-                ## Mirror 생성 후 실제 작업 디렉토리에서도 실행
-                actual_cmd="(cd \"$repo_mirror_base\" && bash -c \"$mirror_init_cmd\")
-$actual_cmd"
-            fi
-
-            ## Mirror 존재시 --reference 옵션 추가
-            if [[ -d "$repo_mirror_base/.repo" ]]; then
-                if [[ ! "$actual_cmd" =~ --reference ]]; then
-                    actual_cmd="$(echo "$actual_cmd" | sed '0,/repo init /s|repo init |repo init --reference='"$repo_mirror_base"' |')"
+                if [ -n "$manifest_file" ]; then
+                    mirror_init_cmd="$(echo "$mirror_init_cmd" | sed "s|repo sync|${START_DIR}/${JOB_DIR}/fix_manifest.sh '${manifest_file}' ; repo sync|g")"
                 fi
+
+                {
+                    echo "#!/bin/bash"
+                    echo "set -e"
+                    echo "cd \"$repo_mirror_base\""
+                    echo "$mirror_init_cmd"
+                } > "$repo_runner_path"
+                chmod +x "$repo_runner_path"
+                actual_cmd="$repo_runner_path
+$repo_main_cmd"
             else
-                ## Mirror 없으면 업데이트 명령 추가
-                only_sync_cmd="$(echo "$actual_cmd" | grep -o 'repo sync[^;]*' || true)"
-                [ -z "$only_sync_cmd" ] && only_sync_cmd="repo sync -cj8"
-                actual_cmd="(cd \"$repo_mirror_base\" && $only_sync_cmd) || true
-$actual_cmd"
+                echo -e "${JOB_COLOR}[${JOB_ID}.MIRROR-USE] Updating repo mirror at $repo_mirror_base/${NC}"
+
+                if [ -n "$manifest_file" ]; then
+                    repo_sync_cmd="$(echo "$repo_sync_cmd" | sed "s|repo sync|${START_DIR}/${JOB_DIR}/fix_manifest.sh '${manifest_file}' ; repo sync|g")"
+                fi
+
+                {
+                    echo "#!/bin/bash"
+                    echo "set -e"
+                    echo "cd \"$repo_mirror_base\""
+                    echo "$repo_sync_cmd"
+                } > "$repo_runner_path"
+                chmod +x "$repo_runner_path"
+                actual_cmd="$repo_runner_path || true
+$repo_main_cmd"
             fi
             ;;
     esac
@@ -270,9 +302,7 @@ $actual_cmd"
     ## ==================================================================
     ## repo init의 -m manifest에서 clone-depth 속성 제거 스크립트 생성
 
-    if [[ "$actual_cmd" =~ repo[[:space:]]+init.*-m[[:space:]]+([^[:space:]]+) ]]; then
-        manifest_file="${BASH_REMATCH[1]}"
-
+    if [ -n "$manifest_file" ]; then
         ## Manifest 수정 스크립트 생성 (clone-depth 제거)
         cat > fix_manifest.sh << 'MANIFEST_FIX_EOF' && chmod +x fix_manifest.sh
 #!/bin/bash
@@ -287,7 +317,9 @@ MANIFEST_FIX_EOF
         ## repo init과 sync 사이에 fix 스크립트 삽입
         ## 변환: "repo init ... ; repo sync ..." → "repo init ... ; ./fix_manifest.sh ... && repo sync ..."
         fix_script_path="${START_DIR}/${JOB_DIR}/fix_manifest.sh"
-        actual_cmd=$(echo "$actual_cmd" | sed "s|repo sync|${fix_script_path} '${manifest_file}' ; repo sync|g")
+        if [ "$manifest_fix_applied" -eq 0 ]; then
+            actual_cmd=$(echo "$actual_cmd" | sed "s|repo sync|${fix_script_path} '${manifest_file}' ; repo sync|g")
+        fi
     fi
 
     ## ==================================================================
