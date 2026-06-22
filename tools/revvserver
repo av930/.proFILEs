@@ -102,7 +102,11 @@ function revvserver_decode(){
         _data=$(cat "$keyfile" | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey | tail -n +2)
         ## 각 줄을 배열에 로드 (파이프로 구분된 필드 사용)
         while IFS='|' read -r key url account pass alias; do
-            key=$(echo "$key" | xargs) # 앞뒤 공백 제거
+            key=$(echo "$key" | xargs | tr -d '\n')
+            url=$(echo "$url" | xargs | tr -d '\n')
+            account=$(echo "$account" | xargs | tr -d '\n')
+            pass=$(echo "$pass" | xargs | tr -d '\n')
+            alias=$(echo "$alias" | xargs | tr -d '\n')
             [ -z "$key" ] && continue  # 빈 줄 스킵
             REVV_SERVER["$key"]="${key}|${url}|${account}|${pass}|${alias}"
         done <<< "$_data"
@@ -117,7 +121,7 @@ function revvserver_decode(){
     [[ $server =~ ^https?://[^/]+/[^/]+ ]] && server="${BASH_REMATCH[0]/https/http}"
     _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | \
         awk -v tag="$server" -F '[[:space:]]*\\|' \
-        'BEGIN{IGNORECASE=1} $1 == tag {print; exit}; $5 ~ tag {print; exit}; $2 ~ tag {print; exit}')
+        'BEGIN{IGNORECASE=1; FS="\\|"} { if ($1 == tag || $2 == tag) { print $0; exit } split($5, arr, ","); for (i in arr) { if (arr[i] == tag) { print $0; exit } } }')
 
     ## 2nd try: manifest remote(REPPFILE_JSON_REMOTE 파일)에서 유추된 이름으로 찾기 (name -> review or fetch -> REMOTEKEY)
     if [ -z "$_line" ] && [ -f "${REPPFILE_JSON_REMOTE}" ] && [ "$server" != "origin" ]; then
@@ -126,14 +130,14 @@ function revvserver_decode(){
         if [ -n "$_review" ] && [ "$_review" != "null" ]; then
             _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | \
                 awk -v tag="$_review" -F '[[:space:]]*\\|' \
-                'BEGIN{IGNORECASE=1} $1 == tag {print; exit}; $5 ~ tag {print; exit}; $2 ~ tag {print; exit}')
+                'BEGIN{IGNORECASE=1; FS="\\|"} { if ($1 == tag || $2 == tag) { print $0; exit } split($5, arr, ","); for (i in arr) { if (arr[i] == tag) { print $0; exit } } }')
         fi
         if [ -z "$_line" ]; then
             _remotekey=$(jq -rM --arg jq_remote "$server" '.[]|select(.name == $jq_remote) | .fetch' "${REPPFILE_JSON_REMOTE}" 2>/dev/null | cut -d'|' -f1)
             if [ -n "$_remotekey" ] && [ "$_remotekey" != "null" ]; then
                 _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | \
                     awk -v tag="$_remotekey" -F '[[:space:]]*\\|' \
-                    'BEGIN{IGNORECASE=1} $1 == tag {print; exit}; $5 ~ tag {print; exit}; $2 ~ tag {print; exit}')
+                    'BEGIN{IGNORECASE=1; FS="\\|"} { if ($1 == tag || $2 == tag) { print $0; exit } split($5, arr, ","); for (i in arr) { if (arr[i] == tag) { print $0; exit } } }')
             fi
         fi
     fi
@@ -147,7 +151,7 @@ function revvserver_decode(){
             if [ -n "$guessed" ]; then
                 _line=$(printf "%s\n" "${REVV_SERVER[@]}" | sort | \
                     awk -v tag="$guessed" -F '[[:space:]]*\\|' \
-                    'BEGIN{IGNORECASE=1} $1 == tag {print; exit}; $5 ~ tag {print; exit}; $2 ~ tag {print; exit}')
+                    'BEGIN{IGNORECASE=1; FS="\\|"} { if ($1 == tag || $2 == tag) { print $0; exit } split($5, arr, ","); for (i in arr) { if (arr[i] == tag) { print $0; exit } } }')
             fi
         fi
     fi
