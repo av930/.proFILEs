@@ -30,6 +30,13 @@ group_id=$user_id
 repo_url="10.158.4.241:8082"
 
 ##============================================================================
+## Load revvserver functions for password management
+##============================================================================
+if [ -e "${PATH_DIR}/revvserver" ]; then
+    source "${PATH_DIR}/revvserver" > /dev/null 2>&1
+fi
+
+##============================================================================
 ## Debug option
 ##============================================================================
 #DEBUG=["echo -e"|:], : means no-operation
@@ -121,59 +128,6 @@ if ! command -v nsenter > /dev/null ; then echo "${cyan}[INFO] nsenter (optional
 }
 
 function dockinfo(){ read -p "docker info  [enter:continue| ctrl+c:exit]: "; docker info; exit 0; }
-function key(){
-## ---------------------------------------------------------------------------
-# encoding as variable: code env <keyname> <key>
-# encoding as file: code en <keyfile> <key>
-# decode de <keyfile>
-local temp temp_var
-local cmd=$1 tag=$2 key=$3
-    case $cmd in
-            en) [ -z "${key}" ] && key help
-    ;; dev|def) [ -z "${tag}" ] && key help
-    esac
-
-    case $cmd in
-         env) #encrypt to ENCODE_$tag
-            declare -g "ENCODE_$tag=$( echo $key | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey )"
-       ;; en) #encrypt to ~/.key_$tag
-            echo $( echo $key | openssl enc -base64 -e -aes-256-cbc -nosalt -pbkdf2  -pass pass:garbageKey ) > $HOME/.key_$tag
-       ;; de) #decrypt from ENCODE_$tag, if error, decrypt from ~/.key_$tag or ~/.key_server.en
-            temp=ENCODE_$tag; temp_var=${!temp} #must be indirect reference
-            if (( 40 < ${#temp_var} )); then
-                echo ${temp_var}| openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 2> /dev/null
-            else
-                # Try individual key file first
-                if [[ -f $HOME/.key_$tag ]]; then 
-                    cat $HOME/.key_$tag | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey
-                # Fallback to central key_server.en file (case-insensitive match)
-                elif [[ -f $HOME/.key_server.en ]]; then
-                    cat $HOME/.key_server.en | openssl enc -base64 -d -aes-256-cbc -nosalt -pbkdf2 -pass pass:garbageKey 2>/dev/null | \
-                    awk -v tag="$tag" 'BEGIN{IGNORECASE=1} $1 ~ "^"tag"[[:space:]]*$" {gsub(/^[[:space:]]+|[[:space:]]+$/,"",$4); print $4; exit}' FS='|'
-                else 
-                    echo "" >&2  # Return empty string silently if no key found
-                fi
-            fi
-       ;;list|debug)  #list up keycode for debugging
-            declare -p |grep ENCODE
-       ;;help|*)
-            [ "$cmd" = help ] || echo "please check your command"
-            echo "variable is live during session, file is live permanent"
-            echo "en/decoding as variable: dock key env <keyname> <key>, key de <key_id>"
-            echo "en/decoding as file    : dock key en <keyfile> <key>, key de <key_id>"
-            echo "ex) save file for vgit : dock key env vgit ejladf69a79f8d79fdsqd"
-            echo "ex) save var for lamp  : dock key en  lamp ejladf69a79f8d79fdsqd"
-            echo "ex) save var for arti  : dock key en  arti ejladf69a79f8d79fdsqd"
-            echo "ex) read key from lamp : dock key de  lamp"
-            echo
-            echo
-            echo "list of current registered key"
-            ls -al ~/.key_*
-            echo "scp ${account}@10.158.7.50:/data001/${account}/.key_* ~/"
-
-    esac
-}
-
 
 function dockdown(){
 ## ---------------------------------------------------------------------------
@@ -207,11 +161,10 @@ function list_repo(){
 ## ---------------------------------------------------------------------------
     if [ -z "${KEY_ADMIN}" ]; then
         printf "${red}ERROR: Artifactory API key not found!${NCOL}\n"
-        echo "Setup required:"
-        echo "  1. Permanent: 'dock key en arti <YOUR_PASSWORD>'"
-        echo "  2. Temporary: 'dock key env arti <YOUR_PASSWORD>'"
+        echo "Setup required: Use 'revv server docker' to retrieve password from ~/.key_server.en"
+        echo "  Usage: revv server de arti"
         echo ""
-        echo "To verify existing keys: ls -la ~/.key_*"
+        echo "Verify with: revv server show"
         exit 1
     fi
 
@@ -225,8 +178,7 @@ function list_repo(){
     if [ "${listimg[0]}" = "errors" ];then 
         printf "${red}ERROR: Artifactory authentication failed!${NCOL}\n"
         echo "The stored password appears to be incorrect or expired."
-        echo "Please update your password using:"
-        echo "  dock key en arti <YOUR_NEW_PASSWORD>"
+        echo "Please verify with: revv server de arti"
         exit 1
     fi
 }
@@ -841,7 +793,6 @@ local ret=0
         cmd)            dockcmd "${@:2}"                                      ;;
         copy)           dockcopy "${@:2}"                                     ;;
         info|status)    dockinfo "${@:2}"                                     ;;
-        key)            "${@:1}"                                              ;;
         help)           dockhelp "${@:2}"                                     ;;
         "")             handler_menu "${@}"                                   ;;
         *)              docker "${@}"
@@ -863,8 +814,8 @@ function ____dock(){
 # Check dependencies on first run
 dockinstall
 
-# check if called from source or not.
-KEY_ADMIN=$(key de arti)
+# Get Artifactory password from revvserver (case-insensitive)
+KEY_ADMIN=$(revvserver_item arti pass 2>/dev/null)
 
 (return 0 2>/dev/null) && sourced=1 || sourced=0
 if [ $sourced -eq 0 ]; then dockmenu $@;else echo "plz run without source." && return; fi
