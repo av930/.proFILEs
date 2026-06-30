@@ -8,7 +8,7 @@
 # Features:
 #   - down.list 자동 분석: git clone과 repo init 명령에서 manifest 파일 자동 추출
 #   - Include manifest 생성: 모든 manifest 파일을 포함하는 중간 manifest (down.list.xml) 생성
-#   - 최종 병합: 모든 project를 하나의 manifest로 통합
+#   - 최종 병합: 모든 project를 하나의 manifest로 통합L
 #   - Remote 중복 처리: 동일 이름의 remote는 자동으로 번호 부여 (name.1, name.2)
 #   - 속성 정리: upstream, dest-branch, remote 속성 제거하여 간결화
 #   - Mirror 경로 설정: devops_test remote로 mirror/merged 디렉토리 참조

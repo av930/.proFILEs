@@ -28,8 +28,8 @@
 
 ## 색상 정의 (작업별 구분용)
 declare -A JOB_COLORS
-# 청록                       # 녹색                      # 파랑                      # 노랑                        # 마젠타                     #초기화
-JOB_COLORS[0]='\033[1;36m'; JOB_COLORS[1]='\033[0;32m'; JOB_COLORS[2]='\033[0;34m'; JOB_COLORS[3]='\033[0;33m'; JOB_COLORS[4]='\033[0;35m' ; NC='\033[0m'
+# 청록                   # 녹색                    # 파랑                   # 노랑                  # 마젠타                 #빨강                      #초기화
+JOB_COLORS[0]='\e[1;36m'; JOB_COLORS[1]='\e[32m'; JOB_COLORS[2]='\e[34m'; JOB_COLORS[3]='\e[33m'; JOB_COLORS[4]='\e[35m'; JOB_COLORS[5]='\e[1;31m'; NC='\e[0m'
 
 ## ======================================================================
 ## 설정 및 초기화
@@ -357,13 +357,19 @@ MANIFEST_FIX_EOF
                 job_id_end=${job_pids[$p]}
                 log_file_end="${job_logs[$p]}"
                 JOB_COLOR_end="${JOB_COLORS[0]}"
-                echo -e "${JOB_COLOR_end}[${job_id_end}.END] Check log: ${LOG_DIR}/downcmd_${job_id_end}.log${NC}"
 
                 ## 실패한 작업 로그 수집
                 if [ $exit_code -ne 0 ]; then
                     has_error=1
                     failed_logs+=("$log_file_end")
+                    status_msg="${JOB_COLORS[5]}[FAIL]${NC}"
+                    JOB_COLOR_end="${JOB_COLORS[5]}"
+                else
+                    status_msg="${JOB_COLORS[1]}[OKAY]${NC}"
+                    JOB_COLOR_end="${JOB_COLORS[1]}"
                 fi
+
+                echo -e "${JOB_COLOR_end}[${job_id_end}.END] Check log: ${log_file_end} ${status_msg}${NC}"
 
                 ## PID/로그 매핑 제거
                 unset "job_logs[$p]"
@@ -383,28 +389,31 @@ done
 for pid in "${!job_logs[@]}"; do
     wait "$pid" && exit_code=0 || exit_code=$?
 
+    log_file_final="${job_logs[$pid]}"
     ## 실패한 작업 로그 기록
     if [ $exit_code -ne 0 ]; then
         has_error=1
-        failed_logs+=("${job_logs[$pid]}")
+        failed_logs+=("$log_file_final")
+        status_msg="${JOB_COLORS[5]}[FAIL]${NC}"
+        JOB_COLOR_final="${JOB_COLORS[5]}"
+    else
+        status_msg="${JOB_COLORS[1]}[OKAY]${NC}"
+        JOB_COLOR_final="${JOB_COLORS[1]}"
     fi
 
     ## 작업 완료 출력
     job_id_final=${job_pids[$pid]}
-    JOB_COLOR_final="${JOB_COLORS[0]}"
-    echo -e "${JOB_COLOR_final}[${job_id_final}.END] Check log: ${LOG_DIR}/downcmd_${job_id_final}.log${NC}"
+    echo -e "${JOB_COLOR_final}[${job_id_final}.END] Check log: ${log_file_final} ${status_msg}${NC}"
 done
 
 ## ======================================================================
 ## 최종 결과 출력
 ## ======================================================================
-
+echo "------------------------------------------------------------------------"
 if [ $has_error -eq 1 ]; then
-    echo -e "${JOB_COLORS[0]}[ERROR] Some jobs failed. Check logs for details.${NC}"
-
-    ## 실패한 모든 작업의 로그 출력
+     ## 실패한 모든 작업의 로그 출력
     for log_file in "${failed_logs[@]}"; do
-        echo -e "${JOB_COLORS[0]}===== FAILED LOG: ${log_file} =====${NC}"
+        echo -e "${JOB_COLORS[5]}===== FAILED LOG: ${log_file##*/} =====${NC}"
         cat "$log_file"
     done
     exit 1

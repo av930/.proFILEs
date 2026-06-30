@@ -174,8 +174,8 @@ else
 	done
 
 	## 원본 dir과 split dir을 .git 제외하고 비교하여, 잘못 생성된건 없는지 확인.
-	[ -f "${PATH_SCRIPT}/../tools/cmp-dirs.sh" ] || { echo "error: script file is not existed"; exit 1; }
-	if EXCEPT=".git;${MANI}" P1="${PATH_SPLIT}" P2="${PATH_CURRENT}" ${PATH_SCRIPT}/../tools/cmp-dirs.sh 1 ; then
+	[ -f "${PATH_SCRIPT}/../tools/cmp-dirs.sh" ] && CMP_FILE="${PATH_SCRIPT}/../tools/cmp-dirs.sh" || CMP_FILE="${PATH_SCRIPT}/cmp-dirs.sh"
+	if EXCEPT=".git;${MANI}" P1="${PATH_SPLIT}" P2="${PATH_CURRENT}" ${CMP_FILE} 1 ; then
 		printf "\e[0;31m [SUCCESS]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ \e[0m\n"
 		printf "=== result is same: \n${PATH_CURRENT} and \n${PATH_SPLIT}\n ==="
 		echo ""

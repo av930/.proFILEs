@@ -9,20 +9,24 @@ format_display_ip() {
     IFS="$old_ifs"
     printf '%3s.%3s.%3s.%3s\n' "${octets[0]}" "${octets[1]}" "${octets[2]}" "${octets[3]}"
 }
+## getIP
+display_ip=$(format_display_ip "10.159.30.66")
+
+
+
+readonly C_YELLOW='\033[1;33m' C_GREEN='\033[1;32m' C_RED='\033[1;31m' C_RESET='\033[0m'
 
 ## 다운로드 스크립트 저장
 download_file() { 
-    readonly C_YELLOW='\033[1;33m' && C_GREEN='\033[1;32m' && C_RED='\033[1;31m' && C_RESET='\033[0m'
     local file="${1##*/}"
-    local display_ip
-
-    display_ip=$(format_display_ip "10.159.30.66")
     
-    wget -O "$file" "http://10.159.30.66:8000/$1" && \
-      { printf "${C_YELLOW}%s${C_RESET}\n" "Downloaded from http://${display_ip}:8000"; } ||\
-      wget -O "$file" "https://raw.githubusercontent.com/av930/.proFILEs/master/$1" && \
-      { printf "${C_GREEN}%s${C_RESET}\n" "Downloaded from github"; } ||\
-      { printf "${C_RED}%s${C_RESET}\n" "Error: Download failed from both 10.159.30.66 and github"; return 1; }
+    if   wget -O "$file" "http://10.159.30.66:8000/$1"; then
+         printf "${C_YELLOW}%s${C_RESET}\n" "Downloaded from http://10.159.30.66:8000"
+    elif wget -O "$file" "https://raw.githubusercontent.com/av930/.proFILEs/master/$1"; then
+         printf "${C_GREEN}%s${C_RESET}\n" "Downloaded from github"
+    else printf "${C_RED}%s${C_RESET}\n" "Error: Download failed from both 10.159.30.66 and github"
+         return 1
+    fi
     [ -s "$file" ] && chmod 755 "$file" || { echo "Error: File is empty."; return 1; }
     [ "$(wc -l < "$file")" -lt 10 ] && { echo "Error: File is too small Less than 10 lines."; return 1; }
     return 0
